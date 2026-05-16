@@ -372,6 +372,123 @@
     gap: 0.5rem;
   }
 
+  .alliance-block {
+    margin-bottom: 1rem;
+    border: 1px solid var(--line);
+    background: rgba(0, 0, 0, 0.15);
+    padding: 0.5rem 0.75rem 0.75rem;
+  }
+  .alliance-block:last-child { margin-bottom: 0; }
+  .alliance-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    padding: 0.4rem 0;
+    margin-bottom: 0.5rem;
+  }
+  .alliance-title {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .alliance-header.alliance-A .alliance-title { color: var(--cyan); }
+  .alliance-header.alliance-B .alliance-title { color: var(--magenta); }
+  .alliance-header.alliance-C .alliance-title { color: var(--amber); }
+  .alliance-summary {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.72rem;
+    color: var(--ink-dim);
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+  }
+  .alliance-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+  }
+  .alliance-preview {
+    color: var(--ink-faint);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: none; /* visible seulement quand replié */
+  }
+  .alliance-block.collapsed .alliance-preview { display: inline; }
+  .alliance-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--line-bright), transparent);
+    min-width: 30px;
+  }
+  .alliance-toggle {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-faint);
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .alliance-block.collapsed .alliance-toggle { transform: rotate(-90deg); }
+  .alliance-header:hover .alliance-toggle { color: var(--cyan); }
+  .alliance-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .alliance-block.collapsed .alliance-body { display: none; }
+
+  .alliance-result-block {
+    border: 1px solid var(--line);
+    padding: 0.75rem 0.85rem 0.85rem;
+    margin-bottom: 0.85rem;
+    background: rgba(0, 0, 0, 0.15);
+  }
+  .alliance-result-block:last-child { margin-bottom: 0; }
+  .alliance-result-header {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .alliance-result-block.alliance-A .alliance-result-header { color: var(--cyan); border-color: rgba(0, 229, 255, 0.3); }
+  .alliance-result-block.alliance-B .alliance-result-header { color: var(--magenta); border-color: rgba(255, 46, 154, 0.3); }
+  .alliance-result-block.alliance-C .alliance-result-header { color: var(--amber); border-color: rgba(255, 181, 71, 0.3); }
+  .alliance-result-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.6rem;
+    align-items: start;
+  }
+  @media (max-width: 1024px) {
+    .alliance-result-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .alliance-result-grid { grid-template-columns: 1fr; }
+  }
+  .alliance-result-empty {
+    grid-column: 1 / -1;
+    color: var(--ink-faint);
+    font-style: italic;
+    padding: 0.5rem;
+    text-align: center;
+    border: 1px dashed var(--line);
+  }
+
   .player-row {
     display: flex;
     align-items: center;
@@ -1840,9 +1957,9 @@ const STRINGS = {
     p_balanceEq: 'Équilibré',
     p_balanceFair: 'Plutôt équitable',
     p_balanceAnti: 'Anti-frustration',
-    p_when: 'Quand ?',
-    p_whenHelp: 'Date / heure du raid · optionnel · partagé avec le salon',
-    p_whenPlaceholder: 'samedi 21h · ven prochain à 20h30 …',
+    p_when: 'Quoi ? Quand ?',
+    p_whenHelp: 'Nom du raid / date / heure · optionnel · partagé avec le salon',
+    p_whenPlaceholder: 'Shinryu EX · samedi 21h · ven prochain à 20h30 …',
     p_bannedJobs: 'Jobs bannis pour ce raid',
     p_bannedHelp: 'Aucun slot ne pourra leur être attribué · ignoré dans les préférences',
     p_summaryBanned: ({ n }) => `${n} banni${n > 1 ? 's' : ''}`,
@@ -1851,6 +1968,11 @@ const STRINGS = {
     c_dungeon: 'Donjon',
     c_raid8: 'Raid 8',
     c_raid24: 'Raid 24',
+    al_title: ({ name }) => `Alliance ${name}`,
+    al_collapseHint: 'Cliquer pour replier',
+    al_expandHint: 'Cliquer pour déplier',
+    al_emptyHint: '—',
+    al_summary: ({ filled, total }) => `${filled} / ${total}`,
     // — Toolbar
     t_share: 'Partager',
     t_import: 'Importer',
@@ -1994,9 +2116,9 @@ const STRINGS = {
     p_balanceEq: 'Balanced',
     p_balanceFair: 'Mostly fair',
     p_balanceAnti: 'Anti-frustration',
-    p_when: 'When?',
-    p_whenHelp: 'Date / time of the raid · optional · shared with the room',
-    p_whenPlaceholder: 'Saturday 9pm · next Fri at 8:30pm …',
+    p_when: 'What? When?',
+    p_whenHelp: 'Raid name / date / time · optional · shared with the room',
+    p_whenPlaceholder: 'Shinryu EX · Saturday 9pm · next Fri at 8:30pm …',
     p_bannedJobs: 'Jobs banned for this raid',
     p_bannedHelp: 'No slot can be assigned to them · ignored in preferences',
     p_summaryBanned: ({ n }) => `${n} banned`,
@@ -2004,6 +2126,11 @@ const STRINGS = {
     c_dungeon: 'Dungeon',
     c_raid8: 'Raid 8',
     c_raid24: 'Raid 24',
+    al_title: ({ name }) => `Alliance ${name}`,
+    al_collapseHint: 'Click to collapse',
+    al_expandHint: 'Click to expand',
+    al_emptyHint: '—',
+    al_summary: ({ filled, total }) => `${filled} / ${total}`,
     t_share: 'Share',
     t_import: 'Import',
     t_reset: 'Reset',
@@ -2194,17 +2321,25 @@ const ROLE_GRID_COLS = { tank: 2, heal: 2, melee: 3, ranged: 2, caster: 2 };
 const CONTENT_BASE = {
   dungeon: { get label() { return t('c_dungeon'); }, size: 4,  comp: { tank: 1, heal: 1, dps: 2  } },
   raid8:   { get label() { return t('c_raid8'); },   size: 8,  comp: { tank: 2, heal: 2, dps: 4  } },
-  raid24:  { get label() { return t('c_raid24'); },  size: 24, comp: { tank: 3, heal: 6, dps: 15 } }
+  // raid24 = 3 alliances de 1T / 2H / 5DPS chacune (24 au total)
+  raid24:  { get label() { return t('c_raid24'); },  size: 24, comp: { tank: 3, heal: 6, dps: 15 },
+             alliances: 3, allianceComp: { tank: 1, heal: 2, dps: 5 } }
 };
+const ALLIANCE_NAMES = ['A', 'B', 'C'];
+const ALLIANCE_SIZE = 8;
+function isRaid24() { return state.contentType === 'raid24'; }
 
 function buildSlots(contentKey, dpsMode) {
   const base = CONTENT_BASE[contentKey];
+  // Pour raid24 on retourne les slots d'UNE alliance ; l'optimiseur en lance
+  // une optimisation par alliance.
+  const comp = base.allianceComp || base.comp;
   const slots = [];
 
-  for (let i = 0; i < base.comp.tank; i++) slots.push({ roles: ['tank'] });
-  for (let i = 0; i < base.comp.heal; i++) slots.push({ roles: ['heal'] });
+  for (let i = 0; i < comp.tank; i++) slots.push({ roles: ['tank'] });
+  for (let i = 0; i < comp.heal; i++) slots.push({ roles: ['heal'] });
 
-  const dpsCount = base.comp.dps;
+  const dpsCount = comp.dps;
 
   if (dpsMode === 'unified') {
     for (let i = 0; i < dpsCount; i++) {
@@ -2226,7 +2361,7 @@ function buildSlots(contentKey, dpsMode) {
 
 const state = {
   contentType: 'raid8',
-  dpsMode: 'unified',
+  dpsMode: 'split',    // par défaut Mêlée / Distance différenciés
   fairnessWeight: 50,  // 0 = max satisfaction globale, 100 = anti-frustration max
   raidWhen: '',
   bannedJobs: [],      // IDs de jobs interdits dans la compo
@@ -2296,11 +2431,7 @@ function renderRosterInfo() {
   info.innerHTML = `<span class="count ${cls}">${current}</span> / ${targetSize}`;
 }
 
-function renderPlayers() {
-  const list = document.getElementById('playersList');
-  list.innerHTML = '';
-
-  state.players.forEach((player, idx) => {
+function buildPlayerRow(player, idx) {
     const presence = player.presence || 'in';
     const row = document.createElement('div');
     row.className = 'player-row presence-' + presence;
@@ -2438,8 +2569,76 @@ function renderPlayers() {
     row.appendChild(removeBtn);
 
     attachRosterDragHandlers(row, player);
-    list.appendChild(row);
-  });
+    return row;
+}
+
+const allianceCollapsed = [false, false, false]; // état UI (non persisté)
+
+function renderPlayers() {
+  const list = document.getElementById('playersList');
+  list.innerHTML = '';
+
+  if (!isRaid24()) {
+    state.players.forEach((player, idx) => {
+      list.appendChild(buildPlayerRow(player, idx));
+    });
+    return;
+  }
+
+  // Raid 24 : 3 sous-blocs alliance A/B/C
+  for (let a = 0; a < 3; a++) {
+    const block = document.createElement('div');
+    block.className = 'alliance-block' + (allianceCollapsed[a] ? ' collapsed' : '');
+
+    const header = document.createElement('div');
+    header.className = 'alliance-header alliance-' + ALLIANCE_NAMES[a];
+    const title = document.createElement('span');
+    title.className = 'alliance-title';
+    title.textContent = t('al_title', { name: ALLIANCE_NAMES[a] });
+    const summary = document.createElement('span');
+    summary.className = 'alliance-summary';
+    const line = document.createElement('div');
+    line.className = 'alliance-line';
+    const toggle = document.createElement('span');
+    toggle.className = 'alliance-toggle';
+    toggle.textContent = '▾';
+    header.appendChild(title);
+    header.appendChild(summary);
+    header.appendChild(line);
+    header.appendChild(toggle);
+    block.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'alliance-body';
+    const start = a * ALLIANCE_SIZE;
+    const allPlayers = state.players.slice(start, start + ALLIANCE_SIZE);
+    for (let i = 0; i < allPlayers.length; i++) {
+      const player = allPlayers[i];
+      if (!player) continue;
+      body.appendChild(buildPlayerRow(player, start + i));
+    }
+    block.appendChild(body);
+
+    // Résumé (visible quand replié) : noms + 1er choix
+    const filled = allPlayers.filter(p => p && p.name && p.name.trim()).length;
+    const names = allPlayers
+      .filter(p => p && p.name && p.name.trim() && (p.presence || 'in') !== 'out')
+      .map(p => {
+        const firstJob = p.preferences && p.preferences[0]
+          ? (JOB_BY_ID[p.preferences[0]] || {}).name || p.preferences[0]
+          : '—';
+        return `${escapeHtml(p.name.trim())} [${escapeHtml(firstJob)}]`;
+      })
+      .join(' · ');
+    summary.innerHTML = `<span class="alliance-count">${t('al_summary', { filled, total: ALLIANCE_SIZE })}</span>${names ? `<span class="alliance-preview">${names}</span>` : ''}`;
+
+    header.addEventListener('click', () => {
+      allianceCollapsed[a] = !allianceCollapsed[a];
+      block.classList.toggle('collapsed', allianceCollapsed[a]);
+    });
+
+    list.appendChild(block);
+  }
 }
 
 function movePlayerInRoster(playerId, direction) {
@@ -2745,11 +2944,13 @@ function computeOptimalAssignment(opts = {}) {
   const fairnessWeight = opts.fairnessWeight ?? state.fairnessWeight;
   const topK = opts.topK ?? 1;  // nb de solutions distinctes à retourner
 
-  const slots = buildSlots(state.contentType, state.dpsMode);
+  const slots = opts.slotsOverride || buildSlots(state.contentType, state.dpsMode);
   const banned = new Set(state.bannedJobs);
   // Vue effective : on retire les joueurs absents, et on filtre les jobs bannis
-  // dans les prefs (sans muter l'état)
-  const players = state.players
+  // dans les prefs (sans muter l'état). playersSource permet de scoper à
+  // une alliance (raid24) ou autre.
+  const playersSource = opts.playersOverride || state.players;
+  const players = playersSource
     .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
     .map(p => ({
       ...p,
@@ -3018,6 +3219,97 @@ function renderActiveSolution() {
   renderSolution(sol);
 }
 
+function buildAssignmentCard(r, resultsCtx) {
+  const card = document.createElement('div');
+  if (!r.assigned) {
+    card.className = 'assignment bench';
+    card.innerHTML = `
+      <div class="assignment-left">
+        <div class="assignment-text-left">
+          <div class="assigned-name">${escapeHtml(r.name)}</div>
+          ${rankBadge(r)}
+        </div>
+      </div>
+      <div class="assignment-right">
+        <div class="assigned-job" style="color:var(--ink-faint)">—</div>
+      </div>
+    `;
+  } else {
+    card.className = `assignment ${r.role}` + (r.locked ? ' locked' : '');
+    const lockGlyph = r.locked ? t('lk_locked') : t('lk_unlocked');
+    const lockTitle = r.locked ? t('lk_unlockTitle') : t('lk_lockTitle', { job: r.jobName });
+    // Voisinage : seulement parmi la même row/role *dans le même contexte*
+    // (un bloc alliance pour raid24, l'ensemble sinon)
+    const rowKey = r.role === 'caster' ? 'ranged' : r.role;
+    const sameRow = (resultsCtx || []).filter(x => {
+      if (!x.assigned) return false;
+      const k = x.role === 'caster' ? 'ranged' : x.role;
+      return k === rowKey;
+    });
+    const posInRow = sameRow.findIndex(x => x.name === r.name);
+    const canLeft = posInRow > 0;
+    const canRight = posInRow < sameRow.length - 1;
+    card.innerHTML = `
+      <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
+      <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
+      <div class="assignment-left">
+        <div class="assignment-job-icon">
+          <img src="${r.iconUrl}" alt="${r.jobName}" loading="lazy" draggable="false">
+        </div>
+        <div class="assignment-text-left">
+          <div class="assigned-name">${escapeHtml(r.name)}</div>
+          ${rankBadge(r)}
+        </div>
+      </div>
+      <div class="assignment-right">
+        <div class="assigned-job">${r.jobName}</div>
+        <div class="assigned-slot">${slotShortLabel(r.slotRoles)}</div>
+      </div>
+      <div class="reorder-controls" style="margin-left:6px;">
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
+      </div>
+    `;
+    attachResultDragHandlers(card, r);
+  }
+  return card;
+}
+
+function build4ColLayout(targetGrid, results) {
+  const columns = { tank: [], heal: [], melee: [], ranged: [] };
+  const bench = [];
+  results.forEach(r => {
+    if (!r.assigned) { bench.push(r); return; }
+    const colKey = r.role === 'caster' ? 'ranged' : r.role;
+    (columns[colKey] || columns.ranged).push(r);
+  });
+  const COL_DEFS = [
+    { key: 'tank',   label: t('res_colTanks') },
+    { key: 'heal',   label: t('res_colHeals') },
+    { key: 'melee',  label: t('res_colMelee') },
+    { key: 'ranged', label: t('res_colDistance') }
+  ];
+  targetGrid.innerHTML = '';
+  COL_DEFS.forEach(def => {
+    const colEl = document.createElement('div');
+    colEl.className = 'result-col';
+    const hdr = document.createElement('div');
+    hdr.className = 'result-col-header ' + def.key + (columns[def.key].length === 0 ? ' empty' : '');
+    hdr.textContent = def.label;
+    colEl.appendChild(hdr);
+    if (columns[def.key].length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'result-col-empty';
+      empty.textContent = t('res_empty');
+      colEl.appendChild(empty);
+    } else {
+      columns[def.key].forEach(r => colEl.appendChild(buildAssignmentCard(r, results)));
+    }
+    targetGrid.appendChild(colEl);
+  });
+  return bench;
+}
+
 function renderSolution(sol) {
   const summary = document.getElementById('resultSummary');
   const grid = document.getElementById('assignmentGrid');
@@ -3055,61 +3347,6 @@ function renderSolution(sol) {
     </div>` : ''}
   `;
 
-  function buildAssignmentCard(r) {
-    const card = document.createElement('div');
-    if (!r.assigned) {
-      card.className = 'assignment bench';
-      card.innerHTML = `
-        <div class="assignment-left">
-          <div class="assignment-text-left">
-            <div class="assigned-name">${escapeHtml(r.name)}</div>
-            ${rankBadge(r)}
-          </div>
-        </div>
-        <div class="assignment-right">
-          <div class="assigned-job" style="color:var(--ink-faint)">—</div>
-        </div>
-      `;
-    } else {
-      card.className = `assignment ${r.role}` + (r.locked ? ' locked' : '');
-      const lockGlyph = r.locked ? t('lk_locked') : t('lk_unlocked');
-      const lockTitle = r.locked ? t('lk_unlockTitle') : t('lk_lockTitle', { job: r.jobName });
-      // Compte des voisin·e·s de même rôle pour activer/désactiver les flèches
-      const rowKey = r.role === 'caster' ? 'ranged' : r.role;
-      const sameRow = results.filter(x => {
-        if (!x.assigned) return false;
-        const k = x.role === 'caster' ? 'ranged' : x.role;
-        return k === rowKey;
-      });
-      const posInRow = sameRow.findIndex(x => x.name === r.name);
-      const canLeft = posInRow > 0;
-      const canRight = posInRow < sameRow.length - 1;
-      card.innerHTML = `
-        <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
-        <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
-        <div class="assignment-left">
-          <div class="assignment-job-icon">
-            <img src="${r.iconUrl}" alt="${r.jobName}" loading="lazy" draggable="false">
-          </div>
-          <div class="assignment-text-left">
-            <div class="assigned-name">${escapeHtml(r.name)}</div>
-            ${rankBadge(r)}
-          </div>
-        </div>
-        <div class="assignment-right">
-          <div class="assigned-job">${r.jobName}</div>
-          <div class="assigned-slot">${slotShortLabel(r.slotRoles)}</div>
-        </div>
-        <div class="reorder-controls" style="margin-left:6px;">
-          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
-          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
-        </div>
-      `;
-      attachResultDragHandlers(card, r);
-    }
-    return card;
-  }
-
   // Mise à jour de la barre d'actions (verrouiller / déverrouiller tout + statut)
   const actionsEl = document.getElementById('resultActions');
   if (actionsEl) {
@@ -3138,40 +3375,9 @@ function renderSolution(sol) {
     });
   }
 
-  // Distribue les cartes en 4 colonnes fixes : Tank / Heal / Mêlée / Distance (= ranged + caster)
-  const columns = { tank: [], heal: [], melee: [], ranged: [] };
-  const bench = [];
-  results.forEach(r => {
-    if (!r.assigned) { bench.push(r); return; }
-    const colKey = r.role === 'caster' ? 'ranged' : r.role;
-    (columns[colKey] || columns.ranged).push(r);
-  });
-
-  const COL_DEFS = [
-    { key: 'tank',   label: t('res_colTanks') },
-    { key: 'heal',   label: t('res_colHeals') },
-    { key: 'melee',  label: t('res_colMelee') },
-    { key: 'ranged', label: t('res_colDistance') }
-  ];
-
+  // Distribution en 4 colonnes (helper) + récupération du banc
   grid.innerHTML = '';
-  COL_DEFS.forEach(def => {
-    const colEl = document.createElement('div');
-    colEl.className = 'result-col';
-    const hdr = document.createElement('div');
-    hdr.className = 'result-col-header ' + def.key + (columns[def.key].length === 0 ? ' empty' : '');
-    hdr.textContent = def.label;
-    colEl.appendChild(hdr);
-    if (columns[def.key].length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'result-col-empty';
-      empty.textContent = t('res_empty');
-      colEl.appendChild(empty);
-    } else {
-      columns[def.key].forEach(r => colEl.appendChild(buildAssignmentCard(r)));
-    }
-    grid.appendChild(colEl);
-  });
+  const bench = build4ColLayout(grid, results);
 
   // Banc séparé en bas
   const benchArea = document.getElementById('benchArea');
@@ -3179,7 +3385,7 @@ function renderSolution(sol) {
   if (benchCards) benchCards.innerHTML = '';
   if (bench.length > 0 && benchArea && benchCards) {
     benchArea.hidden = false;
-    bench.forEach(r => benchCards.appendChild(buildAssignmentCard(r)));
+    bench.forEach(r => benchCards.appendChild(buildAssignmentCard(r, results)));
   } else if (benchArea) {
     benchArea.hidden = true;
   }
@@ -3200,6 +3406,154 @@ function renderSolution(sol) {
   }
 }
 
+function renderRaid24Result() {
+  const summary = document.getElementById('resultSummary');
+  const grid = document.getElementById('assignmentGrid');
+  const warningArea = document.getElementById('warningArea');
+  const tabs = document.getElementById('alternativesTabs');
+  const actionsEl = document.getElementById('resultActions');
+  const benchArea = document.getElementById('benchArea');
+  const benchCards = document.getElementById('benchCards');
+
+  // Pas d'alternatives pour raid24 (multiplie les combinaisons à l'infini)
+  tabs.innerHTML = '';
+  currentSolutions = null;
+
+  // Optimisation par alliance
+  const allianceResults = [];
+  let totalFirst = 0, totalAssigned = 0, totalForced = 0, totalSlots = 0;
+  let totalBenched = 0;
+  let totalSatSum = 0;
+  let worstRank = null;
+  let hasError = false;
+
+  for (let a = 0; a < 3; a++) {
+    const start = a * ALLIANCE_SIZE;
+    const allPlayers = state.players.slice(start, start + ALLIANCE_SIZE);
+    const result = computeOptimalAssignment({ topK: 1, playersOverride: allPlayers });
+    allianceResults.push(result);
+    if (result.error) { hasError = true; continue; }
+    const sol = result.solutions[0];
+    totalFirst += sol.stats.firstChoices;
+    totalAssigned += sol.stats.assigned;
+    totalForced += sol.stats.forced;
+    totalSlots += sol.stats.slotsTotal;
+    totalBenched += sol.stats.benched;
+    if (sol.stats.assigned > 0) totalSatSum += sol.stats.satisfaction;
+    if (sol.stats.worstRank !== null && sol.stats.worstRank !== undefined) {
+      if (worstRank === null || sol.stats.worstRank > worstRank) worstRank = sol.stats.worstRank;
+    }
+  }
+
+  const validAlliances = allianceResults.filter(r => !r.error).length;
+  const avgSat = validAlliances > 0 ? Math.round(totalSatSum / validAlliances) : 0;
+  let worstRankDisplay = '—';
+  if (worstRank !== null) {
+    if (worstRank === 999) worstRankDisplay = t('res_forced');
+    else worstRankDisplay = t('res_nth', { n: worstRank + 1 });
+  }
+
+  summary.innerHTML = `
+    <div class="stat">
+      <span class="stat-value">${totalFirst}/${totalAssigned}</span>
+      <span class="stat-label">${t('res_firstChoice')}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">${avgSat}<span style="font-size:0.7em">%</span></span>
+      <span class="stat-label">${t('res_avgSat')}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" style="color:${totalForced > 0 ? 'var(--danger)' : 'var(--cyan)'}">${worstRankDisplay}</span>
+      <span class="stat-label">${t('res_worstRank')}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">${totalAssigned}/${totalSlots}</span>
+      <span class="stat-label">${t('res_slots')}</span>
+    </div>
+    ${totalBenched > 0 ? `
+    <div class="stat">
+      <span class="stat-value">${totalBenched}</span>
+      <span class="stat-label">${t('res_bench')}</span>
+    </div>` : ''}
+  `;
+
+  // Action bar global (lock all / unlock all / status)
+  const allAssigned = allianceResults.flatMap(r => r.error ? [] : r.solutions[0].results.filter(x => x.assigned));
+  const lockedCount = allAssigned.filter(r => r.locked).length;
+  const total = allAssigned.length;
+  const allLocked = total > 0 && lockedCount === total;
+  const statusText = allLocked
+    ? t('lk_validated', { locked: lockedCount, total })
+    : t('lk_status', { locked: lockedCount, total });
+  if (actionsEl) {
+    actionsEl.innerHTML = `
+      <button class="btn-tool" id="lockAllBtn"><span class="arrow">◆</span> ${t('lk_lockAll')}</button>
+      <button class="btn-tool" id="unlockAllBtn"${lockedCount === 0 ? ' disabled' : ''}><span class="arrow">◇</span> ${t('lk_unlockAll')}</button>
+      <span class="lock-status${allLocked ? ' validated' : ''}">${statusText}</span>
+    `;
+    document.getElementById('lockAllBtn').addEventListener('click', () => {
+      allAssigned.forEach(r => {
+        const player = state.players.find(p => p.name.trim() === r.name);
+        if (player) player.lockedJob = r.jobId;
+      });
+      scheduleLiveCompute();
+    });
+    document.getElementById('unlockAllBtn').addEventListener('click', () => {
+      state.players.forEach(p => { p.lockedJob = null; });
+      scheduleLiveCompute();
+    });
+  }
+
+  // 3 blocs alliance, chacun avec sa grille 4 col
+  grid.innerHTML = '';
+  const allBench = [];
+  allianceResults.forEach((result, ai) => {
+    const block = document.createElement('div');
+    block.className = 'alliance-result-block alliance-' + ALLIANCE_NAMES[ai];
+    const header = document.createElement('div');
+    header.className = 'alliance-result-header';
+    header.textContent = t('al_title', { name: ALLIANCE_NAMES[ai] });
+    block.appendChild(header);
+    const allianceGrid = document.createElement('div');
+    allianceGrid.className = 'alliance-result-grid';
+    if (result.error) {
+      const empty = document.createElement('div');
+      empty.className = 'alliance-result-empty';
+      empty.textContent = result.error;
+      allianceGrid.appendChild(empty);
+    } else {
+      const sol = result.solutions[0];
+      const bench = build4ColLayout(allianceGrid, sol.results);
+      bench.forEach(b => allBench.push(b));
+    }
+    block.appendChild(allianceGrid);
+    grid.appendChild(block);
+  });
+
+  // Banc combiné
+  if (benchCards) benchCards.innerHTML = '';
+  if (allBench.length > 0 && benchArea && benchCards) {
+    benchArea.hidden = false;
+    allBench.forEach(r => benchCards.appendChild(buildAssignmentCard(r, allBench)));
+  } else if (benchArea) {
+    benchArea.hidden = true;
+  }
+
+  warningArea.innerHTML = '';
+  if (totalForced > 0) {
+    const w = document.createElement('div');
+    w.className = 'warning';
+    w.textContent = t('res_forcedWarn', { n: totalForced });
+    warningArea.appendChild(w);
+  }
+  if (totalAssigned < totalSlots) {
+    const w = document.createElement('div');
+    w.className = 'warning';
+    w.textContent = t('res_missingWarn', { n: totalSlots - totalAssigned });
+    warningArea.appendChild(w);
+  }
+}
+
 function setLiveIndicator(state) {
   const ind = document.getElementById('liveIndicator');
   if (state === 'computing') {
@@ -3216,7 +3570,14 @@ function setLiveIndicator(state) {
 
 function renderResult() {
   setLiveIndicator('computing');
-  const section = document.getElementById('resultSection');
+
+  // Raid 24 : 3 alliances optimisées indépendamment
+  if (isRaid24()) {
+    renderRaid24Result();
+    setLiveIndicator('live');
+    return;
+  }
+
   const summary = document.getElementById('resultSummary');
   const grid = document.getElementById('assignmentGrid');
   const warningArea = document.getElementById('warningArea');
@@ -3280,13 +3641,15 @@ const PRIMARY_DEPTH = 2;  // un job dans top-2 = "prêt à jouer ce rôle"
 function getRoleRequirements() {
   const slots = buildSlots(state.contentType, state.dpsMode);
   const reqs = { tank: 0, heal: 0, melee: 0, ranged: 0, caster: 0, flex_dps: 0, distance: 0 };
+  // Pour raid24, buildSlots renvoie 1 alliance ; on multiplie par le nb d'alliances
+  const factor = isRaid24() ? (CONTENT_BASE.raid24.alliances || 1) : 1;
   slots.forEach(slot => {
     if (slot.roles.length === 1) {
-      reqs[slot.roles[0]]++;
+      reqs[slot.roles[0]] += factor;
     } else if (slot.roles.includes('melee') && slot.roles.includes('ranged') && slot.roles.includes('caster')) {
-      reqs.flex_dps++;
+      reqs.flex_dps += factor;
     } else if (slot.roles.includes('ranged') && slot.roles.includes('caster')) {
-      reqs.distance++;
+      reqs.distance += factor;
     }
   });
   return reqs;
