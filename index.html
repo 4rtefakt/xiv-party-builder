@@ -373,6 +373,38 @@
     flex-shrink: 0;
   }
 
+  .drag-handle {
+    cursor: grab;
+    color: var(--ink-faint);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    user-select: none;
+    flex-shrink: 0;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.15s;
+    letter-spacing: -2px;
+  }
+  .drag-handle:hover { color: var(--cyan); }
+  .drag-handle:active { cursor: grabbing; }
+
+  .player-row.dragging,
+  .assignment.dragging {
+    opacity: 0.35;
+  }
+  .player-row.drop-above {
+    box-shadow: inset 0 2px 0 0 var(--cyan);
+  }
+  .player-row.drop-below {
+    box-shadow: inset 0 -2px 0 0 var(--cyan);
+  }
+  .assignment.drop-above {
+    box-shadow: inset 0 2px 0 0 var(--cyan);
+  }
+  .assignment.drop-below {
+    box-shadow: inset 0 -2px 0 0 var(--cyan);
+  }
+
   .reorder-controls {
     display: flex;
     flex-direction: column;
@@ -1914,6 +1946,13 @@ function renderPlayers() {
     const row = document.createElement('div');
     row.className = 'player-row presence-' + presence;
 
+    const handle = document.createElement('div');
+    handle.className = 'drag-handle';
+    handle.textContent = '⋮⋮';
+    handle.draggable = true;
+    handle.title = 'Glisser pour réorganiser';
+    row.appendChild(handle);
+
     const idxEl = document.createElement('div');
     idxEl.className = 'player-idx';
     idxEl.textContent = String(idx + 1).padStart(2, '0');
@@ -2039,6 +2078,7 @@ function renderPlayers() {
     });
     row.appendChild(removeBtn);
 
+    attachRosterDragHandlers(row, player);
     list.appendChild(row);
   });
 }
@@ -2052,6 +2092,132 @@ function movePlayerInRoster(playerId, direction) {
   renderPlayers();
   renderSuggestions();
   scheduleLiveCompute();
+}
+
+// ============================================================
+// DRAG & DROP — réordonner par glisser-déposer
+// ============================================================
+
+let dragState = null; // { kind: 'roster' | 'result', id, role? }
+
+function clearDropIndicators() {
+  document.querySelectorAll('.drop-above, .drop-below').forEach(el => {
+    el.classList.remove('drop-above', 'drop-below');
+  });
+}
+
+function movePlayerToIndex(sourceId, targetId, position) {
+  if (sourceId === targetId) return;
+  const sourceIdx = state.players.findIndex(p => p.id === sourceId);
+  if (sourceIdx < 0) return;
+  const [source] = state.players.splice(sourceIdx, 1);
+  const targetIdx = state.players.findIndex(p => p.id === targetId);
+  if (targetIdx < 0) {
+    // Cible perdue → on remet la source en place
+    state.players.splice(sourceIdx, 0, source);
+    return;
+  }
+  const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
+  state.players.splice(insertIdx, 0, source);
+  renderPlayers();
+  renderSuggestions();
+  scheduleLiveCompute();
+}
+
+function movePlayerByNameToOther(sourceName, targetName, position) {
+  const source = state.players.find(p => p.name.trim() === sourceName);
+  const target = state.players.find(p => p.name.trim() === targetName);
+  if (!source || !target || source.id === target.id) return;
+  movePlayerToIndex(source.id, target.id, position);
+}
+
+function attachRosterDragHandlers(row, player) {
+  row.dataset.playerId = String(player.id);
+  const handle = row.querySelector('.drag-handle');
+  if (handle) {
+    handle.addEventListener('dragstart', e => {
+      dragState = { kind: 'roster', id: player.id };
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(player.id));
+      e.dataTransfer.setDragImage(row, 20, 20);
+      row.classList.add('dragging');
+    });
+    handle.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      clearDropIndicators();
+      dragState = null;
+    });
+  }
+  row.addEventListener('dragover', e => {
+    if (!dragState || dragState.kind !== 'roster' || dragState.id === player.id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = row.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    row.classList.toggle('drop-above', above);
+    row.classList.toggle('drop-below', !above);
+  });
+  row.addEventListener('dragleave', e => {
+    // Ne nettoie que si on quitte vraiment la row (pas un de ses enfants)
+    if (!row.contains(e.relatedTarget)) {
+      row.classList.remove('drop-above', 'drop-below');
+    }
+  });
+  row.addEventListener('drop', e => {
+    if (!dragState || dragState.kind !== 'roster') return;
+    e.preventDefault();
+    const rect = row.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    const sourceId = dragState.id;
+    row.classList.remove('drop-above', 'drop-below');
+    movePlayerToIndex(sourceId, player.id, above ? 'before' : 'after');
+  });
+}
+
+function attachResultDragHandlers(card, r) {
+  if (!r.assigned) return;
+  card.dataset.playerName = r.name;
+  card.dataset.resultRole = r.role === 'caster' ? 'ranged' : r.role;
+  const handle = card.querySelector('.drag-handle');
+  if (handle) {
+    handle.addEventListener('dragstart', e => {
+      dragState = { kind: 'result', name: r.name, role: card.dataset.resultRole };
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', r.name);
+      e.dataTransfer.setDragImage(card, 20, 20);
+      card.classList.add('dragging');
+    });
+    handle.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      clearDropIndicators();
+      dragState = null;
+    });
+  }
+  card.addEventListener('dragover', e => {
+    if (!dragState || dragState.kind !== 'result') return;
+    if (dragState.role !== card.dataset.resultRole) return; // rôle différent : refus
+    if (dragState.name === r.name) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = card.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    card.classList.toggle('drop-above', above);
+    card.classList.toggle('drop-below', !above);
+  });
+  card.addEventListener('dragleave', e => {
+    if (!card.contains(e.relatedTarget)) {
+      card.classList.remove('drop-above', 'drop-below');
+    }
+  });
+  card.addEventListener('drop', e => {
+    if (!dragState || dragState.kind !== 'result') return;
+    if (dragState.role !== card.dataset.resultRole) return;
+    e.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    card.classList.remove('drop-above', 'drop-below');
+    movePlayerByNameToOther(dragState.name, r.name, above ? 'before' : 'after');
+  });
 }
 
 function moveResultPlayer(playerName, direction) {
@@ -2558,6 +2724,7 @@ function renderSolution(sol) {
       const canRight = posInRow < sameRow.length - 1;
       card.innerHTML = `
         <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
+        <div class="drag-handle" draggable="true" title="Glisser pour réorganiser (dans le rôle)">⋮⋮</div>
         <div class="assignment-left">
           <div class="assignment-job-icon">
             <img src="${r.iconUrl}" alt="${r.jobName}" loading="lazy" draggable="false">
@@ -2571,11 +2738,12 @@ function renderSolution(sol) {
           <div class="assigned-job">${r.jobName}</div>
           <div class="assigned-slot">${slotShortLabel(r.slotRoles)}</div>
         </div>
-        <div class="reorder-controls horizontal" style="margin-left:6px;">
-          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="Déplacer à gauche"${canLeft ? '' : ' disabled'}>◂</button>
-          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="Déplacer à droite"${canRight ? '' : ' disabled'}>▸</button>
+        <div class="reorder-controls" style="margin-left:6px;">
+          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="Monter dans le rôle"${canLeft ? '' : ' disabled'}>↑</button>
+          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="Descendre dans le rôle"${canRight ? '' : ' disabled'}>↓</button>
         </div>
       `;
+      attachResultDragHandlers(card, r);
     }
     return card;
   }
