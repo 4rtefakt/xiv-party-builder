@@ -339,6 +339,77 @@
     flex-shrink: 0;
   }
 
+  .preset-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
+    padding: 0.2rem 0.45rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover { color: var(--amber); border-color: var(--amber); }
+
+  .preset-menu {
+    position: fixed;
+    z-index: 1000;
+    background: var(--panel-2);
+    border: 1px solid var(--line-bright);
+    padding: 0.4rem;
+    min-width: 220px;
+    max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    font-family: 'Chakra Petch', sans-serif;
+  }
+  .preset-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--ink);
+    gap: 0.5rem;
+  }
+  .preset-item:hover { background: rgba(0, 229, 255, 0.08); color: var(--cyan); }
+  .preset-item-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .preset-item-meta { font-size: 0.7rem; color: var(--ink-faint); flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .preset-item-remove {
+    background: transparent;
+    border: none;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 0 0.2rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .preset-item-remove:hover { color: var(--danger); }
+  .preset-empty {
+    padding: 0.5rem;
+    color: var(--ink-faint);
+    font-size: 0.8rem;
+    font-style: italic;
+    text-align: center;
+  }
+  .preset-divider { border-top: 1px solid var(--line); margin: 0.3rem -0.4rem; }
+  .preset-add {
+    padding: 0.5rem;
+    color: var(--cyan);
+    cursor: pointer;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+    font-weight: 500;
+  }
+  .preset-add:hover { background: rgba(0, 229, 255, 0.1); }
+  .preset-add.disabled { color: var(--ink-faint); cursor: default; }
+  .preset-add.disabled:hover { background: transparent; }
+
   .presence-pill {
     border: 1px solid var(--line);
     background: transparent;
@@ -1457,6 +1528,7 @@
   </div>
 </div>
 
+<div class="preset-menu" id="presetMenu" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1645,6 +1717,17 @@ function renderPlayers() {
       renderSuggestions();
     });
     row.appendChild(input);
+
+    const presetBtn = document.createElement('button');
+    presetBtn.className = 'preset-btn';
+    presetBtn.textContent = '★';
+    presetBtn.title = 'Presets de préférences';
+    presetBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (presetMenuTarget && presetMenuTarget.btn === presetBtn) closePresetMenu();
+      else openPresetMenu(presetBtn, player);
+    });
+    row.appendChild(presetBtn);
 
     const jobsRow = document.createElement('div');
     jobsRow.className = 'job-icons-row';
@@ -2491,6 +2574,138 @@ async function fetchPayloadById(id) {
   const payload = await r.json();
   return validateAndNormalizePayload(payload);
 }
+
+// ============================================================
+// PRESETS DE PRÉFÉRENCES — mémoire locale des combos favorites
+// ============================================================
+
+const PRESETS_KEY = 'xiv-pref-presets';
+const MAX_PRESETS = 5;
+const MAX_PRESET_NAME_LEN = 30;
+
+function getPresets() {
+  try {
+    const v = localStorage.getItem(PRESETS_KEY);
+    if (!v) return [];
+    const arr = JSON.parse(v);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(p => p && typeof p.name === 'string' && Array.isArray(p.jobs))
+      .slice(0, MAX_PRESETS);
+  } catch { return []; }
+}
+
+function writePresets(arr) {
+  try { localStorage.setItem(PRESETS_KEY, JSON.stringify(arr.slice(0, MAX_PRESETS))); }
+  catch { /* quota / mode privé : on ignore */ }
+}
+
+function savePreset(name, jobs) {
+  const arr = getPresets().filter(p => p.name !== name);
+  arr.unshift({ name: name.slice(0, MAX_PRESET_NAME_LEN), jobs: jobs.slice() });
+  writePresets(arr);
+}
+
+function deletePreset(name) {
+  writePresets(getPresets().filter(p => p.name !== name));
+}
+
+let presetMenuTarget = null;
+
+function closePresetMenu() {
+  const menu = document.getElementById('presetMenu');
+  if (menu) menu.hidden = true;
+  presetMenuTarget = null;
+}
+
+function openPresetMenu(btn, player) {
+  presetMenuTarget = { btn, player };
+  const menu = document.getElementById('presetMenu');
+  menu.innerHTML = '';
+  const presets = getPresets();
+  const validJobIds = new Set(JOBS.map(j => j.id));
+
+  if (presets.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'preset-empty';
+    empty.textContent = 'Aucun preset enregistré';
+    menu.appendChild(empty);
+  } else {
+    presets.forEach(preset => {
+      const item = document.createElement('div');
+      item.className = 'preset-item';
+      const previewNames = preset.jobs
+        .slice(0, 3)
+        .map(id => (JOB_BY_ID[id] || {}).name || id)
+        .join(', ') + (preset.jobs.length > 3 ? '…' : '');
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'preset-item-name';
+      nameSpan.textContent = preset.name;
+      const metaSpan = document.createElement('span');
+      metaSpan.className = 'preset-item-meta';
+      metaSpan.textContent = previewNames;
+      item.appendChild(nameSpan);
+      item.appendChild(metaSpan);
+      const rm = document.createElement('button');
+      rm.className = 'preset-item-remove';
+      rm.textContent = '×';
+      rm.title = 'Supprimer ce preset';
+      rm.addEventListener('click', e => {
+        e.stopPropagation();
+        deletePreset(preset.name);
+        openPresetMenu(btn, player);
+      });
+      item.appendChild(rm);
+      item.addEventListener('click', () => {
+        player.preferences = preset.jobs.filter(id => validJobIds.has(id));
+        closePresetMenu();
+        renderPlayers();
+        renderSuggestions();
+        scheduleLiveCompute();
+        showToast('Preset "' + preset.name + '" appliqué');
+      });
+      menu.appendChild(item);
+    });
+  }
+
+  const divider = document.createElement('div');
+  divider.className = 'preset-divider';
+  menu.appendChild(divider);
+
+  const add = document.createElement('div');
+  const canSave = player.preferences.length > 0 && presets.length < MAX_PRESETS;
+  add.className = 'preset-add' + (canSave ? '' : ' disabled');
+  add.textContent = canSave
+    ? '+ Enregistrer comme preset'
+    : (presets.length >= MAX_PRESETS ? `Max ${MAX_PRESETS} presets atteint` : 'Choisis d\'abord des prefs');
+  if (canSave) {
+    add.addEventListener('click', () => {
+      const name = prompt('Nom du preset :', player.name || '');
+      if (name && name.trim()) {
+        savePreset(name.trim(), player.preferences);
+        showToast('Preset enregistré');
+        openPresetMenu(btn, player);
+      }
+    });
+  }
+  menu.appendChild(add);
+
+  // Position
+  menu.hidden = false;
+  const rect = btn.getBoundingClientRect();
+  const menuW = 240;
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.left = Math.max(10, Math.min(window.innerWidth - menuW - 10, rect.left)) + 'px';
+}
+
+// Ferme le menu si clic en dehors
+document.addEventListener('click', e => {
+  const menu = document.getElementById('presetMenu');
+  if (!menu || menu.hidden) return;
+  if (menu.contains(e.target)) return;
+  if (presetMenuTarget && (presetMenuTarget.btn === e.target || presetMenuTarget.btn.contains(e.target))) return;
+  closePresetMenu();
+});
 
 // ============================================================
 // SALONS RÉCENTS — mémoire locale des derniers salons visités
