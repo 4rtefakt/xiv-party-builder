@@ -196,18 +196,23 @@ function fallback(text) {
   return new Response(text, { status: 500, headers: { 'Content-Type': 'text/plain' } });
 }
 
+// Largeur fixe par carte pour aligner les colonnes entre les 4 lignes
+// (sinon chaque carte hugge son contenu et les colonnes décalent).
+// 280 px × 4 cards + 3 gaps de 12 px = 1156 px, tient dans 1200 - 2*46 padding.
+const CARD_WIDTH = 280;
+
 function renderRow(roleKey, members) {
   if (members.length === 0) return '';
   const cards = members.map(m => `
-    <div style="display:flex; align-items:center; height:54px; padding:0 12px 0 8px; background:rgba(255,255,255,0.03); border-left:3px solid ${ROLE_COLOR[m.job.role]}; margin-right:14px;">
-      <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px;" />
-      <div style="display:flex; flex-direction:column;">
+    <div style="display:flex; align-items:center; height:54px; width:${CARD_WIDTH}px; padding:0 10px 0 8px; background:rgba(255,255,255,0.03); border-left:3px solid ${ROLE_COLOR[m.job.role]};">
+      <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
+      <div style="display:flex; flex-direction:column; overflow:hidden;">
         <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(m.name)}</div>
         <div style="display:flex; font-size:16px; color:${ROLE_COLOR[m.job.role]}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
       </div>
     </div>
   `).join('');
-  return `<div style="display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; margin-bottom:10px;">${cards}</div>`;
+  return `<div style="display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:10px;">${cards}</div>`;
 }
 
 export async function onRequestGet({ params, env }) {
