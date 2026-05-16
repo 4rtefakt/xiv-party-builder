@@ -48,7 +48,7 @@ export async function onRequest(context) {
   const playerCount = Array.isArray(data.p)
     ? data.p.filter(x => x && x.n && x.s !== 'out').length
     : 0;
-  const desc = `${playerCount} joueur${playerCount > 1 ? 's' : ''} · clique pour rejoindre le salon et ajouter ta ligne.`;
+  const desc = `${playerCount} ${playerCount > 1 ? 'joueur·euse·s' : 'joueur·euse'} · clique pour rejoindre le salon et ajouter ta ligne.`;
   const ogImage = `${url.origin}/og/${p}`;
 
   html = html

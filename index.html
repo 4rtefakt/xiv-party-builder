@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Party Builder · FFXIV</title>
-<meta name="description" content="Composition optimale de groupe pour Final Fantasy XIV — Dawntrail. Choisis ton contenu, entre les préférences de chaque joueur, obtiens la meilleure répartition de jobs.">
+<meta name="description" content="Composition optimale de groupe pour Final Fantasy XIV — Dawntrail. Choisis ton contenu, entre les préférences de chaque joueur·euse, obtiens la meilleure répartition de jobs.">
 
 <!-- Open Graph (Discord, Facebook, LinkedIn, ...) -->
 <meta property="og:type" content="website">
@@ -2137,7 +2137,7 @@ function computeOptimalAssignment(opts = {}) {
       preferences: p.preferences.filter(id => !banned.has(id))
     }));
 
-  if (players.length === 0) return { error: 'Aucun aventurier nommé.' };
+  if (players.length === 0) return { error: 'Aucun·e aventurier·ère nommé·e.' };
 
   const n = players.length;
   const m = slots.length;
@@ -2451,7 +2451,7 @@ function renderSolution(sol) {
     } else {
       card.className = `assignment ${r.role}` + (r.locked ? ' locked' : '');
       const lockGlyph = r.locked ? '◆ LOCK' : '◇ LOCK';
-      const lockTitle = r.locked ? 'Déverrouiller cette position' : 'Verrouiller ce joueur sur ' + r.jobName;
+      const lockTitle = r.locked ? 'Déverrouiller cette position' : 'Verrouiller cette personne sur ' + r.jobName;
       card.innerHTML = `
         <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
         <div class="assignment-left">
@@ -2550,13 +2550,14 @@ function renderSolution(sol) {
   if (stats.forced > 0) {
     const w = document.createElement('div');
     w.className = 'warning';
-    w.textContent = `${stats.forced} joueur${stats.forced > 1 ? 's' : ''} hors préférences — le groupe ne pouvait pas être formé autrement avec cette stratégie.`;
+    w.textContent = `${stats.forced} ${stats.forced > 1 ? 'joueur·euse·s' : 'joueur·euse'} hors préférences — le groupe ne pouvait pas être formé autrement avec cette stratégie.`;
     warningArea.appendChild(w);
   }
   if (stats.assigned < stats.slotsTotal) {
     const w = document.createElement('div');
     w.className = 'warning';
-    w.textContent = `Il manque ${stats.slotsTotal - stats.assigned} joueur${stats.slotsTotal - stats.assigned > 1 ? 's' : ''} pour compléter.`;
+    const missing = stats.slotsTotal - stats.assigned;
+    w.textContent = `Il manque ${missing} ${missing > 1 ? 'joueur·euse·s' : 'joueur·euse'} pour compléter.`;
     warningArea.appendChild(w);
   }
 }
@@ -2747,11 +2748,11 @@ function renderSuggestions() {
 
   if (playersWithName.length < targetSize) {
     const missing = targetSize - playersWithName.length;
-    messages.push(`Il manque <strong>${missing} joueur${missing > 1 ? 's' : ''}</strong> pour compléter le groupe.`);
+    messages.push(`Il manque <strong>${missing} ${missing > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> pour compléter le groupe.`);
   }
 
   if (noPref > 0) {
-    messages.push(`<strong>${noPref} joueur${noPref > 1 ? 's' : ''}</strong> ${noPref > 1 ? 'n\'ont' : 'n\'a'} pas encore renseigné de préférence.`);
+    messages.push(`<strong>${noPref} ${noPref > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> ${noPref > 1 ? 'n\'ont' : 'n\'a'} pas encore renseigné de préférence.`);
   }
 
   if (gaps.length > 0) {
@@ -2819,7 +2820,7 @@ function validateAndNormalizePayload(payload) {
   if (!payload || typeof payload !== 'object') throw new Error('Format invalide');
   if (!CONTENT_BASE[payload.c]) throw new Error('Type de contenu inconnu');
   if (!['unified', 'split'].includes(payload.d)) throw new Error('Mode DPS invalide');
-  if (!Array.isArray(payload.p)) throw new Error('Liste de joueurs invalide');
+  if (!Array.isArray(payload.p)) throw new Error('Liste de joueur·euse·s invalide');
 
   // Valider les jobs : filtrer les IDs inconnus silencieusement
   const validJobIds = new Set(JOBS.map(j => j.id));
@@ -3403,7 +3404,7 @@ function buildDiscordText() {
   const absents = state.players.filter(p => p.name.trim() && p.presence === 'out');
   if (absents.length > 0) {
     lines.push('');
-    lines.push(`Absents : ${absents.map(p => p.name).join(', ')}`);
+    lines.push(`Absent·e·s : ${absents.map(p => p.name).join(', ')}`);
   }
 
   if (state.bannedJobs.length > 0) {

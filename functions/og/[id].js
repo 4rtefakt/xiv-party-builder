@@ -104,7 +104,8 @@ function computeAssignment(data) {
     .filter(p => p && typeof p.n === 'string' && p.n.trim() !== '' && p.s !== 'out')
     .map(p => ({
       name: p.n.trim(),
-      preferences: (Array.isArray(p.j) ? p.j : []).filter(id => !banned.has(id))
+      preferences: (Array.isArray(p.j) ? p.j : []).filter(id => !banned.has(id)),
+      lockedJob: typeof p.l === 'string' && JOB_BY_ID[p.l] ? p.l : null
     }));
 
   if (players.length === 0 || slots.length === 0) {
@@ -115,9 +116,15 @@ function computeAssignment(data) {
   const m = slots.length;
   const benchSc = benchScore(fairnessWeight);
 
-  const bestPerPlayer = players.map(p => p.preferences.length === 0
-    ? Math.max(jobScoreForPlayer(p, '__none__', fairnessWeight).score, benchSc)
-    : SCORING.FIRST_CHOICE);
+  const bestPerPlayer = players.map(p => {
+    if (p.lockedJob) {
+      return Math.max(jobScoreForPlayer(p, p.lockedJob, fairnessWeight).score, benchSc);
+    }
+    if (p.preferences.length === 0) {
+      return Math.max(jobScoreForPlayer(p, '__none__', fairnessWeight).score, benchSc);
+    }
+    return SCORING.FIRST_CHOICE;
+  });
 
   const upperBoundFrom = i => {
     let s = 0;
@@ -144,15 +151,22 @@ function computeAssignment(data) {
       if (slotTaken[slotIdx]) continue;
       const slot = slots[slotIdx];
       const candidates = new Set();
-      for (const role of slot.roles) {
-        for (const job of JOBS_BY_ROLE[role]) {
-          if (banned.has(job.id)) continue;
-          if (player.preferences.includes(job.id)) candidates.add(job.id);
-        }
-        const hasPref = JOBS_BY_ROLE[role].some(j => !banned.has(j.id) && player.preferences.includes(j.id));
-        if (!hasPref) {
-          const fallback = JOBS_BY_ROLE[role].find(j => !banned.has(j.id));
-          if (fallback) candidates.add(fallback.id);
+      const lockedJobId = player.lockedJob;
+      const lockedJob = lockedJobId ? JOB_BY_ID[lockedJobId] : null;
+      if (lockedJob) {
+        // Lock : seul le job verrouillé compte, dans les slots compatibles
+        if (slot.roles.includes(lockedJob.role)) candidates.add(lockedJob.id);
+      } else {
+        for (const role of slot.roles) {
+          for (const job of JOBS_BY_ROLE[role]) {
+            if (banned.has(job.id)) continue;
+            if (player.preferences.includes(job.id)) candidates.add(job.id);
+          }
+          const hasPref = JOBS_BY_ROLE[role].some(j => !banned.has(j.id) && player.preferences.includes(j.id));
+          if (!hasPref) {
+            const fallback = JOBS_BY_ROLE[role].find(j => !banned.has(j.id));
+            if (fallback) candidates.add(fallback.id);
+          }
         }
       }
       for (const jobId of candidates) {
@@ -203,15 +217,26 @@ const CARD_WIDTH = 280;
 
 function renderRow(roleKey, members) {
   if (members.length === 0) return '';
-  const cards = members.map(m => `
-    <div style="display:flex; align-items:center; height:54px; width:${CARD_WIDTH}px; padding:0 10px 0 8px; background:rgba(255,255,255,0.03); border-left:3px solid ${ROLE_COLOR[m.job.role]};">
-      <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
-      <div style="display:flex; flex-direction:column; overflow:hidden;">
-        <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(m.name)}</div>
-        <div style="display:flex; font-size:16px; color:${ROLE_COLOR[m.job.role]}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
+  const cards = members.map(m => {
+    const roleColor = ROLE_COLOR[m.job.role];
+    // Joueurs verrouillés : cadre ambre + glyphe cadenas pour les distinguer visuellement
+    const lockBorder = m.locked
+      ? `border:1px solid #ffb547; background:rgba(255,181,71,0.08); box-shadow:0 0 8px rgba(255,181,71,0.25);`
+      : `background:rgba(255,255,255,0.03);`;
+    const lockGlyph = m.locked
+      ? `<div style="display:flex; align-items:center; justify-content:center; width:18px; height:18px; color:#ffb547; font-size:14px; font-weight:700; margin-left:auto; padding:0 2px;">◆</div>`
+      : '';
+    return `
+      <div style="display:flex; align-items:center; height:54px; width:${CARD_WIDTH}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
+        <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
+        <div style="display:flex; flex-direction:column; overflow:hidden;">
+          <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(m.name)}</div>
+          <div style="display:flex; font-size:16px; color:${roleColor}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
+        </div>
+        ${lockGlyph}
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
   return `<div style="display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:10px;">${cards}</div>`;
 }
 
@@ -233,13 +258,17 @@ export async function onRequestGet({ params, env }) {
   // ranged ET caster vont sur la même ligne ("Distance").
   const rows = { tank: [], heal: [], melee: [], ranged: [] };
   const bench = [];
+  let lockedCount = 0;
   assignment.forEach((a, i) => {
-    const playerName = players[i] ? players[i].name : '';
+    const p = players[i];
+    const playerName = p ? p.name : '';
     if (!a) { bench.push({ name: playerName }); return; }
     const job = JOB_BY_ID[a.jobId];
     if (!job) return;
+    const locked = !!(p && p.lockedJob && p.lockedJob === a.jobId);
+    if (locked) lockedCount++;
     const rowKey = job.role === 'caster' ? 'ranged' : job.role;
-    (rows[rowKey] || rows.ranged).push({ name: playerName, job });
+    (rows[rowKey] || rows.ranged).push({ name: playerName, job, locked });
   });
 
   const ct = CONTENT_BASE[data.c] || { label: 'Party' };
@@ -248,7 +277,15 @@ export async function onRequestGet({ params, env }) {
   // Auto-shrink font size if title is long
   const titleSize = titleText.length > 38 ? 48 : titleText.length > 28 ? 56 : 68;
   const playerCount = players.length;
-  const subtitle = `${ct.label} · ${playerCount} joueur${playerCount > 1 ? 's' : ''}${bench.length > 0 ? ` · ${bench.length} au banc` : ''}`;
+  const assignedCount = playerCount - bench.length;
+  const playerLabel = playerCount > 1 ? 'joueur·euse·s' : 'joueur·euse';
+  let validationLabel = '';
+  if (assignedCount > 0 && lockedCount === assignedCount) {
+    validationLabel = ' · ◆ COMPO VALIDÉE';
+  } else if (lockedCount > 0) {
+    validationLabel = ` · ${lockedCount} verrouillé·e·s`;
+  }
+  const subtitle = `${ct.label} · ${playerCount} ${playerLabel}${bench.length > 0 ? ` · ${bench.length} au banc` : ''}${validationLabel}`;
 
   const html = `
     <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:46px 56px; font-family:sans-serif;">
