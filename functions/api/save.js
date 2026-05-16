@@ -20,6 +20,7 @@ const VALID_PRESENCE = new Set(['in', 'maybe', 'out']);
 const MAX_BODY_BYTES = 8192; // élargi pour inclure les nouveaux champs (rowId, claimedBy, admins…)
 const MAX_PLAYERS = 24;
 const MAX_NAME_LEN = 32;
+const MAX_NOTE_LEN = 200;
 const MAX_WHEN_LEN = 80;
 const MAX_ADMINS = 24;
 const ID_LEN = 6;
@@ -116,6 +117,7 @@ function validatePayload(payload) {
     if (raw.l !== undefined && (typeof raw.l !== 'string' || !VALID_JOBS.has(raw.l))) return 'Invalid locked job';
     if (raw.id !== undefined && (typeof raw.id !== 'string' || !ROW_ID_PATTERN.test(raw.id))) return 'Invalid row id';
     if (raw.by !== undefined && raw.by !== null && (typeof raw.by !== 'string' || !USER_ID_PATTERN.test(raw.by))) return 'Invalid claimedBy';
+    if (raw.nt !== undefined && (typeof raw.nt !== 'string' || raw.nt.length > MAX_NOTE_LEN)) return 'Invalid note';
   }
   if (payload.admins !== undefined) {
     if (!Array.isArray(payload.admins) || payload.admins.length > MAX_ADMINS) return 'Invalid admins array';
@@ -132,6 +134,7 @@ function normalizePlayer(raw, existingRowId) {
   if (raw.s !== undefined && raw.s !== 'in') obj.s = raw.s;
   if (raw.l !== undefined) obj.l = raw.l;
   if (raw.by !== undefined && raw.by !== null && raw.by !== '') obj.by = raw.by;
+  if (raw.nt !== undefined && raw.nt !== '') obj.nt = raw.nt.slice(0, MAX_NOTE_LEN);
   obj.id = (raw.id && ROW_ID_PATTERN.test(raw.id)) ? raw.id : (existingRowId || generateRowId());
   return obj;
 }

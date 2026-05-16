@@ -793,6 +793,13 @@
     opacity: 0.45;
   }
 
+  .player-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 160px;
+    min-width: 130px;
+    gap: 2px;
+  }
   .player-name-input {
     background: transparent;
     border: none;
@@ -800,10 +807,34 @@
     font-family: 'Chakra Petch', sans-serif;
     font-size: 0.95rem;
     padding: 0.3rem 0.4rem;
-    flex: 1 1 140px;
-    min-width: 110px;
+    width: 100%;
     border-bottom: 1px solid var(--line);
     font-weight: 500;
+  }
+  .player-note-input {
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.7rem;
+    font-style: italic;
+    padding: 0.15rem 0.4rem;
+    width: 100%;
+    border-bottom: 1px dashed transparent;
+  }
+  .player-note-input:hover { border-bottom-color: rgba(0, 229, 255, 0.15); }
+  .player-note-input:focus {
+    outline: none;
+    border-bottom-color: var(--cyan);
+    font-style: normal;
+    color: var(--ink);
+  }
+  .player-note-input::placeholder {
+    color: var(--ink-faint);
+    opacity: 0.5;
+  }
+  .player-row.readonly .player-note-input {
+    pointer-events: none;
   }
   .player-name-input:focus {
     outline: none;
@@ -2178,6 +2209,7 @@ const STRINGS = {
     t_syncNow: '↻ Synchroniser',
     // — Roster row
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
+    r_notePlaceholder: 'Note (optionnelle) — visible par tout le monde',
     r_presenceClick: 'Présence — clic pour changer',
     r_dragHandle: 'Glisser pour réorganiser',
     r_reorderUp: 'Monter',
@@ -2352,6 +2384,7 @@ const STRINGS = {
     t_newTitle: 'Open an empty tab',
     t_syncNow: '↻ Sync now',
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
+    r_notePlaceholder: 'Note (optional) — visible to everyone',
     r_presenceClick: 'Attendance — click to change',
     r_dragHandle: 'Drag to reorder',
     r_reorderUp: 'Move up',
@@ -2603,7 +2636,8 @@ const makePlayer = (name = '') => ({
   preferences: [],
   presence: 'in',
   lockedJob: null,
-  claimedBy: null
+  claimedBy: null,
+  note: ''
 });
 
 // L'utilisateur peut ajouter/retirer librement après. Mais quand il change de contenu,
@@ -2721,6 +2755,9 @@ function buildPlayerRow(player, idx) {
     });
     row.appendChild(presenceEl);
 
+    const info = document.createElement('div');
+    info.className = 'player-info';
+
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'player-name-input';
@@ -2733,7 +2770,23 @@ function buildPlayerRow(player, idx) {
       scheduleLiveCompute(400);
       renderSuggestions();
     });
-    row.appendChild(input);
+    info.appendChild(input);
+
+    const noteInput = document.createElement('input');
+    noteInput.type = 'text';
+    noteInput.className = 'player-note-input';
+    noteInput.placeholder = t('r_notePlaceholder');
+    noteInput.value = player.note || '';
+    noteInput.readOnly = !editable;
+    noteInput.maxLength = 200;
+    noteInput.addEventListener('input', e => {
+      if (!canEditPlayer(player)) return;
+      player.note = e.target.value;
+      scheduleAutoSave(800); // debounce un peu plus long pour la note
+    });
+    info.appendChild(noteInput);
+
+    row.appendChild(info);
 
     // Couronne admin (visible seulement pour admin, sur lignes claimées)
     if (state.isAdmin && player.claimedBy) {
@@ -4120,6 +4173,7 @@ function buildPayload() {
       if (p.presence && p.presence !== 'in') obj.s = p.presence;
       if (p.lockedJob) obj.l = p.lockedJob;
       if (p.claimedBy) obj.by = p.claimedBy;
+      if (p.note && p.note.trim()) obj.nt = p.note.trim().slice(0, 200);
       return obj;
     })
   };
@@ -4166,6 +4220,9 @@ function validateAndNormalizePayload(payload) {
     }
     if (typeof raw.by === 'string' && raw.by.length >= 4 && raw.by.length <= 64) {
       player.claimedBy = raw.by;
+    }
+    if (typeof raw.nt === 'string') {
+      player.note = raw.nt.slice(0, 200);
     }
     return player;
   });
