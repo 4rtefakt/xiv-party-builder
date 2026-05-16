@@ -279,8 +279,33 @@
      des actions qui seront refusées côté serveur. */
   body.non-admin #addPlayerBtn,
   body.non-admin #resetBtn,
-  body.non-admin #importBtn {
+  body.non-admin #importBtn,
+  body.non-admin .btn-templates {
     display: none;
+  }
+
+  /* Bouton Templates dans la section Paramètres */
+  .templates-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.75rem;
+  }
+  .btn-templates {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    padding: 0.35rem 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 600;
+  }
+  .btn-templates:hover {
+    color: var(--amber);
+    border-color: var(--amber);
   }
 
   /* ============================================================
@@ -2159,6 +2184,9 @@
     </div>
 
     <div class="section-body">
+      <div class="templates-bar">
+        <button id="templatesBtn" class="btn-templates" data-i18n="tpl_btn">◆ Templates</button>
+      </div>
       <div class="controls-row">
         <div>
           <div class="control-block-label" data-i18n="p_content">Contenu</div>
@@ -2274,6 +2302,7 @@
 </div>
 
 <div class="preset-menu" id="presetMenu" hidden></div>
+<div class="preset-menu" id="templateMenu" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -2508,6 +2537,15 @@ const STRINGS = {
     pr_maxReached: ({ n }) => `Max ${n} presets atteint`,
     pr_delete: 'Supprimer ce preset',
     pr_prompt: 'Nom du preset :',
+    tpl_btn: '◆ Templates',
+    tpl_empty: 'Aucun template enregistré',
+    tpl_saveCurrent: '+ Enregistrer la config actuelle',
+    tpl_prompt: 'Nom du template :',
+    tpl_delete: 'Supprimer ce template',
+    tpl_applied: ({ name }) => `Template "${name}" appliqué`,
+    tpl_saved: 'Template enregistré',
+    tpl_maxReached: ({ n }) => `Max ${n} templates atteint`,
+    tpl_meta: ({ content, bans }) => `${content}${bans > 0 ? ' · ' + bans + ' banni' + (bans > 1 ? 's' : '') : ''}`,
     // — Errors
     e_invalidCode: 'Code invalide ou corrompu',
     e_invalidFormat: 'Format invalide',
@@ -2682,6 +2720,15 @@ const STRINGS = {
     pr_maxReached: ({ n }) => `Max ${n} presets reached`,
     pr_delete: 'Delete this preset',
     pr_prompt: 'Preset name:',
+    tpl_btn: '◆ Templates',
+    tpl_empty: 'No template saved',
+    tpl_saveCurrent: '+ Save current config',
+    tpl_prompt: 'Template name:',
+    tpl_delete: 'Delete this template',
+    tpl_applied: ({ name }) => `Template "${name}" applied`,
+    tpl_saved: 'Template saved',
+    tpl_maxReached: ({ n }) => `Max ${n} templates reached`,
+    tpl_meta: ({ content, bans }) => `${content}${bans > 0 ? ' · ' + bans + ' banned' : ''}`,
     e_invalidCode: 'Invalid or corrupt code',
     e_invalidFormat: 'Invalid format',
     e_unknownContent: 'Unknown content type',
@@ -4666,6 +4713,167 @@ document.addEventListener('click', e => {
   if (menu.contains(e.target)) return;
   if (presetMenuTarget && (presetMenuTarget.btn === e.target || presetMenuTarget.btn.contains(e.target))) return;
   closePresetMenu();
+});
+
+// ============================================================
+// TEMPLATES DE COMPO — sauvegarde locale d'une config ré-utilisable
+// (contenu + jobs bannis + fairnessWeight ; PAS le roster ni le Quand?)
+// ============================================================
+
+const TEMPLATES_KEY = 'xiv-comp-templates';
+const MAX_TEMPLATES = 10;
+const MAX_TEMPLATE_NAME_LEN = 40;
+
+function getTemplates() {
+  try {
+    const v = localStorage.getItem(TEMPLATES_KEY);
+    if (!v) return [];
+    const arr = JSON.parse(v);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(tp => tp && typeof tp.name === 'string' && typeof tp.contentType === 'string')
+      .slice(0, MAX_TEMPLATES);
+  } catch { return []; }
+}
+
+function writeTemplates(arr) {
+  try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(arr.slice(0, MAX_TEMPLATES))); }
+  catch { /* quota / mode privé : on ignore */ }
+}
+
+function saveTemplate(name) {
+  const arr = getTemplates().filter(tp => tp.name !== name);
+  arr.unshift({
+    name: name.slice(0, MAX_TEMPLATE_NAME_LEN),
+    contentType: state.contentType,
+    bannedJobs: state.bannedJobs.slice(),
+    fairnessWeight: state.fairnessWeight,
+    savedAt: Date.now()
+  });
+  writeTemplates(arr);
+}
+
+function deleteTemplate(name) {
+  writeTemplates(getTemplates().filter(tp => tp.name !== name));
+}
+
+function applyTemplate(tmpl) {
+  // Snapshot pour l'undo (au cas où c'est appliqué par erreur)
+  snapshotState(t('tpl_applied', { name: tmpl.name }));
+  if (typeof tmpl.contentType === 'string' && CONTENT_BASE[tmpl.contentType]) {
+    state.contentType = tmpl.contentType;
+  }
+  if (Array.isArray(tmpl.bannedJobs)) {
+    const validJobIds = new Set(JOBS.map(j => j.id));
+    state.bannedJobs = tmpl.bannedJobs.filter(id => validJobIds.has(id));
+  }
+  if (typeof tmpl.fairnessWeight === 'number' && tmpl.fairnessWeight >= 0 && tmpl.fairnessWeight <= 100) {
+    state.fairnessWeight = tmpl.fairnessWeight;
+  }
+  ensureRosterSize(CONTENT_BASE[state.contentType].size);
+  const slider = document.getElementById('balanceSlider');
+  if (slider) slider.value = state.fairnessWeight;
+  const balVal = document.getElementById('balanceValue');
+  if (balVal) balVal.textContent = balanceLabel(state.fairnessWeight);
+  renderAll();
+  scheduleAutoSave(200);
+  showToast(t('tpl_applied', { name: tmpl.name }), {
+    action: { label: t('undo_btn'), onClick: performUndo },
+    duration: 4500
+  });
+}
+
+let templateMenuOpen = false;
+
+function closeTemplateMenu() {
+  const menu = document.getElementById('templateMenu');
+  if (menu) menu.hidden = true;
+  templateMenuOpen = false;
+}
+
+function openTemplateMenu(btn) {
+  templateMenuOpen = true;
+  const menu = document.getElementById('templateMenu');
+  menu.innerHTML = '';
+  const templates = getTemplates();
+  if (templates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'preset-empty';
+    empty.textContent = t('tpl_empty');
+    menu.appendChild(empty);
+  } else {
+    templates.forEach(tmpl => {
+      const item = document.createElement('div');
+      item.className = 'preset-item';
+      const ct = CONTENT_BASE[tmpl.contentType];
+      const ctLabel = ct ? ct.label : tmpl.contentType;
+      const meta = t('tpl_meta', {
+        content: ctLabel,
+        bans: Array.isArray(tmpl.bannedJobs) ? tmpl.bannedJobs.length : 0
+      });
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'preset-item-name';
+      nameSpan.textContent = tmpl.name;
+      const metaSpan = document.createElement('span');
+      metaSpan.className = 'preset-item-meta';
+      metaSpan.textContent = meta;
+      item.appendChild(nameSpan);
+      item.appendChild(metaSpan);
+      const rm = document.createElement('button');
+      rm.className = 'preset-item-remove';
+      rm.textContent = '×';
+      rm.title = t('tpl_delete');
+      rm.addEventListener('click', e => {
+        e.stopPropagation();
+        deleteTemplate(tmpl.name);
+        openTemplateMenu(btn); // re-render
+      });
+      item.appendChild(rm);
+      item.addEventListener('click', () => {
+        closeTemplateMenu();
+        applyTemplate(tmpl);
+      });
+      menu.appendChild(item);
+    });
+  }
+  const divider = document.createElement('div');
+  divider.className = 'preset-divider';
+  menu.appendChild(divider);
+  const add = document.createElement('div');
+  const canSave = templates.length < MAX_TEMPLATES;
+  add.className = 'preset-add' + (canSave ? '' : ' disabled');
+  add.textContent = canSave ? t('tpl_saveCurrent') : t('tpl_maxReached', { n: MAX_TEMPLATES });
+  if (canSave) {
+    add.addEventListener('click', () => {
+      const name = prompt(t('tpl_prompt'), state.raidWhen.trim() || '');
+      if (name && name.trim()) {
+        saveTemplate(name.trim());
+        showToast(t('tpl_saved'));
+        openTemplateMenu(btn);
+      }
+    });
+  }
+  menu.appendChild(add);
+  menu.hidden = false;
+  const rect = btn.getBoundingClientRect();
+  const menuW = 280;
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.left = Math.max(10, Math.min(window.innerWidth - menuW - 10, rect.right - menuW)) + 'px';
+}
+
+document.getElementById('templatesBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  if (templateMenuOpen) closeTemplateMenu();
+  else openTemplateMenu(e.currentTarget);
+});
+
+// Ferme le menu templates si clic en dehors
+document.addEventListener('click', e => {
+  const menu = document.getElementById('templateMenu');
+  if (!menu || menu.hidden) return;
+  if (menu.contains(e.target)) return;
+  if (e.target.id === 'templatesBtn' || e.target.closest('#templatesBtn')) return;
+  closeTemplateMenu();
 });
 
 // ============================================================
