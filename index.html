@@ -232,6 +232,40 @@
     background: linear-gradient(90deg, var(--line-bright), transparent);
   }
 
+  .section-collapsible .section-header {
+    cursor: pointer;
+    margin-bottom: 1.25rem;
+    user-select: none;
+  }
+  .section-collapsible.collapsed .section-header {
+    margin-bottom: 0;
+  }
+  .section-collapsible.collapsed .section-body {
+    display: none;
+  }
+  .section-summary {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.75rem;
+    color: var(--ink-dim);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: none;
+  }
+  .section-toggle {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-faint);
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .section-collapsible.collapsed .section-toggle {
+    transform: rotate(-90deg);
+  }
+  .section-collapsible:hover .section-toggle {
+    color: var(--cyan);
+  }
+
   .section-roster-info {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
@@ -1410,48 +1444,52 @@
     <span class="recent-rooms-label">Salons récents</span>
   </div>
 
-  <section class="section">
-    <div class="section-header">
+  <section class="section section-collapsible" id="paramsSection">
+    <div class="section-header" id="paramsHeader">
       <span class="section-tag">01</span>
       <h2>Paramètres</h2>
+      <span class="section-summary" id="paramsSummary"></span>
       <div class="section-line"></div>
+      <span class="section-toggle">▾</span>
     </div>
 
-    <div class="controls-row">
-      <div>
-        <div class="control-block-label">Contenu</div>
-        <div class="segment" id="contentSeg"></div>
+    <div class="section-body">
+      <div class="controls-row">
+        <div>
+          <div class="control-block-label">Contenu</div>
+          <div class="segment" id="contentSeg"></div>
+        </div>
+        <div>
+          <div class="control-block-label">Distinction DPS</div>
+          <div class="segment" id="dpsModeSeg"></div>
+        </div>
       </div>
-      <div>
-        <div class="control-block-label">Distinction DPS</div>
-        <div class="segment" id="dpsModeSeg"></div>
-      </div>
-    </div>
 
-    <div class="balance-control">
-      <div class="balance-header">
-        <span class="balance-title">Stratégie d'optimisation</span>
-        <span class="balance-value" id="balanceValue">Équilibré</span>
+      <div class="balance-control">
+        <div class="balance-header">
+          <span class="balance-title">Stratégie d'optimisation</span>
+          <span class="balance-value" id="balanceValue">Équilibré</span>
+        </div>
+        <div class="balance-slider-wrap">
+          <input type="range" id="balanceSlider" class="balance-slider" min="0" max="100" value="50" step="5">
+        </div>
+        <div class="balance-labels">
+          <span>◂ Satisfaction globale</span>
+          <span>Frustration limitée ▸</span>
+        </div>
       </div>
-      <div class="balance-slider-wrap">
-        <input type="range" id="balanceSlider" class="balance-slider" min="0" max="100" value="50" step="5">
-      </div>
-      <div class="balance-labels">
-        <span>◂ Satisfaction globale</span>
-        <span>Frustration limitée ▸</span>
-      </div>
-    </div>
 
-    <div class="balance-control" style="margin-top:0.75rem">
-      <div class="control-block-label">Quand ?</div>
-      <div class="control-block-label-sub">Date / heure du raid · optionnel · partagé avec le salon</div>
-      <input type="text" id="raidWhenInput" class="raid-when-input" maxlength="80" placeholder="samedi 21h · ven prochain à 20h30 …">
-    </div>
+      <div class="balance-control" style="margin-top:0.75rem">
+        <div class="control-block-label">Quand ?</div>
+        <div class="control-block-label-sub">Date / heure du raid · optionnel · partagé avec le salon</div>
+        <input type="text" id="raidWhenInput" class="raid-when-input" maxlength="80" placeholder="samedi 21h · ven prochain à 20h30 …">
+      </div>
 
-    <div class="balance-control" style="margin-top:0.75rem">
-      <div class="control-block-label">Jobs bannis pour ce raid</div>
-      <div class="control-block-label-sub">Aucun slot ne pourra leur être attribué · ignoré dans les préférences</div>
-      <div class="banned-jobs-row" id="bannedJobsRow"></div>
+      <div class="balance-control" style="margin-top:0.75rem">
+        <div class="control-block-label">Jobs bannis pour ce raid</div>
+        <div class="control-block-label-sub">Aucun slot ne pourra leur être attribué · ignoré dans les préférences</div>
+        <div class="banned-jobs-row" id="bannedJobsRow"></div>
+      </div>
     </div>
   </section>
 
@@ -1819,6 +1857,30 @@ function renderRaidWhen() {
   if (input && input.value !== state.raidWhen) input.value = state.raidWhen;
 }
 
+const PARAMS_COLLAPSED_KEY = 'xiv-params-collapsed';
+
+function updateParamsSummary() {
+  const el = document.getElementById('paramsSummary');
+  if (!el) return;
+  const parts = [];
+  const ct = CONTENT_BASE[state.contentType];
+  if (ct) parts.push(ct.label);
+  if (state.dpsMode === 'split') parts.push('Mêlée/Distance');
+  const w = state.raidWhen.trim();
+  if (w) parts.push(w);
+  if (state.bannedJobs.length > 0) {
+    parts.push(state.bannedJobs.length + ' banni' + (state.bannedJobs.length > 1 ? 's' : ''));
+  }
+  el.textContent = parts.length > 0 ? '· ' + parts.join(' · ') : '';
+}
+
+function setParamsCollapsed(collapsed) {
+  const sec = document.getElementById('paramsSection');
+  if (!sec) return;
+  sec.classList.toggle('collapsed', collapsed);
+  try { localStorage.setItem(PARAMS_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch {}
+}
+
 function renderAll() {
   renderSegments();
   renderRosterInfo();
@@ -1826,6 +1888,7 @@ function renderAll() {
   renderSuggestions();
   renderBannedJobs();
   renderRaidWhen();
+  updateParamsSummary();
   scheduleLiveCompute();
 }
 
@@ -3170,8 +3233,21 @@ balanceSlider.addEventListener('input', e => {
 // Quand ? (date/heure du raid)
 document.getElementById('raidWhenInput').addEventListener('input', e => {
   state.raidWhen = e.target.value.slice(0, 80);
+  updateParamsSummary();
   scheduleAutoSave(2000);
 });
+
+// Toggle de la section Paramètres
+document.getElementById('paramsHeader').addEventListener('click', () => {
+  const sec = document.getElementById('paramsSection');
+  setParamsCollapsed(!sec.classList.contains('collapsed'));
+});
+
+// État initial : collapsé par défaut sauf si l'utilisateur l'a déjà déplié
+(() => {
+  const saved = localStorage.getItem(PARAMS_COLLAPSED_KEY);
+  setParamsCollapsed(saved === null ? true : saved === '1');
+})();
 
 // Modal close buttons (générique)
 document.querySelectorAll('[data-modal-close]').forEach(btn => {
