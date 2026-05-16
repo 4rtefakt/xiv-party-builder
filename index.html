@@ -155,6 +155,7 @@
   .meta-info {
     display: flex;
     gap: 1rem;
+    align-items: center;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
     color: var(--ink-dim);
@@ -166,6 +167,27 @@
     content: '◇';
     margin-right: 0.4rem;
     color: var(--cyan);
+  }
+
+  .btn-new {
+    background: transparent;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    padding: 0.35rem 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 600;
+  }
+  .btn-new:hover {
+    background: rgba(0, 229, 255, 0.1);
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
+  }
+  .btn-new::before {
+    content: '+ ';
   }
 
   .section {
@@ -1639,6 +1661,7 @@
       <h1>PARTY<span class="sep">//</span>BUILDER</h1>
     </div>
     <div class="meta-info">
+      <button class="btn-new" id="newBtn" data-i18n="t_new" data-i18n-title="t_newTitle">Nouveau</button>
       <span>S9.NET</span>
       <span>v7.1</span>
     </div>
@@ -1715,8 +1738,7 @@
     </div>
 
     <div class="toolbar">
-      <button class="btn-tool" id="shareBtn"><span class="arrow">▸</span> <span data-i18n="t_share">Partager</span></button>
-      <button class="btn-tool" id="syncBtn" hidden><span class="arrow">↻</span> <span id="syncStatus">Salon</span></button>
+      <button class="btn-tool" id="shareBtn"><span class="arrow">▸</span> <span id="shareBtnLabel">Partager</span></button>
       <button class="btn-tool" id="importBtn"><span class="arrow">◂</span> <span data-i18n="t_import">Importer</span></button>
       <button class="btn-tool" id="resetBtn"><span class="arrow">×</span> <span data-i18n="t_reset">Réinitialiser</span></button>
     </div>
@@ -1757,6 +1779,7 @@
       <button class="btn-tool" id="copyLinkBtn"><span class="arrow">▸</span> <span data-i18n="m_copyLink">Copier le lien</span></button>
       <button class="btn-tool" id="copyDiscordBtn"><span class="arrow">▸</span> <span data-i18n="m_copyDiscord">Copier pour Discord</span></button>
       <button class="btn-tool" id="copyCodeBtn"><span class="arrow">▸</span> <span data-i18n="m_copyCode">Copier le code seul</span></button>
+      <button class="btn-tool" id="modalSyncBtn" hidden><span data-i18n="t_syncNow">↻ Synchroniser</span></button>
     </div>
   </div>
 </div>
@@ -1836,6 +1859,9 @@ const STRINGS = {
     t_salon: 'Salon',
     t_syncing: 'Sync…',
     t_salonAt: ({ time }) => `Salon · ${time}`,
+    t_new: 'Nouveau',
+    t_newTitle: 'Ouvrir un onglet vide',
+    t_syncNow: '↻ Synchroniser',
     // — Roster row
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
     r_presenceClick: 'Présence — clic pour changer',
@@ -1985,6 +2011,9 @@ const STRINGS = {
     t_salon: 'Room',
     t_syncing: 'Sync…',
     t_salonAt: ({ time }) => `Room · ${time}`,
+    t_new: 'New',
+    t_newTitle: 'Open an empty tab',
+    t_syncNow: '↻ Sync now',
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
     r_presenceClick: 'Attendance — click to change',
     r_dragHandle: 'Drag to reorder',
@@ -3735,13 +3764,12 @@ let suppressAutoSave = false;
 function pad2(n) { return String(n).padStart(2, '0'); }
 
 function updateSyncStatus() {
-  const btn = document.getElementById('syncBtn');
-  const label = document.getElementById('syncStatus');
+  const label = document.getElementById('shareBtnLabel');
+  if (!label) return;
   if (!currentRoomId) {
-    btn.hidden = true;
+    label.textContent = t('t_share');
     return;
   }
-  btn.hidden = false;
   if (saving) {
     label.textContent = t('t_syncing');
   } else if (lastSavedAt) {
@@ -3772,19 +3800,42 @@ function exitRoomMode() {
   updateSyncStatus();
 }
 
+// Y a-t-il du contenu "utile" qui mérite de créer un salon ?
+// Évite de créer un ID au tout premier chargement sur une page vide.
+function hasMeaningfulContent() {
+  if (state.raidWhen && state.raidWhen.trim()) return true;
+  if (state.bannedJobs && state.bannedJobs.length > 0) return true;
+  return state.players.some(p =>
+    (p.name && p.name.trim()) ||
+    (p.preferences && p.preferences.length > 0) ||
+    (p.presence && p.presence !== 'in') ||
+    !!p.lockedJob
+  );
+}
+
 async function saveRoom() {
-  if (!currentRoomId || saving) return;
+  if (saving) return;
+  // En mode local, on ne sauve que s'il y a quelque chose de concret à sauver
+  if (!currentRoomId && !hasMeaningfulContent()) return;
   saving = true;
   updateSyncStatus();
   try {
+    const body = currentRoomId
+      ? { id: currentRoomId, ...buildPayload() }
+      : buildPayload();
     const r = await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: currentRoomId, ...buildPayload() })
+      body: JSON.stringify(body)
     });
     if (r.ok) {
+      const data = await r.json().catch(() => null);
+      // Premier save sans ID : on entre en mode salon avec l'ID renvoyé
+      if (!currentRoomId && data && typeof data.id === 'string') {
+        enterRoomMode(data.id);
+      }
       lastSavedAt = Date.now();
-      recordCurrentRoom(); // rafraîchit le when / contentType / timestamp
+      recordCurrentRoom();
     }
   } catch { /* silencieux */ }
   saving = false;
@@ -3792,7 +3843,9 @@ async function saveRoom() {
 }
 
 function scheduleAutoSave(delay = 2000) {
-  if (!currentRoomId || suppressAutoSave) return;
+  if (suppressAutoSave) return;
+  // Pas de salon ET pas de contenu utile = on ne planifie rien (état initial vide)
+  if (!currentRoomId && !hasMeaningfulContent()) return;
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(saveRoom, delay);
 }
@@ -3916,47 +3969,61 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   const urlEl = document.getElementById('shareUrl');
   const copyLinkBtn = document.getElementById('copyLinkBtn');
   const copyCodeBtn = document.getElementById('copyCodeBtn');
+  const modalSyncBtn = document.getElementById('modalSyncBtn');
   const code = encodeState();
   urlEl.dataset.code = code;
 
-  // Déjà dans un salon : on affiche juste l'URL existante, pas de nouvelle création
+  // Déjà dans un salon : on affiche l'URL existante, on flushe les modifs en
+  // attente pour avoir l'état le plus récent côté serveur, on offre le sync
   if (currentRoomId) {
     urlEl.value = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`;
     copyLinkBtn.disabled = false;
     copyCodeBtn.disabled = false;
+    modalSyncBtn.hidden = false;
     openModal('shareModal');
+    await flushPendingSave();
     shareBusy = false;
     return;
   }
 
-  // Local → on crée le salon
-  const payload = buildPayload();
+  // Local → on déclenche un save immédiat pour créer le salon
+  modalSyncBtn.hidden = true;
   const longUrl = buildShareUrl(code);
   urlEl.value = t('ts_generating');
   copyLinkBtn.disabled = true;
   copyCodeBtn.disabled = true;
   openModal('shareModal');
 
-  try {
-    const id = await requestShortId(payload);
-    if (id) {
-      enterRoomMode(id);
-      lastSavedAt = Date.now();
-      updateSyncStatus();
-      urlEl.value = `${window.location.origin}${window.location.pathname}?p=${id}`;
-    } else {
-      urlEl.value = longUrl;
-      showToast(t('ts_shortUnavailable'));
-    }
-  } finally {
-    copyLinkBtn.disabled = false;
-    copyCodeBtn.disabled = false;
-    shareBusy = false;
+  // Annule le debounce et déclenche un save immédiat
+  if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+  await saveRoom();
+
+  if (currentRoomId) {
+    urlEl.value = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`;
+    modalSyncBtn.hidden = false;
+  } else {
+    // Échec : fallback sur l'URL base64
+    urlEl.value = longUrl;
+    showToast(t('ts_shortUnavailable'));
+  }
+  copyLinkBtn.disabled = false;
+  copyCodeBtn.disabled = false;
+  shareBusy = false;
+});
+
+// Sync depuis la modale (visible uniquement en mode salon)
+document.getElementById('modalSyncBtn').addEventListener('click', async () => {
+  await syncRoom();
+  // Met à jour l'URL au cas où l'ID change (ne devrait pas)
+  if (currentRoomId) {
+    document.getElementById('shareUrl').value = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`;
   }
 });
 
-// Sync (bouton salon)
-document.getElementById('syncBtn').addEventListener('click', syncRoom);
+// Nouveau : ouvre un onglet vide sur la racine de l'app (sans ?p=)
+document.getElementById('newBtn').addEventListener('click', () => {
+  window.open(window.location.pathname, '_blank');
+});
 
 // Auto-sync quand l'onglet reprend le focus ; flush quand il part au second plan
 document.addEventListener('visibilitychange', () => {
@@ -4202,6 +4269,7 @@ document.addEventListener('keydown', e => {
 
 (async function initFromUrl() {
   applyStaticI18n();
+  updateSyncStatus(); // assure le label du bouton Partager dans la bonne langue
   const params = new URLSearchParams(window.location.search);
   const code = params.get('p');
   if (code) {
