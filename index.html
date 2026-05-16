@@ -1136,6 +1136,30 @@
     pointer-events: none;
   }
 
+  .role-bulk-btn {
+    width: 26px;
+    height: 26px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    align-self: center;
+  }
+  .role-bulk-btn[data-role="tank"]:hover   { color: var(--tank);   border-color: var(--tank);   background: rgba(43, 158, 255, 0.08); }
+  .role-bulk-btn[data-role="heal"]:hover   { color: var(--heal);   border-color: var(--heal);   background: rgba(74, 222, 128, 0.08); }
+  .role-bulk-btn[data-role="melee"]:hover  { color: var(--melee);  border-color: var(--melee);  background: rgba(255, 79, 110, 0.08); }
+  .role-bulk-btn[data-role="ranged"]:hover { color: var(--ranged); border-color: var(--ranged); background: rgba(255, 181, 71, 0.08); }
+  .role-bulk-btn[data-role="caster"]:hover { color: var(--caster); border-color: var(--caster); background: rgba(192, 132, 252, 0.08); }
+  .player-row.readonly .role-bulk-btn { opacity: 0.3; pointer-events: none; }
+
   .job-icon .order-badge {
     position: absolute;
     top: -5px;
@@ -1159,6 +1183,18 @@
   .job-icon[data-role="melee"].selected  .order-badge { background: var(--melee);  box-shadow: 0 0 6px var(--melee); }
   .job-icon[data-role="ranged"].selected .order-badge { background: var(--ranged); box-shadow: 0 0 6px var(--ranged); }
   .job-icon[data-role="caster"].selected .order-badge { background: var(--caster); box-shadow: 0 0 6px var(--caster); }
+
+  /* Étoile dorée sur le job favori (position 0 dans les prefs) */
+  .job-icon .order-badge.favorite {
+    background: linear-gradient(135deg, #ffd700, #ffaa00) !important;
+    color: #1a0e00;
+    box-shadow: 0 0 8px rgba(255, 200, 0, 0.7) !important;
+    width: 16px;
+    height: 16px;
+    top: -6px;
+    right: -6px;
+    font-size: 0.62rem;
+  }
 
   .job-icon[data-tooltip]::after {
     content: attr(data-tooltip);
@@ -2438,6 +2474,10 @@ const STRINGS = {
     // — Roster row
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
     r_notePlaceholder: 'Note (optionnelle) — visible par tout le monde',
+    r_bulkRole: ({ role }) => {
+      const labels = { tank: 'tanks', heal: 'healers', melee: 'mêlée', ranged: 'distance physique', caster: 'casters' };
+      return `Cocher tous les ${labels[role] || role} d'un coup`;
+    },
     r_presenceClick: 'Présence — clic pour changer',
     r_dragHandle: 'Glisser pour réorganiser',
     r_reorderUp: 'Monter',
@@ -2639,6 +2679,10 @@ const STRINGS = {
     t_syncNow: '↻ Sync now',
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
     r_notePlaceholder: 'Note (optional) — visible to everyone',
+    r_bulkRole: ({ role }) => {
+      const labels = { tank: 'tanks', heal: 'healers', melee: 'melee', ranged: 'physical ranged', caster: 'casters' };
+      return `Select all ${labels[role] || role} at once`;
+    },
     r_presenceClick: 'Attendance — click to change',
     r_dragHandle: 'Drag to reorder',
     r_reorderUp: 'Move up',
@@ -3109,13 +3153,45 @@ function buildPlayerRow(player, idx) {
     const jobsRow = document.createElement('div');
     jobsRow.className = 'job-icons-row';
 
+    // Auto-nom : si on coche un job dans une ligne sans nom, on remplit
+    // automatiquement avec le placeholder pour que la ligne compte dans l'optimiseur.
+    function autoFillNameIfNeeded() {
+      if (!player.name.trim()) {
+        player.name = t('r_playerPlaceholder', { n: idx + 1 });
+      }
+    }
+
     const roles = ['tank', 'heal', 'melee', 'ranged', 'caster'];
+    const ROLE_LETTERS = { tank: 'T', heal: 'H', melee: 'M', ranged: 'R', caster: 'C' };
     roles.forEach((role, roleIdx) => {
       if (roleIdx > 0) {
         const sep = document.createElement('div');
         sep.className = 'role-sep';
         jobsRow.appendChild(sep);
       }
+
+      // Bouton bulk-select : ajoute tous les jobs du rôle aux préférences
+      const bulkBtn = document.createElement('button');
+      bulkBtn.className = 'role-bulk-btn';
+      bulkBtn.dataset.role = role;
+      bulkBtn.textContent = ROLE_LETTERS[role];
+      bulkBtn.title = t('r_bulkRole', { role });
+      bulkBtn.addEventListener('click', e => {
+        if (!canEditPlayer(player)) return;
+        e.stopPropagation();
+        autoFillNameIfNeeded();
+        // Ajoute tous les jobs du rôle qui n'y sont pas déjà
+        ROLE_GRID_ORDER[role].forEach(jobId => {
+          if (!state.bannedJobs.includes(jobId) && !player.preferences.includes(jobId)) {
+            player.preferences.push(jobId);
+          }
+        });
+        renderPlayers();
+        renderSuggestions();
+        scheduleLiveCompute();
+      });
+      jobsRow.appendChild(bulkBtn);
+
       const group = document.createElement('div');
       group.className = 'role-group';
       group.style.setProperty('--cols', ROLE_GRID_COLS[role]);
@@ -3134,7 +3210,13 @@ function buildPlayerRow(player, idx) {
           icon.classList.add('selected');
           const badge = document.createElement('span');
           badge.className = 'order-badge';
-          badge.textContent = prefIdx + 1;
+          // Étoile dorée sur le favori (position 0) — sinon le rang numérique
+          if (prefIdx === 0) {
+            badge.classList.add('favorite');
+            badge.textContent = '★';
+          } else {
+            badge.textContent = prefIdx + 1;
+          }
           icon.appendChild(badge);
         }
         if (state.bannedJobs.includes(job.id)) {
@@ -3143,9 +3225,14 @@ function buildPlayerRow(player, idx) {
         }
 
         icon.addEventListener('click', () => {
+          if (!canEditPlayer(player)) return;
           const i = player.preferences.indexOf(job.id);
-          if (i === -1) player.preferences.push(job.id);
-          else          player.preferences.splice(i, 1);
+          if (i === -1) {
+            player.preferences.push(job.id);
+            autoFillNameIfNeeded(); // remplit le nom si vide
+          } else {
+            player.preferences.splice(i, 1);
+          }
           renderPlayers();
           renderSuggestions();
           scheduleLiveCompute();
