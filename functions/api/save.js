@@ -31,6 +31,23 @@ const USER_ID_PATTERN = /^[A-Za-z0-9_-]{4,64}$/;
 const ROW_ID_PATTERN = /^[A-Za-z0-9_-]{4,16}$/;
 const SECRET_PATTERN = /^[A-Fa-f0-9]{32,128}$/;
 
+// Rate-limit : max N saves/heure par userId. KV est eventually-consistent donc
+// best-effort (deux saves quasi-simultanés peuvent passer ensemble), mais
+// suffit pour bloquer un client qui boucle.
+const RATE_LIMIT_MAX = 100;
+const RATE_LIMIT_WINDOW_SECONDS = 3600;
+
+async function checkRateLimit(env, userId) {
+  const key = 'rl:' + userId;
+  const current = parseInt(await env.PARTY_KV.get(key) || '0', 10);
+  if (current >= RATE_LIMIT_MAX) return { allowed: false, current };
+  // expirationTtl s'applique à la NOUVELLE entrée ; chaque save prolonge la
+  // fenêtre. Pour une vraie fenêtre glissante il faudrait une approche
+  // différente, mais c'est OK pour notre usage.
+  await env.PARTY_KV.put(key, String(current + 1), { expirationTtl: RATE_LIMIT_WINDOW_SECONDS });
+  return { allowed: true, current: current + 1 };
+}
+
 function generateId() {
   const bytes = new Uint8Array(ID_LEN);
   crypto.getRandomValues(bytes);
@@ -205,6 +222,12 @@ export async function onRequestPost(context) {
 
   const userId = (request.headers.get('x-user-id') || '').trim();
   if (!USER_ID_PATTERN.test(userId)) return jsonResponse({ error: 'Invalid or missing X-User-Id' }, 400);
+
+  // Rate-limit : bloque les clients qui spamment (max N saves/heure/userId)
+  const rl = await checkRateLimit(env, userId);
+  if (!rl.allowed) {
+    return jsonResponse({ error: 'Trop de sauvegardes — réessaie dans 1h' }, 429);
+  }
 
   const adminSecret = (request.headers.get('x-admin-secret') || '').trim();
   const adminSecretValid = SECRET_PATTERN.test(adminSecret);
