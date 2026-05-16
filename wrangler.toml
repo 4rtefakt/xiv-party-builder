@@ -3,6 +3,12 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "."
 
+# Sans cette section, CF Pages saute totalement l'étape de build (et donc
+# n'installe pas les deps npm) parce que wrangler.toml est présent.
+# `npm install` ici sert juste à récupérer workers-og pour les Functions.
+[build]
+command = "npm install"
+
 # Cloudflare Pages utilise ce fichier comme source de vérité des bindings
 # dès qu'il est présent dans le repo (le dashboard est ignoré).
 #
