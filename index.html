@@ -169,6 +169,120 @@
     color: var(--cyan);
   }
 
+  /* Permissions / claim */
+  .player-row.readonly {
+    opacity: 0.85;
+  }
+  .player-row.readonly .player-name-input,
+  .player-row.readonly .job-icon {
+    pointer-events: none;
+  }
+  .player-row.readonly .presence-pill,
+  .player-row.readonly .preset-btn,
+  .player-row.readonly .reorder-btn,
+  .player-row.readonly .btn-remove,
+  .player-row.readonly .drag-handle {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .player-row.unclaimed {
+    border-color: rgba(0, 229, 255, 0.25);
+    background: rgba(0, 229, 255, 0.03);
+  }
+  .player-row.mine {
+    border-color: rgba(74, 222, 128, 0.45);
+    background: linear-gradient(180deg, var(--bg-deep), rgba(74, 222, 128, 0.04));
+  }
+  .claim-btn {
+    background: var(--bg);
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.6rem;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .claim-btn:hover {
+    background: rgba(0, 229, 255, 0.12);
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
+  }
+  .crown-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 0.1rem 0.35rem;
+    line-height: 1;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    filter: grayscale(1);
+    opacity: 0.4;
+  }
+  .crown-btn:hover {
+    opacity: 1;
+    filter: grayscale(0);
+    border-color: var(--amber);
+  }
+  .crown-btn.is-admin {
+    opacity: 1;
+    filter: grayscale(0);
+    color: var(--amber);
+    text-shadow: 0 0 6px rgba(255, 181, 71, 0.6);
+  }
+  .crown-btn.is-owner {
+    cursor: default;
+    pointer-events: none;
+    color: var(--amber);
+    opacity: 1;
+    filter: grayscale(0);
+  }
+  .perm-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.12em;
+    padding: 0.1rem 0.3rem;
+    border: 1px solid;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    line-height: 1.2;
+  }
+  .perm-badge.you { color: var(--heal); border-color: rgba(74, 222, 128, 0.45); }
+  .perm-badge.owner { color: var(--amber); border-color: rgba(255, 181, 71, 0.45); }
+  .perm-badge.admin { color: var(--cyan); border-color: rgba(0, 229, 255, 0.45); }
+
+  /* Désactivation visuelle pour non-admins sur paramètres */
+  .section-collapsible.readonly .balance-slider,
+  .section-collapsible.readonly .raid-when-input,
+  .section-collapsible.readonly .segment-btn,
+  .section-collapsible.readonly .banned-jobs-row .job-icon {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .readonly-banner {
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    color: var(--cyan);
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* Non-admins : on cache add-player / reset / import pour ne pas suggérer
+     des actions qui seront refusées côté serveur. */
+  body.non-admin #addPlayerBtn,
+  body.non-admin #resetBtn,
+  body.non-admin #importBtn {
+    display: none;
+  }
+
   .btn-new {
     background: transparent;
     border: 1px solid var(--cyan);
@@ -1897,6 +2011,7 @@
       <button class="btn-tool" id="copyLinkBtn"><span class="arrow">▸</span> <span data-i18n="m_copyLink">Copier le lien</span></button>
       <button class="btn-tool" id="copyDiscordBtn"><span class="arrow">▸</span> <span data-i18n="m_copyDiscord">Copier pour Discord</span></button>
       <button class="btn-tool" id="copyCodeBtn"><span class="arrow">▸</span> <span data-i18n="m_copyCode">Copier le code seul</span></button>
+      <button class="btn-tool" id="copyAdminLinkBtn" hidden style="border-color:var(--amber);color:var(--amber)" data-i18n-title="perm_copyAdminLinkTitle"><span data-i18n="perm_copyAdminLink">◆ Copier le lien admin</span></button>
       <button class="btn-tool" id="modalSyncBtn" hidden><span data-i18n="t_syncNow">↻ Synchroniser</span></button>
     </div>
   </div>
@@ -1921,6 +2036,51 @@
 
 <script>
 'use strict';
+
+// ============================================================
+// IDENTITÉ — userId persistant en localStorage (auth "faible")
+// ============================================================
+
+const USER_ID = (() => {
+  try {
+    let id = localStorage.getItem('xiv-user-id');
+    if (!id) {
+      id = (crypto.randomUUID && crypto.randomUUID()) ||
+           ('u_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36));
+      localStorage.setItem('xiv-user-id', id);
+    }
+    return id;
+  } catch {
+    return 'anon_' + Math.random().toString(36).slice(2);
+  }
+})();
+
+function generateRowId() {
+  const bytes = new Uint8Array(7);
+  crypto.getRandomValues(bytes);
+  const base62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  let out = 'r';
+  for (let i = 0; i < 7; i++) out += base62[bytes[i] % 62];
+  return out;
+}
+
+function getAdminSecret(roomId) {
+  if (!roomId) return null;
+  try { return localStorage.getItem('xiv-admin-secret-' + roomId) || null; }
+  catch { return null; }
+}
+
+function setAdminSecret(roomId, secret) {
+  if (!roomId || !secret) return;
+  try { localStorage.setItem('xiv-admin-secret-' + roomId, secret); } catch {}
+}
+
+function apiHeaders(roomId) {
+  const h = { 'Content-Type': 'application/json', 'X-User-Id': USER_ID };
+  const s = getAdminSecret(roomId);
+  if (s) h['X-Admin-Secret'] = s;
+  return h;
+}
 
 // ============================================================
 // i18n — détection de la langue + dictionnaire FR/EN
@@ -1965,6 +2125,23 @@ const STRINGS = {
     p_bannedHelp: 'Aucun slot ne pourra leur être attribué · ignoré dans les préférences',
     p_summaryBanned: ({ n }) => `${n} banni${n > 1 ? 's' : ''}`,
     p_summarySplit: 'Mêlée/Distance',
+    // Permissions / claim
+    perm_claim: 'Réserver',
+    perm_claimTitle: 'Réserver cette ligne (claim)',
+    perm_yours: 'Toi',
+    perm_owner: 'Owner',
+    perm_admin: 'Admin',
+    perm_readonly: 'Lecture seule — réserve une ligne pour participer',
+    perm_crown: '👑',
+    perm_crownGrant: 'Promouvoir cette personne admin',
+    perm_crownRevoke: 'Retirer les droits admin',
+    perm_uncrown: '⌫',
+    perm_copyAdminLink: '◆ Copier le lien admin',
+    perm_copyAdminLinkTitle: 'Lien de récupération admin — ne partager qu\'avec des personnes de confiance',
+    perm_adminLinkCopied: 'Lien admin copié — garde-le précieusement',
+    perm_noRecoveryAvailable: 'Lien de récupération non disponible (déjà partagé via un autre canal ?)',
+    perm_promoted: ({ name }) => `${name} est maintenant admin`,
+    perm_demoted: ({ name }) => `${name} n'est plus admin`,
     // — Content types
     c_dungeon: 'Donjon',
     c_raid8: 'Raid 8',
@@ -2124,6 +2301,23 @@ const STRINGS = {
     p_bannedHelp: 'No slot can be assigned to them · ignored in preferences',
     p_summaryBanned: ({ n }) => `${n} banned`,
     p_summarySplit: 'Melee/Ranged',
+    // Permissions / claim
+    perm_claim: 'Claim',
+    perm_claimTitle: 'Claim this row',
+    perm_yours: 'You',
+    perm_owner: 'Owner',
+    perm_admin: 'Admin',
+    perm_readonly: 'Read-only — claim a row to take part',
+    perm_crown: '👑',
+    perm_crownGrant: 'Promote to admin',
+    perm_crownRevoke: 'Remove admin rights',
+    perm_uncrown: '⌫',
+    perm_copyAdminLink: '◆ Copy admin link',
+    perm_copyAdminLinkTitle: 'Admin recovery link — only share with trusted people',
+    perm_adminLinkCopied: 'Admin link copied — keep it safe',
+    perm_noRecoveryAvailable: 'Recovery link not available (already shared via another channel?)',
+    perm_promoted: ({ name }) => `${name} is now admin`,
+    perm_demoted: ({ name }) => `${name} is no longer admin`,
     c_dungeon: 'Dungeon',
     c_raid8: 'Raid 8',
     c_raid24: 'Raid 24',
@@ -2367,17 +2561,42 @@ const state = {
   raidWhen: '',
   bannedJobs: [],      // IDs de jobs interdits dans la compo
   showAlternatives: false,
-  players: []
+  players: [],
+  // Permissions (mises à jour à chaque load/save) :
+  ownerId: null,
+  admins: [],
+  isAdmin: true        // en local mode, on est toujours "admin" de ce qu'on créera
 };
+
+function isCurrentAdmin() { return !!state.isAdmin; }
+function canEditPlayer(p) {
+  if (state.isAdmin) return true;
+  return p.claimedBy === USER_ID;
+}
+function canClaimPlayer(p) {
+  if (state.isAdmin) return false; // admin n'a pas besoin de claim
+  return !p.claimedBy;
+}
 
 let nextPlayerId = 1;
 const PRESENCE_VALUES = ['in', 'maybe', 'out'];
-const makePlayer = (name = '') => ({ id: nextPlayerId++, name, preferences: [], presence: 'in', lockedJob: null });
+const makePlayer = (name = '') => ({
+  id: nextPlayerId++,
+  rowId: generateRowId(),
+  name,
+  preferences: [],
+  presence: 'in',
+  lockedJob: null,
+  claimedBy: null
+});
 
 // L'utilisateur peut ajouter/retirer librement après. Mais quand il change de contenu,
 // on n'écrase PAS son roster — on prévient juste s'il y a sous/sur-effectif.
 // Au premier load, on remplit avec la taille du contenu par défaut.
 function ensureRosterSize(targetSize) {
+  // Les non-admins ne paddent pas : leurs lignes locales n'existent pas
+  // côté serveur, leur claim aurait un rowId orphelin que le merge ignorerait.
+  if (!state.isAdmin && currentRoomId) return;
   while (state.players.length < targetSize) state.players.push(makePlayer());
 }
 
@@ -2434,13 +2653,19 @@ function renderRosterInfo() {
 
 function buildPlayerRow(player, idx) {
     const presence = player.presence || 'in';
+    const isMine = player.claimedBy === USER_ID;
+    const isUnclaimed = !player.claimedBy;
+    const editable = canEditPlayer(player);
     const row = document.createElement('div');
-    row.className = 'player-row presence-' + presence;
+    row.className = 'player-row presence-' + presence
+      + (isMine ? ' mine' : '')
+      + (isUnclaimed && !state.isAdmin ? ' unclaimed' : '')
+      + (!editable ? ' readonly' : '');
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
     handle.textContent = '⋮⋮';
-    handle.draggable = true;
+    handle.draggable = state.isAdmin; // drag uniquement pour admin
     handle.title = t('r_dragHandle');
     row.appendChild(handle);
 
@@ -2449,11 +2674,43 @@ function buildPlayerRow(player, idx) {
     idxEl.textContent = String(idx + 1).padStart(2, '0');
     row.appendChild(idxEl);
 
+    // Badge "Toi" / "Owner" / "Admin" si pertinent
+    if (player.claimedBy) {
+      let badgeClass = '';
+      let badgeText = '';
+      if (player.claimedBy === USER_ID) { badgeClass = 'you'; badgeText = t('perm_yours'); }
+      else if (player.claimedBy === state.ownerId) { badgeClass = 'owner'; badgeText = t('perm_owner'); }
+      else if (state.admins.includes(player.claimedBy)) { badgeClass = 'admin'; badgeText = t('perm_admin'); }
+      if (badgeText) {
+        const badge = document.createElement('span');
+        badge.className = 'perm-badge ' + badgeClass;
+        badge.textContent = badgeText;
+        row.appendChild(badge);
+      }
+    }
+
+    // Bouton Réserver pour les non-admins sur ligne libre
+    if (!state.isAdmin && isUnclaimed) {
+      const claimBtn = document.createElement('button');
+      claimBtn.className = 'claim-btn';
+      claimBtn.textContent = t('perm_claim');
+      claimBtn.title = t('perm_claimTitle');
+      claimBtn.addEventListener('click', () => {
+        player.claimedBy = USER_ID;
+        renderPlayers();
+        renderSuggestions();
+        scheduleAutoSave(150); // save rapide pour matérialiser le claim côté serveur
+      });
+      row.appendChild(claimBtn);
+    }
+
     const presenceEl = document.createElement('button');
     presenceEl.className = 'presence-pill presence-' + presence;
     presenceEl.textContent = { in: 'OK', maybe: '?', out: 'ABS' }[presence];
     presenceEl.title = t('r_presenceClick');
+    presenceEl.disabled = !editable;
     presenceEl.addEventListener('click', () => {
+      if (!canEditPlayer(player)) return;
       const cur = PRESENCE_VALUES.indexOf(player.presence || 'in');
       player.presence = PRESENCE_VALUES[(cur + 1) % PRESENCE_VALUES.length];
       renderPlayers();
@@ -2467,14 +2724,41 @@ function buildPlayerRow(player, idx) {
     input.className = 'player-name-input';
     input.placeholder = t('r_playerPlaceholder', { n: idx + 1 });
     input.value = player.name;
+    input.readOnly = !editable;
     input.addEventListener('input', e => {
+      if (!canEditPlayer(player)) return;
       player.name = e.target.value;
-      // Le nom n'affecte que la présence dans le calcul (joueurs vides ignorés)
-      // Debounce plus long sur le nom pour ne pas calculer à chaque frappe
       scheduleLiveCompute(400);
       renderSuggestions();
     });
     row.appendChild(input);
+
+    // Couronne admin (visible seulement pour admin, sur lignes claimées)
+    if (state.isAdmin && player.claimedBy) {
+      const crown = document.createElement('button');
+      const isOwnerRow = player.claimedBy === state.ownerId;
+      const isAdminRow = state.admins.includes(player.claimedBy);
+      crown.className = 'crown-btn' + (isOwnerRow ? ' is-owner' : '') + (isAdminRow && !isOwnerRow ? ' is-admin' : '');
+      crown.textContent = isOwnerRow ? '◆' : '👑';
+      crown.title = isOwnerRow
+        ? t('perm_owner')
+        : (isAdminRow ? t('perm_crownRevoke') : t('perm_crownGrant'));
+      crown.addEventListener('click', () => {
+        if (isOwnerRow) return; // pas de demote de l'owner
+        const target = player.claimedBy;
+        const i = state.admins.indexOf(target);
+        if (i === -1) {
+          state.admins.push(target);
+          showToast(t('perm_promoted', { name: player.name || target.slice(0, 8) }));
+        } else {
+          state.admins.splice(i, 1);
+          showToast(t('perm_demoted', { name: player.name || target.slice(0, 8) }));
+        }
+        renderPlayers();
+        scheduleAutoSave(150);
+      });
+      row.appendChild(crown);
+    }
 
     const presetBtn = document.createElement('button');
     presetBtn.className = 'preset-btn';
@@ -2578,6 +2862,20 @@ const allianceCollapsed = [false, false, false]; // état UI (non persisté)
 function renderPlayers() {
   const list = document.getElementById('playersList');
   list.innerHTML = '';
+
+  // Banner lecture seule pour les non-admins
+  const isNonAdmin = !state.isAdmin && !!currentRoomId;
+  document.body.classList.toggle('non-admin', isNonAdmin);
+  if (isNonAdmin) {
+    const banner = document.createElement('div');
+    banner.className = 'readonly-banner';
+    banner.textContent = t('perm_readonly');
+    list.appendChild(banner);
+  }
+
+  // Applique la classe readonly à la section paramètres pour griser les contrôles
+  const paramsSection = document.getElementById('paramsSection');
+  if (paramsSection) paramsSection.classList.toggle('readonly', isNonAdmin);
 
   if (!isRaid24()) {
     state.players.forEach((player, idx) => {
@@ -3793,19 +4091,23 @@ function buildPayload() {
     c: state.contentType,
     d: state.dpsMode,
     f: state.fairnessWeight,
-    p: state.players
-      .filter(p => p.name.trim() !== '' || p.preferences.length > 0)
-      .map(p => {
-        const obj = { n: p.name.trim(), j: p.preferences.slice() };
-        // 'in' est le défaut → omis pour économiser des bytes
-        if (p.presence && p.presence !== 'in') obj.s = p.presence;
-        if (p.lockedJob) obj.l = p.lockedJob;
-        return obj;
-      })
+    // On envoie aussi les lignes vides claimées et non claimées (utile pour le
+    // merge non-admin côté serveur — l'ordre/le nombre comptent)
+    p: state.players.map(p => {
+      const obj = { n: p.name.trim(), j: p.preferences.slice(), id: p.rowId };
+      if (p.presence && p.presence !== 'in') obj.s = p.presence;
+      if (p.lockedJob) obj.l = p.lockedJob;
+      if (p.claimedBy) obj.by = p.claimedBy;
+      return obj;
+    })
   };
   const w = state.raidWhen.trim();
   if (w) payload.w = w;
   if (state.bannedJobs.length > 0) payload.bj = state.bannedJobs.slice();
+  // Admins : on n'envoie cette liste que si on est admin (le serveur l'ignorerait sinon)
+  if (state.isAdmin && state.admins && state.admins.length > 0) {
+    payload.admins = state.admins.slice();
+  }
   return payload;
 }
 
@@ -3828,6 +4130,9 @@ function validateAndNormalizePayload(payload) {
   const validJobIds = new Set(JOBS.map(j => j.id));
   const players = payload.p.map(raw => {
     const player = makePlayer(typeof raw.n === 'string' ? raw.n : '');
+    if (typeof raw.id === 'string' && raw.id.length <= 16) {
+      player.rowId = raw.id;
+    }
     if (Array.isArray(raw.j)) {
       player.preferences = raw.j.filter(id => validJobIds.has(id));
     }
@@ -3836,6 +4141,9 @@ function validateAndNormalizePayload(payload) {
     }
     if (typeof raw.l === 'string' && validJobIds.has(raw.l)) {
       player.lockedJob = raw.l;
+    }
+    if (typeof raw.by === 'string' && raw.by.length >= 4 && raw.by.length <= 64) {
+      player.claimedBy = raw.by;
     }
     return player;
   });
@@ -3861,7 +4169,10 @@ function validateAndNormalizePayload(payload) {
     fairnessWeight,
     raidWhen,
     bannedJobs,
-    players
+    players,
+    ownerId: typeof payload.ownerId === 'string' ? payload.ownerId : null,
+    admins: Array.isArray(payload.admins) ? payload.admins.slice() : [],
+    isAdmin: !!payload.isAdmin
   };
 }
 
@@ -3890,12 +4201,18 @@ async function requestShortId(payload) {
   try {
     const r = await fetch('/api/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders(null),
       body: JSON.stringify(payload)
     });
     if (!r.ok) return null;
     const data = await r.json();
     if (data && typeof data.id === 'string' && SHORT_ID_PATTERN.test(data.id)) {
+      // Sur création, on récupère le secret de récupération admin
+      if (data.recoverySecret) setAdminSecret(data.id, data.recoverySecret);
+      // On peut aussi mettre à jour state.* depuis la réponse
+      if (typeof data.isAdmin === 'boolean') state.isAdmin = data.isAdmin;
+      if (typeof data.ownerId === 'string') state.ownerId = data.ownerId;
+      if (Array.isArray(data.admins)) state.admins = data.admins.slice();
       return data.id;
     }
     return null;
@@ -3905,7 +4222,7 @@ async function requestShortId(payload) {
 }
 
 async function fetchPayloadById(id) {
-  const r = await fetch(`/api/load/${encodeURIComponent(id)}`);
+  const r = await fetch(`/api/load/${encodeURIComponent(id)}`, { headers: apiHeaders(id) });
   if (!r.ok) {
     if (r.status === 404) throw new Error(t('e_notFound'));
     throw new Error(t('e_loadFail', { status: r.status }));
@@ -4189,7 +4506,7 @@ async function saveRoom() {
       : buildPayload();
     const r = await fetch('/api/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders(currentRoomId),
       body: JSON.stringify(body)
     });
     if (r.ok) {
@@ -4198,8 +4515,18 @@ async function saveRoom() {
       if (!currentRoomId && data && typeof data.id === 'string') {
         enterRoomMode(data.id);
       }
+      // Permissions à jour depuis la réponse serveur
+      if (data) {
+        if (data.recoverySecret && data.id) setAdminSecret(data.id, data.recoverySecret);
+        if (typeof data.isAdmin === 'boolean') state.isAdmin = data.isAdmin;
+        if (typeof data.ownerId === 'string') state.ownerId = data.ownerId;
+        if (Array.isArray(data.admins)) state.admins = data.admins.slice();
+      }
       lastSavedAt = Date.now();
       recordCurrentRoom();
+      // Si le statut admin a changé (ex: récupération via secret), on doit
+      // re-render pour refléter les nouvelles permissions
+      renderAll();
     }
   } catch { /* silencieux */ }
   saving = false;
@@ -4256,6 +4583,11 @@ function applyImportedState(imported) {
   state.raidWhen = imported.raidWhen ?? '';
   state.bannedJobs = Array.isArray(imported.bannedJobs) ? imported.bannedJobs.slice() : [];
   state.players = imported.players;
+  // Permissions : si l'import vient du serveur on a ces champs ; sinon (base64
+  // local) on reste en mode "admin local"
+  if (imported.ownerId !== undefined) state.ownerId = imported.ownerId || null;
+  if (Array.isArray(imported.admins)) state.admins = imported.admins.slice();
+  if (typeof imported.isAdmin === 'boolean') state.isAdmin = imported.isAdmin;
   // Mettre à jour le slider visuellement
   const slider = document.getElementById('balanceSlider');
   if (slider) slider.value = state.fairnessWeight;
@@ -4334,8 +4666,13 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   const copyLinkBtn = document.getElementById('copyLinkBtn');
   const copyCodeBtn = document.getElementById('copyCodeBtn');
   const modalSyncBtn = document.getElementById('modalSyncBtn');
+  const adminLinkBtn = document.getElementById('copyAdminLinkBtn');
   const code = encodeState();
   urlEl.dataset.code = code;
+
+  function refreshAdminLinkVisibility() {
+    adminLinkBtn.hidden = !(state.isAdmin && currentRoomId && getAdminSecret(currentRoomId));
+  }
 
   // Déjà dans un salon : on affiche l'URL existante, on flushe les modifs en
   // attente pour avoir l'état le plus récent côté serveur, on offre le sync
@@ -4344,6 +4681,7 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
     copyLinkBtn.disabled = false;
     copyCodeBtn.disabled = false;
     modalSyncBtn.hidden = false;
+    refreshAdminLinkVisibility();
     openModal('shareModal');
     await flushPendingSave();
     shareBusy = false;
@@ -4352,6 +4690,7 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
 
   // Local → on déclenche un save immédiat pour créer le salon
   modalSyncBtn.hidden = true;
+  adminLinkBtn.hidden = true;
   const longUrl = buildShareUrl(code);
   urlEl.value = t('ts_generating');
   copyLinkBtn.disabled = true;
@@ -4365,6 +4704,7 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   if (currentRoomId) {
     urlEl.value = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`;
     modalSyncBtn.hidden = false;
+    refreshAdminLinkVisibility();
   } else {
     // Échec : fallback sur l'URL base64
     urlEl.value = longUrl;
@@ -4382,6 +4722,19 @@ document.getElementById('modalSyncBtn').addEventListener('click', async () => {
   if (currentRoomId) {
     document.getElementById('shareUrl').value = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`;
   }
+});
+
+// Copier le lien admin de récupération (admin avec secret en LS uniquement)
+document.getElementById('copyAdminLinkBtn').addEventListener('click', async () => {
+  if (!currentRoomId) return;
+  const secret = getAdminSecret(currentRoomId);
+  if (!secret) {
+    showToast(t('perm_noRecoveryAvailable'));
+    return;
+  }
+  const url = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}#admin=${secret}`;
+  if (await copyToClipboard(url)) showToast(t('perm_adminLinkCopied'));
+  else showToast(t('ts_copyFail'));
 });
 
 // Nouveau : ouvre un onglet vide sur la racine de l'app (sans ?p=)
@@ -4636,6 +4989,18 @@ document.addEventListener('keydown', e => {
   updateSyncStatus(); // assure le label du bouton Partager dans la bonne langue
   const params = new URLSearchParams(window.location.search);
   const code = params.get('p');
+  // Récupération admin via fragment : ?p=ID#admin=SECRET
+  // Le fragment n'est jamais envoyé au serveur, idéal pour un secret partagé
+  // uniquement avec l'owner.
+  if (window.location.hash && code) {
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const sec = hashParams.get('admin');
+    if (sec && /^[A-Fa-f0-9]{32,128}$/.test(sec)) {
+      setAdminSecret(code, sec);
+      // On nettoie le fragment de la barre d'URL (mais on garde le secret en LS)
+      window.history.replaceState({}, '', window.location.pathname + window.location.search);
+    }
+  }
   if (code) {
     const isShortId = SHORT_ID_PATTERN.test(code);
     // Pour un short ID, on doit await la Function : on rend d'abord la state
