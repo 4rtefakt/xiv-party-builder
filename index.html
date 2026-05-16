@@ -400,6 +400,62 @@
     .btn-tool { font-size: 0.62rem; padding: 0.45rem 0.6rem; letter-spacing: 0.1em; }
   }
 
+  /* ============================================================
+     ANIMATIONS — micro-transitions de confort
+     ============================================================ */
+  @keyframes assignment-in {
+    from { opacity: 0.55; transform: translateY(-2px); }
+    to   { opacity: 1;     transform: translateY(0); }
+  }
+  .assignment {
+    animation: assignment-in 0.22s ease-out;
+    transition: border-color 0.2s, background 0.25s, box-shadow 0.25s;
+  }
+
+  @keyframes alliance-result-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .alliance-result-block { animation: alliance-result-in 0.28s ease-out; }
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  /* Sections / alliances collapsibles : transition douce sur la chevron rotation
+     (les body restent en display:none pour ne pas garder de hauteur) */
+  .section-toggle, .alliance-toggle {
+    transition: transform 0.22s ease, color 0.15s;
+  }
+
+  /* Boutons de la toolbar : feedback "press" plus net */
+  .btn-tool:active { transform: translateY(1px); }
+  .claim-btn:active { transform: translateY(1px); }
+  .crown-btn:active { transform: scale(0.92); }
+
+  /* Job icon click : rebond mini */
+  .job-icon { transition: transform 0.12s ease, color 0.15s, border-color 0.15s; }
+  .job-icon:active:not(.banned) { transform: scale(0.92); }
+
+  /* Live indicator pulse pendant le calcul */
+  @keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  .live-indicator.computing { animation: live-pulse 1s ease-in-out infinite; }
+
+  /* Respect prefers-reduced-motion : on coupe tout pour les utilisateur·ices
+     qui ont activé "réduire les animations" système */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   .btn-new {
     background: transparent;
     border: 1px solid var(--cyan);
