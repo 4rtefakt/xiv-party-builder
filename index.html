@@ -1751,7 +1751,31 @@
   .toast.show {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+    pointer-events: auto; /* permet le clic sur le bouton d'action */
   }
+  .toast.with-action {
+    padding-right: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .toast-action {
+    background: transparent;
+    border: 1px solid currentColor;
+    color: currentColor;
+    cursor: pointer;
+    padding: 0.3rem 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .toast-action:hover {
+    background: rgba(0, 229, 255, 0.15);
+  }
+  .toast.with-action::before { display: none; }
   .toast::before {
     content: '✓ ';
     color: var(--heal);
@@ -2393,6 +2417,12 @@ const STRINGS = {
     r_bannedTooltip: ({ name }) => `${name} · banni du raid`,
     r_presetTip: 'Presets de préférences',
     r_confirmReset: 'Réinitialiser le roster ?',
+    undo_btn: 'Annuler',
+    undo_done: 'Action annulée',
+    undo_reset: 'Roster réinitialisé',
+    undo_remove: ({ name }) => `${name || 'Joueur·euse'} retiré·e`,
+    undo_unlockAll: 'Tout déverrouillé',
+    undo_nothing: 'Rien à annuler',
     // — Modals
     m_shareTitle: 'Partager ce groupe',
     m_shareSubtitle: 'Lien copiable · contient noms + préférences',
@@ -2568,6 +2598,12 @@ const STRINGS = {
     r_bannedTooltip: ({ name }) => `${name} · banned from this raid`,
     r_presetTip: 'Preference presets',
     r_confirmReset: 'Reset the roster?',
+    undo_btn: 'Undo',
+    undo_done: 'Action undone',
+    undo_reset: 'Roster reset',
+    undo_remove: ({ name }) => `${name || 'Player'} removed`,
+    undo_unlockAll: 'All unlocked',
+    undo_nothing: 'Nothing to undo',
     m_shareTitle: 'Share this group',
     m_shareSubtitle: 'Copyable link · contains names + preferences',
     m_copyLink: 'Copy link',
@@ -3073,11 +3109,18 @@ function buildPlayerRow(player, idx) {
     removeBtn.textContent = '×';
     removeBtn.title = t('r_remove');
     removeBtn.addEventListener('click', () => {
+      // Snapshot avant retrait pour permettre l'undo
+      snapshotState(t('undo_remove', { name: player.name || '' }));
+      const removedName = player.name;
       state.players = state.players.filter(p => p.id !== player.id);
       renderPlayers();
       renderRosterInfo();
       renderSuggestions();
       scheduleLiveCompute();
+      showToast(t('undo_remove', { name: removedName }), {
+        action: { label: t('undo_btn'), onClick: performUndo },
+        duration: 4500
+      });
     });
     row.appendChild(removeBtn);
 
@@ -3917,8 +3960,13 @@ function renderSolution(sol) {
       scheduleLiveCompute();
     });
     document.getElementById('unlockAllBtn').addEventListener('click', () => {
+      snapshotState(t('undo_unlockAll'));
       state.players.forEach(p => { p.lockedJob = null; });
       scheduleLiveCompute();
+      showToast(t('undo_unlockAll'), {
+        action: { label: t('undo_btn'), onClick: performUndo },
+        duration: 4500
+      });
     });
   }
 
@@ -4046,8 +4094,13 @@ function renderRaid24Result() {
       scheduleLiveCompute();
     });
     document.getElementById('unlockAllBtn').addEventListener('click', () => {
+      snapshotState(t('undo_unlockAll'));
       state.players.forEach(p => { p.lockedJob = null; });
       scheduleLiveCompute();
+      showToast(t('undo_unlockAll'), {
+        action: { label: t('undo_btn'), onClick: performUndo },
+        duration: 4500
+      });
     });
   }
 
@@ -4890,13 +4943,115 @@ function closeModal(id) {
   document.getElementById(id).classList.remove('show');
 }
 
-function showToast(message) {
+function showToast(message, opts) {
   const toast = document.getElementById('toast');
-  toast.textContent = message;
+  toast.innerHTML = ''; // reset
+  toast.classList.remove('with-action');
+  const msg = document.createElement('span');
+  msg.textContent = message;
+  toast.appendChild(msg);
+  // Optionnel : bouton d'action (ex: "Annuler") avec callback
+  if (opts && opts.action) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = opts.action.label;
+    btn.addEventListener('click', () => {
+      toast.classList.remove('show');
+      clearTimeout(showToast._timer);
+      opts.action.onClick();
+    });
+    toast.appendChild(btn);
+    toast.classList.add('with-action');
+  }
   toast.classList.add('show');
   clearTimeout(showToast._timer);
-  showToast._timer = setTimeout(() => toast.classList.remove('show'), 2500);
+  const duration = (opts && opts.duration) || 2500;
+  showToast._timer = setTimeout(() => toast.classList.remove('show'), duration);
 }
+
+// ============================================================
+// UNDO — pile de snapshots pour les actions destructrices
+// ============================================================
+
+const undoStack = [];
+const MAX_UNDO = 20;
+
+function snapshotState(label) {
+  // Capture les parties mutables du state. Les références sont clonées en
+  // profondeur via JSON pour ne pas garder de pointeurs vers des objets vivants.
+  const snap = {
+    label,
+    time: Date.now(),
+    players: state.players.map(p => ({
+      id: p.id,
+      rowId: p.rowId,
+      name: p.name,
+      preferences: p.preferences.slice(),
+      presence: p.presence,
+      lockedJob: p.lockedJob,
+      claimedBy: p.claimedBy,
+      note: p.note || ''
+    })),
+    contentType: state.contentType,
+    dpsMode: state.dpsMode,
+    raidWhen: state.raidWhen,
+    bannedJobs: state.bannedJobs.slice(),
+    fairnessWeight: state.fairnessWeight
+  };
+  undoStack.push(snap);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+
+function performUndo() {
+  const snap = undoStack.pop();
+  if (!snap) {
+    showToast(t('undo_nothing'));
+    return;
+  }
+  // Restaure l'état
+  state.contentType = snap.contentType;
+  state.dpsMode = snap.dpsMode;
+  state.raidWhen = snap.raidWhen;
+  state.bannedJobs = snap.bannedJobs.slice();
+  state.fairnessWeight = snap.fairnessWeight;
+  // Joueurs : on reconstruit pour préserver les refs propres
+  state.players = snap.players.map(s => ({
+    id: s.id,
+    rowId: s.rowId,
+    name: s.name,
+    preferences: s.preferences.slice(),
+    presence: s.presence,
+    lockedJob: s.lockedJob,
+    claimedBy: s.claimedBy,
+    note: s.note || ''
+  }));
+  const whenInput = document.getElementById('raidWhenInput');
+  if (whenInput) whenInput.value = state.raidWhen;
+  const slider = document.getElementById('balanceSlider');
+  if (slider) slider.value = state.fairnessWeight;
+  ensureRosterSize(CONTENT_BASE[state.contentType].size);
+  renderAll();
+  scheduleAutoSave(100);
+  showToast(t('undo_done'));
+}
+
+function snapshotAndToast(label, undoLabel) {
+  snapshotState(label);
+  showToast(label, {
+    action: { label: undoLabel || t('undo_btn'), onClick: performUndo },
+    duration: 4500
+  });
+}
+
+// Ctrl+Z global (sauf dans un input/textarea où la touche a son sens habituel)
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
+    e.preventDefault();
+    performUndo();
+  }
+});
 
 async function copyToClipboard(text) {
   try {
@@ -5171,10 +5326,16 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
 // Reset
 document.getElementById('resetBtn').addEventListener('click', () => {
   if (!confirm(t('r_confirmReset'))) return;
+  // Snapshot AVANT que les modifs liées au reset (exitRoomMode, etc.) aient lieu
+  snapshotState(t('undo_reset'));
   exitRoomMode(); // quitte le salon avant le reset pour ne pas pousser un état vide
   state.players = [];
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
+  showToast(t('undo_reset'), {
+    action: { label: t('undo_btn'), onClick: performUndo },
+    duration: 5000
+  });
 });
 
 // Lock / unlock + réordonnancement : délégation sur la grille de résultat
