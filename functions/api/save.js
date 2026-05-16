@@ -99,6 +99,9 @@ function validatePayload(payload) {
     if (raw.s !== undefined && (typeof raw.s !== 'string' || !VALID_PRESENCE.has(raw.s))) {
       return 'Invalid presence';
     }
+    if (raw.l !== undefined && (typeof raw.l !== 'string' || !VALID_JOBS.has(raw.l))) {
+      return 'Invalid locked job';
+    }
   }
   return null;
 }
@@ -168,6 +171,7 @@ export async function onRequestPost(context) {
     p: payload.p.map(raw => {
       const obj = { n: raw.n, j: raw.j.slice() };
       if (raw.s !== undefined && raw.s !== 'in') obj.s = raw.s;
+      if (raw.l !== undefined) obj.l = raw.l;
       return obj;
     })
   };

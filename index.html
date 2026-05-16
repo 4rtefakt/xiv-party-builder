@@ -831,6 +831,65 @@
     left: 0; top: 0; bottom: 0;
     width: 2px;
   }
+
+  .assignment.locked {
+    border-color: var(--cyan);
+    background: linear-gradient(180deg, var(--bg-deep), rgba(0, 229, 255, 0.04));
+  }
+  .assignment.locked::before {
+    box-shadow: 0 0 12px var(--cyan);
+  }
+
+  .lock-toggle {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    line-height: 1;
+    opacity: 0.4;
+    transition: all 0.15s;
+    letter-spacing: 0;
+  }
+  .assignment:hover .lock-toggle { opacity: 0.85; }
+  .lock-toggle:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+    opacity: 1 !important;
+  }
+  .assignment.locked .lock-toggle {
+    opacity: 1;
+    color: var(--cyan);
+    border-color: rgba(0, 229, 255, 0.35);
+  }
+  .assignment.locked .lock-toggle:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .result-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .result-actions .lock-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .result-actions .lock-status.validated {
+    color: var(--cyan);
+    text-shadow: 0 0 6px rgba(0, 229, 255, 0.5);
+  }
   .assignment.tank::before   { background: var(--tank);   box-shadow: 0 0 8px var(--tank);   }
   .assignment.heal::before   { background: var(--heal);   box-shadow: 0 0 8px var(--heal);   }
   .assignment.melee::before  { background: var(--melee);  box-shadow: 0 0 8px var(--melee);  }
@@ -1601,6 +1660,7 @@
     </div>
     <div class="alternatives-tabs" id="alternativesTabs"></div>
     <div class="result-summary" id="resultSummary"></div>
+    <div class="result-actions" id="resultActions"></div>
     <div class="assignment-grid" id="assignmentGrid"></div>
     <div class="bench-area" id="benchArea" hidden>
       <div class="bench-area-header">Banc</div>
@@ -1746,7 +1806,7 @@ const state = {
 
 let nextPlayerId = 1;
 const PRESENCE_VALUES = ['in', 'maybe', 'out'];
-const makePlayer = (name = '') => ({ id: nextPlayerId++, name, preferences: [], presence: 'in' });
+const makePlayer = (name = '') => ({ id: nextPlayerId++, name, preferences: [], presence: 'in', lockedJob: null });
 
 // L'utilisateur peut ajouter/retirer librement après. Mais quand il change de contenu,
 // on n'écrase PAS son roster — on prévient juste s'il y a sous/sur-effectif.
@@ -2084,6 +2144,11 @@ function computeOptimalAssignment(opts = {}) {
 
   const benchSc = benchScore(fairnessWeight);
   const bestPerPlayer = players.map(p => {
+    if (p.lockedJob) {
+      // Joueur verrouillé : son score est fixé par son lock
+      const { score } = jobScoreForPlayer(p, p.lockedJob, fairnessWeight);
+      return Math.max(score, benchSc);
+    }
     if (p.preferences.length === 0) {
       // Que ce soit forcé ou bench, c'est pas terrible. On prend le moins pire.
       const forcedScore = jobScoreForPlayer(p, '__none__', fairnessWeight).score;
@@ -2154,15 +2219,24 @@ function computeOptimalAssignment(opts = {}) {
       const slot = slots[slotIdx];
 
       const candidates = new Set();
-      for (const role of slot.roles) {
-        for (const job of JOBS_BY_ROLE[role]) {
-          if (banned.has(job.id)) continue;
-          if (player.preferences.includes(job.id)) candidates.add(job.id);
-        }
-        const hasPref = JOBS_BY_ROLE[role].some(j => !banned.has(j.id) && player.preferences.includes(j.id));
-        if (!hasPref) {
-          const fallback = JOBS_BY_ROLE[role].find(j => !banned.has(j.id));
-          if (fallback) candidates.add(fallback.id);
+      const lockedJobId = player.lockedJob;
+      const lockedJob = lockedJobId ? JOB_BY_ID[lockedJobId] : null;
+
+      if (lockedJob) {
+        // Joueur verrouillé : on ne considère que son job verrouillé,
+        // dans les slots qui acceptent son rôle. Le ban est ignoré par le lock.
+        if (slot.roles.includes(lockedJob.role)) candidates.add(lockedJob.id);
+      } else {
+        for (const role of slot.roles) {
+          for (const job of JOBS_BY_ROLE[role]) {
+            if (banned.has(job.id)) continue;
+            if (player.preferences.includes(job.id)) candidates.add(job.id);
+          }
+          const hasPref = JOBS_BY_ROLE[role].some(j => !banned.has(j.id) && player.preferences.includes(j.id));
+          if (!hasPref) {
+            const fallback = JOBS_BY_ROLE[role].find(j => !banned.has(j.id));
+            if (fallback) candidates.add(fallback.id);
+          }
         }
       }
 
@@ -2211,9 +2285,12 @@ function computeOptimalAssignment(opts = {}) {
 function buildResultFromAssignment(players, slots, assignment) {
   const results = players.map((p, i) => {
     const a = assignment[i];
-    if (a === null) return { name: p.name, assigned: false, preferences: p.preferences };
+    if (a === null) {
+      return { name: p.name, assigned: false, preferences: p.preferences, locked: false, lockedJob: p.lockedJob || null };
+    }
     const job = JOB_BY_ID[a.jobId];
     const prefRank = p.preferences.indexOf(a.jobId);
+    const locked = !!p.lockedJob && p.lockedJob === a.jobId;
     return {
       name: p.name,
       assigned: true,
@@ -2225,7 +2302,9 @@ function buildResultFromAssignment(players, slots, assignment) {
       prefRank,
       forced: prefRank === -1,
       preferences: p.preferences,
-      totalPrefs: p.preferences.length
+      totalPrefs: p.preferences.length,
+      locked,
+      lockedJob: p.lockedJob || null
     };
   });
 
@@ -2370,8 +2449,11 @@ function renderSolution(sol) {
         </div>
       `;
     } else {
-      card.className = `assignment ${r.role}`;
+      card.className = `assignment ${r.role}` + (r.locked ? ' locked' : '');
+      const lockGlyph = r.locked ? '◆ LOCK' : '◇ LOCK';
+      const lockTitle = r.locked ? 'Déverrouiller cette position' : 'Verrouiller ce joueur sur ' + r.jobName;
       card.innerHTML = `
+        <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
         <div class="assignment-left">
           <div class="assignment-job-icon">
             <img src="${r.iconUrl}" alt="${r.jobName}" loading="lazy" draggable="false">
@@ -2388,6 +2470,34 @@ function renderSolution(sol) {
       `;
     }
     return card;
+  }
+
+  // Mise à jour de la barre d'actions (verrouiller / déverrouiller tout + statut)
+  const actionsEl = document.getElementById('resultActions');
+  if (actionsEl) {
+    const assignedResults = results.filter(r => r.assigned);
+    const lockedCount = assignedResults.filter(r => r.locked).length;
+    const total = assignedResults.length;
+    const allLocked = total > 0 && lockedCount === total;
+    const statusText = allLocked
+      ? `◆ COMPO VALIDÉE · ${lockedCount}/${total}`
+      : `${lockedCount}/${total} verrouillés`;
+    actionsEl.innerHTML = `
+      <button class="btn-tool" id="lockAllBtn"><span class="arrow">◆</span> Verrouiller tout</button>
+      <button class="btn-tool" id="unlockAllBtn"${lockedCount === 0 ? ' disabled' : ''}><span class="arrow">◇</span> Déverrouiller tout</button>
+      <span class="lock-status${allLocked ? ' validated' : ''}">${statusText}</span>
+    `;
+    document.getElementById('lockAllBtn').addEventListener('click', () => {
+      assignedResults.forEach(r => {
+        const player = state.players.find(p => p.name.trim() === r.name);
+        if (player) player.lockedJob = r.jobId;
+      });
+      scheduleLiveCompute();
+    });
+    document.getElementById('unlockAllBtn').addEventListener('click', () => {
+      state.players.forEach(p => { p.lockedJob = null; });
+      scheduleLiveCompute();
+    });
   }
 
   // Distribue les cartes en 4 colonnes fixes : Tank / Heal / Mêlée / Distance (= ranged + caster)
@@ -2686,6 +2796,7 @@ function buildPayload() {
         const obj = { n: p.name.trim(), j: p.preferences.slice() };
         // 'in' est le défaut → omis pour économiser des bytes
         if (p.presence && p.presence !== 'in') obj.s = p.presence;
+        if (p.lockedJob) obj.l = p.lockedJob;
         return obj;
       })
   };
@@ -2719,6 +2830,9 @@ function validateAndNormalizePayload(payload) {
     }
     if (typeof raw.s === 'string' && PRESENCE_VALUES.includes(raw.s)) {
       player.presence = raw.s;
+    }
+    if (typeof raw.l === 'string' && validJobIds.has(raw.l)) {
+      player.lockedJob = raw.l;
     }
     return player;
   });
@@ -3369,6 +3483,22 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   state.players = [];
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
+});
+
+// Lock / unlock individuel : délégation sur la grille de résultat
+document.getElementById('assignmentGrid').addEventListener('click', e => {
+  const btn = e.target.closest('.lock-toggle');
+  if (!btn) return;
+  const name = btn.dataset.name;
+  const jobId = btn.dataset.job;
+  const player = state.players.find(p => p.name.trim() === name);
+  if (!player) return;
+  if (player.lockedJob === jobId) {
+    player.lockedJob = null;
+  } else {
+    player.lockedJob = jobId;
+  }
+  scheduleLiveCompute();
 });
 
 // Balance slider
