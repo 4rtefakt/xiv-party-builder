@@ -3188,6 +3188,17 @@ function scheduleAutoSave(delay = 2000) {
   autoSaveTimer = setTimeout(saveRoom, delay);
 }
 
+async function flushPendingSave() {
+  // Si une sauvegarde locale est en attente (debounce 2 s), la déclencher
+  // tout de suite pour éviter de perdre les modifs en synchronisant l'état
+  // serveur par-dessus.
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+    await saveRoom();
+  }
+}
+
 async function syncRoom() {
   if (!currentRoomId || saving) return;
   // Ne pas écraser ce que l'utilisateur est en train de taper
@@ -3195,6 +3206,10 @@ async function syncRoom() {
   if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) {
     return;
   }
+  // Toujours flusher les modifs locales en attente d'abord — sinon on récupère
+  // un état serveur antérieur à un lock / changement encore non poussé.
+  await flushPendingSave();
+  if (saving) return; // garde-fou si flush a déclenché une race
   saving = true;
   updateSyncStatus();
   suppressAutoSave = true;
@@ -3334,9 +3349,16 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
 // Sync (bouton salon)
 document.getElementById('syncBtn').addEventListener('click', syncRoom);
 
-// Auto-sync quand l'onglet reprend le focus
+// Auto-sync quand l'onglet reprend le focus ; flush quand il part au second plan
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') syncRoom();
+  if (document.visibilityState === 'visible') {
+    syncRoom();
+  } else if (document.visibilityState === 'hidden') {
+    // Best-effort : on tente de pousser les modifs en attente avant que le
+    // navigateur ne suspende l'onglet. Pas garanti, mais combiné au flush
+    // dans syncRoom au retour, ça couvre le cas du switch d'onglet rapide.
+    flushPendingSave();
+  }
 });
 
 document.getElementById('copyLinkBtn').addEventListener('click', async () => {
