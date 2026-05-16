@@ -957,6 +957,60 @@
     position: relative;
   }
 
+  .recent-rooms-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin: -0.5rem 0 1.5rem 0;
+  }
+  .recent-rooms-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-right: 0.3rem;
+  }
+  .recent-room-chip {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 0.3rem 0.7rem;
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'Chakra Petch', sans-serif;
+  }
+  .recent-room-chip:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .recent-room-chip .chip-meta {
+    font-size: 0.65rem;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .recent-room-chip.current {
+    border-color: var(--magenta);
+    color: var(--magenta);
+  }
+  .recent-room-chip.current .chip-meta { color: var(--magenta); opacity: 0.7; }
+  .chip-remove {
+    background: transparent;
+    border: none;
+    color: var(--ink-faint);
+    cursor: pointer;
+    margin-left: 0.2rem;
+    font-size: 0.95rem;
+    padding: 0 0.1rem;
+    line-height: 1;
+  }
+  .chip-remove:hover { color: var(--danger); }
+
   .raid-when-input {
     background: transparent;
     border: none;
@@ -1256,6 +1310,10 @@
       <span>v7.1</span>
     </div>
   </header>
+
+  <div class="recent-rooms-bar" id="recentRoomsBar" hidden>
+    <span class="recent-rooms-label">Salons récents</span>
+  </div>
 
   <section class="section">
     <div class="section-header">
@@ -2389,6 +2447,75 @@ async function fetchPayloadById(id) {
 }
 
 // ============================================================
+// SALONS RÉCENTS — mémoire locale des derniers salons visités
+// ============================================================
+
+const RECENT_ROOMS_KEY = 'xiv-recent-rooms';
+const MAX_RECENT_ROOMS = 5;
+
+function getRecentRooms() {
+  try {
+    const v = localStorage.getItem(RECENT_ROOMS_KEY);
+    if (!v) return [];
+    const arr = JSON.parse(v);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(r => r && typeof r.id === 'string').slice(0, MAX_RECENT_ROOMS);
+  } catch { return []; }
+}
+
+function writeRecentRooms(arr) {
+  try { localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(arr.slice(0, MAX_RECENT_ROOMS))); }
+  catch { /* quota / mode privé : on ignore */ }
+}
+
+function recordCurrentRoom() {
+  if (!currentRoomId) return;
+  const meta = {
+    id: currentRoomId,
+    when: (state.raidWhen || '').slice(0, 80),
+    contentType: state.contentType,
+    savedAt: Date.now()
+  };
+  const arr = getRecentRooms().filter(r => r.id !== currentRoomId);
+  arr.unshift(meta);
+  writeRecentRooms(arr);
+  renderRecentRooms();
+}
+
+function forgetRoom(id) {
+  const arr = getRecentRooms().filter(r => r.id !== id);
+  writeRecentRooms(arr);
+  renderRecentRooms();
+}
+
+function renderRecentRooms() {
+  const bar = document.getElementById('recentRoomsBar');
+  if (!bar) return;
+  const arr = getRecentRooms();
+  bar.innerHTML = '<span class="recent-rooms-label">Salons récents</span>';
+  if (arr.length === 0) { bar.hidden = true; return; }
+  bar.hidden = false;
+  arr.forEach(r => {
+    const chip = document.createElement('div');
+    chip.className = 'recent-room-chip' + (r.id === currentRoomId ? ' current' : '');
+    const text = r.when ? r.when : r.id;
+    const ctLabel = (CONTENT_BASE[r.contentType] || {}).label || r.contentType;
+    chip.innerHTML = `<span>${escapeHtml(text)}</span><span class="chip-meta">${escapeHtml(ctLabel)}</span>`;
+    chip.title = `Ouvrir le salon ${r.id}`;
+    chip.addEventListener('click', () => {
+      window.location.search = '?p=' + encodeURIComponent(r.id);
+    });
+    const rm = document.createElement('button');
+    rm.className = 'chip-remove';
+    rm.textContent = '×';
+    rm.title = 'Oublier ce salon';
+    rm.addEventListener('click', e => { e.stopPropagation(); forgetRoom(r.id); });
+    chip.appendChild(rm);
+    bar.appendChild(chip);
+  });
+}
+
+// ============================================================
 // SALON COLLABORATIF — auto-save sur un même ID
 // ============================================================
 
@@ -2423,6 +2550,7 @@ function enterRoomMode(id) {
   const url = new URL(window.location.href);
   url.searchParams.set('p', id);
   window.history.replaceState({}, '', url.toString());
+  recordCurrentRoom();
   updateSyncStatus();
 }
 
@@ -2433,6 +2561,7 @@ function exitRoomMode() {
   const url = new URL(window.location.href);
   url.searchParams.delete('p');
   window.history.replaceState({}, '', url.toString());
+  renderRecentRooms();
   updateSyncStatus();
 }
 
@@ -2446,7 +2575,10 @@ async function saveRoom() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: currentRoomId, ...buildPayload() })
     });
-    if (r.ok) lastSavedAt = Date.now();
+    if (r.ok) {
+      lastSavedAt = Date.now();
+      recordCurrentRoom(); // rafraîchit le when / contentType / timestamp
+    }
   } catch { /* silencieux */ }
   saving = false;
   updateSyncStatus();
@@ -2768,6 +2900,7 @@ document.addEventListener('keydown', e => {
   }
   balanceValue.textContent = balanceLabel(state.fairnessWeight);
   renderAll();
+  renderRecentRooms();
 })();
 </script>
 </body>
