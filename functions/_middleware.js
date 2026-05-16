@@ -69,7 +69,9 @@ export async function onRequest(context) {
     ? data.p.filter(x => x && x.n && x.s !== 'out').length
     : 0;
   const desc = dict.desc(playerCount);
-  const ogImage = `${url.origin}/og/${p}`;
+  // Cache-bust pour Discord/Twitter qui cachent les og:image par URL. Le
+  // timestamp change à chaque scrape → ils re-fetch l'image fraîche.
+  const ogImage = `${url.origin}/og/${p}?t=${Date.now()}`;
 
   html = html
     .replace(/<meta property="og:title" content="[^"]*">/i,

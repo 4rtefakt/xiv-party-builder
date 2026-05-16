@@ -5462,7 +5462,9 @@ function buildDiscordPayload() {
     timestamp: new Date().toISOString()
   };
   if (currentRoomId) {
-    embed.image = { url: `${window.location.origin}/og/${currentRoomId}` };
+    // Cache-bust : Discord cache les images par URL exacte. On force une URL
+    // unique pour qu'il re-fetch à chaque publication.
+    embed.image = { url: `${window.location.origin}/og/${currentRoomId}?t=${Date.now()}` };
   }
   return { username: 'Party Builder', embeds: [embed] };
 }
