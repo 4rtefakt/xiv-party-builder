@@ -2320,6 +2320,7 @@
       <button class="btn-tool" id="copyAdminLinkBtn" hidden style="border-color:var(--amber);color:var(--amber)" data-i18n-title="perm_copyAdminLinkTitle"><span data-i18n="perm_copyAdminLink">◆ Copier le lien admin</span></button>
       <button class="btn-tool" id="publishDiscordBtn" hidden style="border-color:#5865F2;color:#5865F2" data-i18n-title="dc_publishTitle"><span data-i18n="dc_publish">▸ Publier sur Discord</span></button>
       <button class="btn-tool" id="reconfigureWebhookBtn" hidden style="font-size:0.6rem;opacity:0.7"><span data-i18n="dc_reconfigure">↻ Reconfigurer le webhook</span></button>
+      <button class="btn-tool" id="duplicateRoomBtn" hidden data-i18n-title="dupe_title"><span data-i18n="dupe_btn">↻ Dupliquer ce salon</span></button>
       <button class="btn-tool" id="modalSyncBtn" hidden><span data-i18n="t_syncNow">↻ Synchroniser</span></button>
     </div>
   </div>
@@ -2599,6 +2600,11 @@ const STRINGS = {
     dc_saved: 'Webhook enregistré',
     dc_cleared: 'Webhook retiré',
     dc_confirmClear: 'Retirer le webhook Discord configuré ?',
+    dupe_btn: '↻ Dupliquer ce salon',
+    dupe_title: 'Crée un nouveau salon avec les mêmes paramètres et joueur·euse·s (sans Quand? ni claims)',
+    dupe_creating: 'Duplication en cours…',
+    dupe_success: 'Salon dupliqué — ouvert dans un nouvel onglet',
+    dupe_failed: 'Échec de la duplication',
     // — Errors
     e_invalidCode: 'Code invalide ou corrompu',
     e_invalidFormat: 'Format invalide',
@@ -2797,6 +2803,11 @@ const STRINGS = {
     dc_saved: 'Webhook saved',
     dc_cleared: 'Webhook removed',
     dc_confirmClear: 'Remove the configured Discord webhook?',
+    dupe_btn: '↻ Duplicate room',
+    dupe_title: 'Create a new room with the same settings and players (without When? or claims)',
+    dupe_creating: 'Duplicating…',
+    dupe_success: 'Room duplicated — opened in a new tab',
+    dupe_failed: 'Duplication failed',
     e_invalidCode: 'Invalid or corrupt code',
     e_invalidFormat: 'Invalid format',
     e_unknownContent: 'Unknown content type',
@@ -3114,8 +3125,22 @@ function buildPlayerRow(player, idx) {
     input.addEventListener('input', e => {
       if (!canEditPlayer(player)) return;
       player.name = e.target.value;
+      // Auto-claim pour l'admin : dès qu'iel tape un nom dans une ligne libre,
+      // la ligne est claim à son userId pour afficher le badge "Toi"/"Owner"
+      if (state.isAdmin && !player.claimedBy && e.target.value.trim().length > 0) {
+        player.claimedBy = USER_ID;
+        player._needsBadgeRender = true; // marqueur pour re-render au blur
+      }
       scheduleLiveCompute(400);
       renderSuggestions();
+    });
+    input.addEventListener('blur', () => {
+      // Re-render uniquement si un auto-claim a eu lieu, pour ne pas casser
+      // le focus pendant la saisie ni faire de render inutile.
+      if (player._needsBadgeRender) {
+        player._needsBadgeRender = false;
+        renderPlayers();
+      }
     });
     info.appendChild(input);
 
@@ -3202,29 +3227,48 @@ function buildPlayerRow(player, idx) {
       bulkBtn.addEventListener('click', e => {
         if (!canEditPlayer(player)) return;
         e.stopPropagation();
-        autoFillNameIfNeeded();
         // Synchronise prefTiers avec preferences (au cas où il aurait été tronqué)
         while (player.prefTiers.length < player.preferences.length) {
           player.prefTiers.push(player.prefTiers.length);
         }
-        // Tier cible : si des prefs de ce rôle existent déjà, on prend max(tier
-        // de ce rôle)+1 (pour préserver un éventuel favori). Sinon, max overall+1.
-        const tiersInRole = [];
-        for (let i = 0; i < player.preferences.length; i++) {
-          const j = JOB_BY_ID[player.preferences[i]];
-          if (j && j.role === role) tiersInRole.push(player.prefTiers[i]);
+
+        const roleJobs = ROLE_GRID_ORDER[role];
+        const availableJobs = roleJobs.filter(jid => !state.bannedJobs.includes(jid));
+        const allSelected = availableJobs.length > 0 &&
+                            availableJobs.every(jid => player.preferences.includes(jid));
+
+        if (allSelected) {
+          // Comportement toggle : on désélectionne tous les jobs de ce rôle
+          // SAUF ceux qui sont en tier 0 (favoris). Si tous sont co-favoris,
+          // on garde tout (rien ne se passe — l'utilisateur peut désélectionner
+          // individuellement).
+          for (let i = player.preferences.length - 1; i >= 0; i--) {
+            const jid = player.preferences[i];
+            if (roleJobs.includes(jid) && getPrefTier(player, i) !== 0) {
+              player.preferences.splice(i, 1);
+              player.prefTiers.splice(i, 1);
+            }
+          }
+          normalizePrefTiers(player);
+        } else {
+          // Comportement ajout : on ajoute les jobs manquants au même tier
+          autoFillNameIfNeeded();
+          const tiersInRole = [];
+          for (let i = 0; i < player.preferences.length; i++) {
+            const j = JOB_BY_ID[player.preferences[i]];
+            if (j && j.role === role) tiersInRole.push(player.prefTiers[i]);
+          }
+          const maxOverall = player.prefTiers.length > 0 ? Math.max(...player.prefTiers) : -1;
+          const targetTier = tiersInRole.length > 0
+            ? Math.max(...tiersInRole) + 1
+            : maxOverall + 1;
+          roleJobs.forEach(jobId => {
+            if (state.bannedJobs.includes(jobId) || player.preferences.includes(jobId)) return;
+            player.preferences.push(jobId);
+            player.prefTiers.push(targetTier);
+          });
+          normalizePrefTiers(player);
         }
-        const maxOverall = player.prefTiers.length > 0 ? Math.max(...player.prefTiers) : -1;
-        const targetTier = tiersInRole.length > 0
-          ? Math.max(...tiersInRole) + 1
-          : maxOverall + 1;
-        // Ajoute tous les jobs du rôle non encore présents, tous au MÊME tier
-        ROLE_GRID_ORDER[role].forEach(jobId => {
-          if (state.bannedJobs.includes(jobId) || player.preferences.includes(jobId)) return;
-          player.preferences.push(jobId);
-          player.prefTiers.push(targetTier);
-        });
-        normalizePrefTiers(player);
         renderPlayers();
         renderSuggestions();
         scheduleLiveCompute();
@@ -5677,13 +5721,69 @@ async function publishToDiscord() {
 function refreshDiscordButtons() {
   const publishBtn = document.getElementById('publishDiscordBtn');
   const reconfBtn = document.getElementById('reconfigureWebhookBtn');
+  const dupeBtn = document.getElementById('duplicateRoomBtn');
   const isAdminInRoom = state.isAdmin && currentRoomId;
   if (publishBtn) publishBtn.hidden = !isAdminInRoom;
   if (reconfBtn) reconfBtn.hidden = !(isAdminInRoom && getDiscordWebhook());
+  if (dupeBtn) dupeBtn.hidden = !isAdminInRoom;
 }
 
 document.getElementById('publishDiscordBtn').addEventListener('click', () => publishToDiscord());
 document.getElementById('reconfigureWebhookBtn').addEventListener('click', () => promptForDiscordWebhook());
+
+// Dupliquer le salon : crée un nouveau salon avec mêmes params + roster
+// mais sans Quand?, sans claims, sans locks. Ouvert dans un nouvel onglet.
+async function duplicateRoom() {
+  if (!state.isAdmin) return;
+  const btn = document.getElementById('duplicateRoomBtn');
+  if (btn) btn.disabled = true;
+  showToast(t('dupe_creating'));
+  const payload = buildPayload();
+  // Nouveau salon : pas d'id (le serveur en génère un)
+  delete payload.id;
+  // Vide les champs liés à la session/raid courant
+  if (payload.w) delete payload.w;
+  if (Array.isArray(payload.p)) {
+    payload.p = payload.p.map(p => {
+      const np = { ...p };
+      delete np.by; // claimedBy
+      delete np.l;  // lockedJob
+      return np;
+    });
+  }
+  // On NE transmet PAS la liste des admins : le créateur (= nous) devient
+  // seul admin du salon dupliqué (sinon les co-admins du salon source auraient
+  // accès au dupliqué sans qu'on l'ait choisi).
+  delete payload.admins;
+  try {
+    const r = await fetch('/api/save', {
+      method: 'POST',
+      headers: apiHeaders(null),
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) {
+      showToast(t('dupe_failed'));
+      if (btn) btn.disabled = false;
+      return;
+    }
+    const data = await r.json();
+    if (data && data.id) {
+      // Stocke le secret de récupération AVANT d'ouvrir le nouvel onglet
+      // (le nouvel onglet partage le localStorage et y lira la valeur)
+      if (data.recoverySecret) setAdminSecret(data.id, data.recoverySecret);
+      const url = `${window.location.origin}${window.location.pathname}?p=${data.id}`;
+      window.open(url, '_blank');
+      showToast(t('dupe_success'));
+    } else {
+      showToast(t('dupe_failed'));
+    }
+  } catch {
+    showToast(t('dupe_failed'));
+  }
+  if (btn) btn.disabled = false;
+}
+
+document.getElementById('duplicateRoomBtn').addEventListener('click', () => duplicateRoom());
 
 // Copier le lien admin de récupération (admin avec secret en LS uniquement)
 document.getElementById('copyAdminLinkBtn').addEventListener('click', async () => {
