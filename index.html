@@ -752,7 +752,65 @@
 
   .assignment-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    align-items: start;
+  }
+  @media (max-width: 1024px) {
+    .assignment-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .assignment-grid { grid-template-columns: 1fr; }
+  }
+
+  .result-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+  .result-col-header {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.55rem;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+  }
+  .result-col-header.tank   { color: var(--tank);   border-color: rgba(43, 158, 255, 0.4); }
+  .result-col-header.heal   { color: var(--heal);   border-color: rgba(74, 222, 128, 0.4); }
+  .result-col-header.melee  { color: var(--melee);  border-color: rgba(255, 79, 110, 0.4); }
+  .result-col-header.ranged { color: var(--ranged); border-color: rgba(255, 181, 71, 0.4); }
+  .result-col-header.empty  { opacity: 0.4; }
+  .result-col-empty {
+    color: var(--ink-faint);
+    font-style: italic;
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 0.4rem;
+    border: 1px dashed var(--line);
+  }
+
+  .bench-area {
+    margin-top: 1.25rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--line);
+  }
+  .bench-area-header {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .bench-area-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 0.5rem;
   }
 
@@ -1545,6 +1603,10 @@
     <div class="alternatives-tabs" id="alternativesTabs"></div>
     <div class="result-summary" id="resultSummary"></div>
     <div class="assignment-grid" id="assignmentGrid"></div>
+    <div class="bench-area" id="benchArea" hidden>
+      <div class="bench-area-header">Banc</div>
+      <div class="bench-area-cards" id="benchCards"></div>
+    </div>
     <div id="warningArea"></div>
   </section>
 
@@ -2293,8 +2355,7 @@ function renderSolution(sol) {
     </div>` : ''}
   `;
 
-  grid.innerHTML = '';
-  results.forEach(r => {
+  function buildAssignmentCard(r) {
     const card = document.createElement('div');
     if (!r.assigned) {
       card.className = 'assignment bench';
@@ -2327,8 +2388,54 @@ function renderSolution(sol) {
         </div>
       `;
     }
-    grid.appendChild(card);
+    return card;
+  }
+
+  // Distribue les cartes en 4 colonnes fixes : Tank / Heal / Mêlée / Distance (= ranged + caster)
+  const columns = { tank: [], heal: [], melee: [], ranged: [] };
+  const bench = [];
+  results.forEach(r => {
+    if (!r.assigned) { bench.push(r); return; }
+    const colKey = r.role === 'caster' ? 'ranged' : r.role;
+    (columns[colKey] || columns.ranged).push(r);
   });
+
+  const COL_DEFS = [
+    { key: 'tank',   label: 'Tanks' },
+    { key: 'heal',   label: 'Heals' },
+    { key: 'melee',  label: 'Mêlée' },
+    { key: 'ranged', label: 'Distance' }
+  ];
+
+  grid.innerHTML = '';
+  COL_DEFS.forEach(def => {
+    const colEl = document.createElement('div');
+    colEl.className = 'result-col';
+    const hdr = document.createElement('div');
+    hdr.className = 'result-col-header ' + def.key + (columns[def.key].length === 0 ? ' empty' : '');
+    hdr.textContent = def.label;
+    colEl.appendChild(hdr);
+    if (columns[def.key].length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'result-col-empty';
+      empty.textContent = '—';
+      colEl.appendChild(empty);
+    } else {
+      columns[def.key].forEach(r => colEl.appendChild(buildAssignmentCard(r)));
+    }
+    grid.appendChild(colEl);
+  });
+
+  // Banc séparé en bas
+  const benchArea = document.getElementById('benchArea');
+  const benchCards = document.getElementById('benchCards');
+  if (benchCards) benchCards.innerHTML = '';
+  if (bench.length > 0 && benchArea && benchCards) {
+    benchArea.hidden = false;
+    bench.forEach(r => benchCards.appendChild(buildAssignmentCard(r)));
+  } else if (benchArea) {
+    benchArea.hidden = true;
+  }
 
   warningArea.innerHTML = '';
   if (stats.forced > 0) {
