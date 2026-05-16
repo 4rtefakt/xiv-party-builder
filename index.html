@@ -4494,11 +4494,19 @@ function hasMeaningfulContent() {
   );
 }
 
+// Flag "des modifs locales attendent d'être saved". Mis à true à chaque
+// scheduleAutoSave (= chaque frappe ou clic mutant), mis à false à l'instant
+// où saveRoom commence à capturer l'état. Si des modifs arrivent PENDANT le
+// vol réseau du save, le flag se rebascule à true, ce qui pousse un nouveau
+// save à la fin de l'actuel.
+let pendingChanges = false;
+
 async function saveRoom() {
   if (saving) return;
-  // En mode local, on ne sauve que s'il y a quelque chose de concret à sauver
   if (!currentRoomId && !hasMeaningfulContent()) return;
   saving = true;
+  pendingChanges = false; // on capture l'état courant à cet instant
+  if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
   updateSyncStatus();
   try {
     const body = currentRoomId
@@ -4511,11 +4519,9 @@ async function saveRoom() {
     });
     if (r.ok) {
       const data = await r.json().catch(() => null);
-      // Premier save sans ID : on entre en mode salon avec l'ID renvoyé
       if (!currentRoomId && data && typeof data.id === 'string') {
         enterRoomMode(data.id);
       }
-      // Permissions à jour depuis la réponse serveur
       if (data) {
         if (data.recoverySecret && data.id) setAdminSecret(data.id, data.recoverySecret);
         if (typeof data.isAdmin === 'boolean') state.isAdmin = data.isAdmin;
@@ -4524,31 +4530,38 @@ async function saveRoom() {
       }
       lastSavedAt = Date.now();
       recordCurrentRoom();
-      // Si le statut admin a changé (ex: récupération via secret), on doit
-      // re-render pour refléter les nouvelles permissions
       renderAll();
     }
   } catch { /* silencieux */ }
   saving = false;
   updateSyncStatus();
+  // Si des modifs sont arrivées pendant ce vol réseau, on relance vite un save
+  // pour éviter que le serveur reste sur un état périmé.
+  if (pendingChanges) {
+    scheduleAutoSave(200);
+  }
 }
 
 function scheduleAutoSave(delay = 2000) {
   if (suppressAutoSave) return;
-  // Pas de salon ET pas de contenu utile = on ne planifie rien (état initial vide)
   if (!currentRoomId && !hasMeaningfulContent()) return;
+  pendingChanges = true;
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(saveRoom, delay);
 }
 
 async function flushPendingSave() {
-  // Si une sauvegarde locale est en attente (debounce 2 s), la déclencher
-  // tout de suite pour éviter de perdre les modifs en synchronisant l'état
-  // serveur par-dessus.
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = null;
+  // 1. Attend la fin d'un save éventuellement déjà en vol — pendant lequel
+  //    de nouvelles modifs locales ont pu arriver (pendingChanges = true)
+  while (saving) await new Promise(r => setTimeout(r, 30));
+  // 2. S'il reste un timer en attente OU des modifs encore non saved, on
+  //    déclenche un save synchrone pour pousser l'état courant
+  if (autoSaveTimer || pendingChanges) {
+    if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
     await saveRoom();
+    // 3. saveRoom peut elle-même replanifier (si encore des modifs entre-temps),
+    //    on attend à nouveau la fin pour être sûr d'avoir convergé
+    while (saving) await new Promise(r => setTimeout(r, 30));
   }
 }
 
