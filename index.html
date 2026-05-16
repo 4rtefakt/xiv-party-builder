@@ -4522,15 +4522,25 @@ async function saveRoom() {
       if (!currentRoomId && data && typeof data.id === 'string') {
         enterRoomMode(data.id);
       }
+      let permsChanged = false;
       if (data) {
+        const wasAdmin = state.isAdmin;
         if (data.recoverySecret && data.id) setAdminSecret(data.id, data.recoverySecret);
         if (typeof data.isAdmin === 'boolean') state.isAdmin = data.isAdmin;
         if (typeof data.ownerId === 'string') state.ownerId = data.ownerId;
         if (Array.isArray(data.admins)) state.admins = data.admins.slice();
+        if (wasAdmin !== state.isAdmin) permsChanged = true;
       }
       lastSavedAt = Date.now();
       recordCurrentRoom();
-      renderAll();
+      // Ne re-render que si les permissions ont réellement changé (ex: promotion
+      // via récupération admin) — sinon renderAll() relance scheduleLiveCompute
+      // → scheduleAutoSave → save loop, ET ça pète le focus des inputs en cours.
+      if (permsChanged) {
+        suppressAutoSave = true;
+        renderAll();
+        suppressAutoSave = false;
+      }
     }
   } catch { /* silencieux */ }
   saving = false;
