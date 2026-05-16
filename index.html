@@ -339,6 +339,30 @@
     flex-shrink: 0;
   }
 
+  .presence-pill {
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    padding: 0.2rem 0.4rem;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    min-width: 38px;
+    text-align: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .presence-pill:hover { transform: translateY(-1px); }
+  .presence-pill.presence-in { color: var(--heal); border-color: rgba(74, 222, 128, 0.45); }
+  .presence-pill.presence-maybe { color: var(--amber); border-color: rgba(255, 181, 71, 0.45); }
+  .presence-pill.presence-out { color: var(--danger); border-color: rgba(255, 71, 87, 0.45); text-decoration: line-through; }
+
+  .player-row.presence-out .player-name-input,
+  .player-row.presence-out .job-icons-row {
+    opacity: 0.45;
+  }
+
   .player-name-input {
     background: transparent;
     border: none;
@@ -1519,7 +1543,8 @@ const state = {
 };
 
 let nextPlayerId = 1;
-const makePlayer = (name = '') => ({ id: nextPlayerId++, name, preferences: [] });
+const PRESENCE_VALUES = ['in', 'maybe', 'out'];
+const makePlayer = (name = '') => ({ id: nextPlayerId++, name, preferences: [], presence: 'in' });
 
 // L'utilisateur peut ajouter/retirer librement après. Mais quand il change de contenu,
 // on n'écrase PAS son roster — on prévient juste s'il y a sous/sur-effectif.
@@ -1584,13 +1609,27 @@ function renderPlayers() {
   list.innerHTML = '';
 
   state.players.forEach((player, idx) => {
+    const presence = player.presence || 'in';
     const row = document.createElement('div');
-    row.className = 'player-row';
+    row.className = 'player-row presence-' + presence;
 
     const idxEl = document.createElement('div');
     idxEl.className = 'player-idx';
     idxEl.textContent = String(idx + 1).padStart(2, '0');
     row.appendChild(idxEl);
+
+    const presenceEl = document.createElement('button');
+    presenceEl.className = 'presence-pill presence-' + presence;
+    presenceEl.textContent = { in: 'OK', maybe: '?', out: 'ABS' }[presence];
+    presenceEl.title = 'Présence — clic pour changer';
+    presenceEl.addEventListener('click', () => {
+      const cur = PRESENCE_VALUES.indexOf(player.presence || 'in');
+      player.presence = PRESENCE_VALUES[(cur + 1) % PRESENCE_VALUES.length];
+      renderPlayers();
+      renderSuggestions();
+      scheduleLiveCompute();
+    });
+    row.appendChild(presenceEl);
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -1768,9 +1807,10 @@ function computeOptimalAssignment(opts = {}) {
 
   const slots = buildSlots(state.contentType, state.dpsMode);
   const banned = new Set(state.bannedJobs);
-  // Vue effective : prefs des joueurs filtrées des jobs bannis (sans muter l'état)
+  // Vue effective : on retire les joueurs absents, et on filtre les jobs bannis
+  // dans les prefs (sans muter l'état)
   const players = state.players
-    .filter(p => p.name.trim() !== '')
+    .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
     .map(p => ({
       ...p,
       preferences: p.preferences.filter(id => !banned.has(id))
@@ -2198,10 +2238,10 @@ function getRoleRequirements() {
 }
 
 function analyzeCoverage() {
-  // Prefs effectives : on retire les jobs bannis (ne contribuent pas à la couverture)
+  // Prefs effectives : on exclut les absents et on retire les jobs bannis
   const banned = new Set(state.bannedJobs);
   const playersWithName = state.players
-    .filter(p => p.name.trim() !== '')
+    .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
     .map(p => ({ ...p, preferences: p.preferences.filter(id => !banned.has(id)) }));
   const playersWithPrefs = playersWithName.filter(p => p.preferences.length > 0);
   const reqs = getRoleRequirements();
@@ -2336,10 +2376,12 @@ function buildPayload() {
     f: state.fairnessWeight,
     p: state.players
       .filter(p => p.name.trim() !== '' || p.preferences.length > 0)
-      .map(p => ({
-        n: p.name.trim(),
-        j: p.preferences.slice()
-      }))
+      .map(p => {
+        const obj = { n: p.name.trim(), j: p.preferences.slice() };
+        // 'in' est le défaut → omis pour économiser des bytes
+        if (p.presence && p.presence !== 'in') obj.s = p.presence;
+        return obj;
+      })
   };
   const w = state.raidWhen.trim();
   if (w) payload.w = w;
@@ -2368,6 +2410,9 @@ function validateAndNormalizePayload(payload) {
     const player = makePlayer(typeof raw.n === 'string' ? raw.n : '');
     if (Array.isArray(raw.j)) {
       player.preferences = raw.j.filter(id => validJobIds.has(id));
+    }
+    if (typeof raw.s === 'string' && PRESENCE_VALUES.includes(raw.s)) {
+      player.presence = raw.s;
     }
     return player;
   });

@@ -13,6 +13,7 @@ const VALID_JOBS = new Set([
   'BRD','MCH','DNC',
   'BLM','SMN','RDM','PCT'
 ]);
+const VALID_PRESENCE = new Set(['in', 'maybe', 'out']);
 const MAX_BODY_BYTES = 4096;
 const MAX_PLAYERS = 24;
 const MAX_NAME_LEN = 32;
@@ -95,6 +96,9 @@ function validatePayload(payload) {
         return 'Invalid job id';
       }
     }
+    if (raw.s !== undefined && (typeof raw.s !== 'string' || !VALID_PRESENCE.has(raw.s))) {
+      return 'Invalid presence';
+    }
   }
   return null;
 }
@@ -161,7 +165,11 @@ export async function onRequestPost(context) {
   const normalized = {
     c: payload.c,
     d: payload.d,
-    p: payload.p.map(raw => ({ n: raw.n, j: raw.j.slice() }))
+    p: payload.p.map(raw => {
+      const obj = { n: raw.n, j: raw.j.slice() };
+      if (raw.s !== undefined && raw.s !== 'in') obj.s = raw.s;
+      return obj;
+    })
   };
   if (payload.f !== undefined) normalized.f = payload.f;
   if (payload.w !== undefined && payload.w !== '') normalized.w = payload.w;
