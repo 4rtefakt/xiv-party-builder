@@ -1109,7 +1109,25 @@
   .result-col-header.heal   { color: var(--heal);   border-color: rgba(74, 222, 128, 0.4); }
   .result-col-header.melee  { color: var(--melee);  border-color: rgba(255, 79, 110, 0.4); }
   .result-col-header.ranged { color: var(--ranged); border-color: rgba(255, 181, 71, 0.4); }
+  .result-col-header.dps    { color: var(--melee);  border-color: rgba(255, 79, 110, 0.4); }
   .result-col-header.empty  { opacity: 0.4; }
+
+  /* La colonne DPS occupe les 2 dernières colonnes du grid (4-col → span 2),
+     et héberge un sous-grid 2 colonnes pour les cartes (jusqu'à 4 DPS en 2x2,
+     5 DPS pour raid24 = 3+2). */
+  .result-col-dps { grid-column: span 2; }
+  .dps-cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+  }
+  @media (max-width: 1024px) {
+    .result-col-dps { grid-column: span 2; }
+  }
+  @media (max-width: 560px) {
+    .result-col-dps { grid-column: span 1; }
+    .dps-cards-grid { grid-template-columns: 1fr; }
+  }
   .result-col-empty {
     color: var(--ink-faint);
     font-style: italic;
@@ -1918,10 +1936,6 @@
           <div class="control-block-label" data-i18n="p_content">Contenu</div>
           <div class="segment" id="contentSeg"></div>
         </div>
-        <div>
-          <div class="control-block-label" data-i18n="p_dpsDistinction">Distinction DPS</div>
-          <div class="segment" id="dpsModeSeg"></div>
-        </div>
       </div>
 
       <div class="balance-control">
@@ -2212,6 +2226,7 @@ const STRINGS = {
     res_colHeals: 'Heals',
     res_colMelee: 'Mêlée',
     res_colDistance: 'Distance',
+    res_colDps: 'DPS',
     res_empty: '—',
     res_slotTank: 'Tank',
     res_slotHeal: 'Healer',
@@ -2382,6 +2397,7 @@ const STRINGS = {
     res_colHeals: 'Healers',
     res_colMelee: 'Melee',
     res_colDistance: 'Ranged',
+    res_colDps: 'DPS',
     res_empty: '—',
     res_slotTank: 'Tank',
     res_slotHeal: 'Healer',
@@ -2556,7 +2572,7 @@ function buildSlots(contentKey, dpsMode) {
 
 const state = {
   contentType: 'raid8',
-  dpsMode: 'split',    // par défaut Mêlée / Distance différenciés
+  dpsMode: 'unified',  // toujours unified : les 4 DPS sont mixés et swappables
   fairnessWeight: 50,  // 0 = max satisfaction globale, 100 = anti-frustration max
   raidWhen: '',
   bannedJobs: [],      // IDs de jobs interdits dans la compo
@@ -2623,22 +2639,8 @@ function renderSegments() {
     contentSeg.appendChild(btn);
   });
 
-  const dpsSeg = document.getElementById('dpsModeSeg');
-  dpsSeg.innerHTML = '';
-  const modes = [
-    { id: 'unified', label: t('p_dpsUnified') },
-    { id: 'split',   label: t('p_dpsSplit') }
-  ];
-  modes.forEach(m => {
-    const btn = document.createElement('button');
-    btn.className = 'segment-btn' + (state.dpsMode === m.id ? ' active' : '');
-    btn.textContent = m.label;
-    btn.addEventListener('click', () => {
-      state.dpsMode = m.id;
-      renderSegments();
-    });
-    dpsSeg.appendChild(btn);
-  });
+  // Le contrôle DPS Split/Unifié a été retiré : on est toujours en unified
+  // (les 4 DPS sont mixés et permutables librement dans le résultat).
 }
 
 function renderRosterInfo() {
@@ -3034,7 +3036,8 @@ function attachRosterDragHandlers(row, player) {
 function attachResultDragHandlers(card, r) {
   if (!r.assigned) return;
   card.dataset.playerName = r.name;
-  card.dataset.resultRole = r.role === 'caster' ? 'ranged' : r.role;
+  // Tank/Heal restent stricts ; les DPS partagent tous le même bucket "dps"
+  card.dataset.resultRole = (r.role === 'tank' || r.role === 'heal') ? r.role : 'dps';
   const handle = card.querySelector('.drag-handle');
   if (handle) {
     handle.addEventListener('dragstart', e => {
@@ -3082,12 +3085,12 @@ function moveResultPlayer(playerName, direction) {
   if (!sol) return;
   const me = sol.results.find(r => r.name === playerName);
   if (!me || !me.assigned) return;
-  // Même ligne d'affichage = même rôle, sauf caster qui partage la ligne "ranged"
-  const rowKey = me.role === 'caster' ? 'ranged' : me.role;
+  // Tank/Heal : groupes stricts ; DPS (mélée + ranged + caster) : un seul groupe permutable
+  const groupOf = (role) => (role === 'tank' || role === 'heal') ? role : 'dps';
+  const myGroup = groupOf(me.role);
   const sameRow = sol.results.filter(r => {
     if (!r.assigned) return false;
-    const k = r.role === 'caster' ? 'ranged' : r.role;
-    return k === rowKey;
+    return groupOf(r.role) === myGroup;
   });
   const idx = sameRow.findIndex(r => r.name === playerName);
   const newIdx = idx + direction;
@@ -3537,13 +3540,13 @@ function buildAssignmentCard(r, resultsCtx) {
     card.className = `assignment ${r.role}` + (r.locked ? ' locked' : '');
     const lockGlyph = r.locked ? t('lk_locked') : t('lk_unlocked');
     const lockTitle = r.locked ? t('lk_unlockTitle') : t('lk_lockTitle', { job: r.jobName });
-    // Voisinage : seulement parmi la même row/role *dans le même contexte*
-    // (un bloc alliance pour raid24, l'ensemble sinon)
-    const rowKey = r.role === 'caster' ? 'ranged' : r.role;
+    // Voisinage permutable : tank/heal restent strict ; tous les DPS
+    // (mélée + ranged + caster) sont dans le même groupe "dps"
+    const groupOf = (role) => (role === 'tank' || role === 'heal') ? role : 'dps';
+    const myGroup = groupOf(r.role);
     const sameRow = (resultsCtx || []).filter(x => {
       if (!x.assigned) return false;
-      const k = x.role === 'caster' ? 'ranged' : x.role;
-      return k === rowKey;
+      return groupOf(x.role) === myGroup;
     });
     const posInRow = sameRow.findIndex(x => x.name === r.name);
     const canLeft = posInRow > 0;
@@ -3575,37 +3578,56 @@ function buildAssignmentCard(r, resultsCtx) {
 }
 
 function build4ColLayout(targetGrid, results) {
-  const columns = { tank: [], heal: [], melee: [], ranged: [] };
+  // 3 groupes logiques : Tank | Heal | DPS (mélée + ranged + caster regroupés)
+  const groups = { tank: [], heal: [], dps: [] };
   const bench = [];
   results.forEach(r => {
     if (!r.assigned) { bench.push(r); return; }
-    const colKey = r.role === 'caster' ? 'ranged' : r.role;
-    (columns[colKey] || columns.ranged).push(r);
+    if (r.role === 'tank' || r.role === 'heal') groups[r.role].push(r);
+    else groups.dps.push(r); // melee, ranged, caster ensemble
   });
-  const COL_DEFS = [
-    { key: 'tank',   label: t('res_colTanks') },
-    { key: 'heal',   label: t('res_colHeals') },
-    { key: 'melee',  label: t('res_colMelee') },
-    { key: 'ranged', label: t('res_colDistance') }
-  ];
+
   targetGrid.innerHTML = '';
-  COL_DEFS.forEach(def => {
+
+  // Tank et Heal : colonnes simples
+  [{ key: 'tank', label: t('res_colTanks') }, { key: 'heal', label: t('res_colHeals') }].forEach(def => {
     const colEl = document.createElement('div');
     colEl.className = 'result-col';
     const hdr = document.createElement('div');
-    hdr.className = 'result-col-header ' + def.key + (columns[def.key].length === 0 ? ' empty' : '');
+    hdr.className = 'result-col-header ' + def.key + (groups[def.key].length === 0 ? ' empty' : '');
     hdr.textContent = def.label;
     colEl.appendChild(hdr);
-    if (columns[def.key].length === 0) {
+    if (groups[def.key].length === 0) {
       const empty = document.createElement('div');
       empty.className = 'result-col-empty';
       empty.textContent = t('res_empty');
       colEl.appendChild(empty);
     } else {
-      columns[def.key].forEach(r => colEl.appendChild(buildAssignmentCard(r, results)));
+      groups[def.key].forEach(r => colEl.appendChild(buildAssignmentCard(r, results)));
     }
     targetGrid.appendChild(colEl);
   });
+
+  // Colonne DPS : large (span 2) + sous-grid 2x2 pour permettre les swaps libres
+  const dpsCol = document.createElement('div');
+  dpsCol.className = 'result-col result-col-dps';
+  const dpsHdr = document.createElement('div');
+  dpsHdr.className = 'result-col-header dps' + (groups.dps.length === 0 ? ' empty' : '');
+  dpsHdr.textContent = t('res_colDps');
+  dpsCol.appendChild(dpsHdr);
+  if (groups.dps.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'result-col-empty';
+    empty.textContent = t('res_empty');
+    dpsCol.appendChild(empty);
+  } else {
+    const innerGrid = document.createElement('div');
+    innerGrid.className = 'dps-cards-grid';
+    groups.dps.forEach(r => innerGrid.appendChild(buildAssignmentCard(r, results)));
+    dpsCol.appendChild(innerGrid);
+  }
+  targetGrid.appendChild(dpsCol);
+
   return bench;
 }
 
@@ -4601,7 +4623,8 @@ async function syncRoom() {
 
 function applyImportedState(imported) {
   state.contentType = imported.contentType;
-  state.dpsMode = imported.dpsMode;
+  // dpsMode est figé à 'unified' désormais — on ignore la valeur importée
+  state.dpsMode = 'unified';
   state.fairnessWeight = imported.fairnessWeight ?? 50;
   state.raidWhen = imported.raidWhen ?? '';
   state.bannedJobs = Array.isArray(imported.bannedJobs) ? imported.bannedJobs.slice() : [];
