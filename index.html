@@ -2958,11 +2958,34 @@ const makePlayer = (name = '') => ({
   rowId: generateRowId(),
   name,
   preferences: [],
+  // prefTiers : tableau parallèle à preferences. Permet à plusieurs jobs de
+  // partager le même rang (ex: PLD au tier 0 + WAR/DRK/GNB au tier 1 ensemble).
+  // Si vide ou différent de la taille de preferences, on tombe sur l'ordre strict 0..n-1.
+  prefTiers: [],
   presence: 'in',
   lockedJob: null,
   claimedBy: null,
   note: ''
 });
+
+// Tier effectif d'un job dans les prefs d'un·e joueur·euse (fallback strict order)
+function getPrefTier(player, idx) {
+  if (idx < 0 || idx >= player.preferences.length) return -1;
+  if (player.prefTiers && player.prefTiers.length === player.preferences.length &&
+      typeof player.prefTiers[idx] === 'number') {
+    return player.prefTiers[idx];
+  }
+  return idx;
+}
+
+// Normalise les tiers pour qu'ils soient consécutifs à partir de 0
+// (utile après une suppression qui laisse un trou)
+function normalizePrefTiers(player) {
+  if (!player.prefTiers || player.prefTiers.length === 0) return;
+  if (player.prefTiers.length !== player.preferences.length) return;
+  const unique = [...new Set(player.prefTiers)].sort((a, b) => a - b);
+  player.prefTiers = player.prefTiers.map(t => unique.indexOf(t));
+}
 
 // L'utilisateur peut ajouter/retirer librement après. Mais quand il change de contenu,
 // on n'écrase PAS son roster — on prévient juste s'il y a sous/sur-effectif.
@@ -3180,12 +3203,28 @@ function buildPlayerRow(player, idx) {
         if (!canEditPlayer(player)) return;
         e.stopPropagation();
         autoFillNameIfNeeded();
-        // Ajoute tous les jobs du rôle qui n'y sont pas déjà
+        // Synchronise prefTiers avec preferences (au cas où il aurait été tronqué)
+        while (player.prefTiers.length < player.preferences.length) {
+          player.prefTiers.push(player.prefTiers.length);
+        }
+        // Tier cible : si des prefs de ce rôle existent déjà, on prend max(tier
+        // de ce rôle)+1 (pour préserver un éventuel favori). Sinon, max overall+1.
+        const tiersInRole = [];
+        for (let i = 0; i < player.preferences.length; i++) {
+          const j = JOB_BY_ID[player.preferences[i]];
+          if (j && j.role === role) tiersInRole.push(player.prefTiers[i]);
+        }
+        const maxOverall = player.prefTiers.length > 0 ? Math.max(...player.prefTiers) : -1;
+        const targetTier = tiersInRole.length > 0
+          ? Math.max(...tiersInRole) + 1
+          : maxOverall + 1;
+        // Ajoute tous les jobs du rôle non encore présents, tous au MÊME tier
         ROLE_GRID_ORDER[role].forEach(jobId => {
-          if (!state.bannedJobs.includes(jobId) && !player.preferences.includes(jobId)) {
-            player.preferences.push(jobId);
-          }
+          if (state.bannedJobs.includes(jobId) || player.preferences.includes(jobId)) return;
+          player.preferences.push(jobId);
+          player.prefTiers.push(targetTier);
         });
+        normalizePrefTiers(player);
         renderPlayers();
         renderSuggestions();
         scheduleLiveCompute();
@@ -3210,12 +3249,17 @@ function buildPlayerRow(player, idx) {
           icon.classList.add('selected');
           const badge = document.createElement('span');
           badge.className = 'order-badge';
-          // Étoile dorée sur le favori (position 0) — sinon le rang numérique
-          if (prefIdx === 0) {
+          const tier = getPrefTier(player, prefIdx);
+          // Étoile dorée sur le favori UNIQUEMENT si seul à son tier 0
+          // (sinon plusieurs jobs sont co-favoris → badge "1" pour tous)
+          const tier0Count = (player.prefTiers && player.prefTiers.length === player.preferences.length)
+            ? player.prefTiers.filter(t => t === 0).length
+            : 1;
+          if (tier === 0 && tier0Count === 1) {
             badge.classList.add('favorite');
             badge.textContent = '★';
           } else {
-            badge.textContent = prefIdx + 1;
+            badge.textContent = tier + 1;
           }
           icon.appendChild(badge);
         }
@@ -3227,11 +3271,20 @@ function buildPlayerRow(player, idx) {
         icon.addEventListener('click', () => {
           if (!canEditPlayer(player)) return;
           const i = player.preferences.indexOf(job.id);
+          // Sync prefTiers en cas de désync (taille différente de preferences)
+          while (player.prefTiers.length < player.preferences.length) {
+            player.prefTiers.push(player.prefTiers.length);
+          }
           if (i === -1) {
+            // Ajoute au tier suivant (max + 1) → reste strictement ordonné
+            const maxTier = player.prefTiers.length > 0 ? Math.max(...player.prefTiers) : -1;
             player.preferences.push(job.id);
-            autoFillNameIfNeeded(); // remplit le nom si vide
+            player.prefTiers.push(maxTier + 1);
+            autoFillNameIfNeeded();
           } else {
             player.preferences.splice(i, 1);
+            player.prefTiers.splice(i, 1);
+            normalizePrefTiers(player); // collapse les trous éventuels
           }
           renderPlayers();
           renderSuggestions();
@@ -3659,9 +3712,11 @@ function jobScoreForPlayer(player, jobId, fairnessWeight) {
     const frustration = SCORING.FRUST_FORCED * w;
     return { score: baseScore - frustration, forced: true, rank: -1 };
   }
-  const baseScore = SCORING.FIRST_CHOICE - idx * SCORING.PREF_STEP;
-  const frustration = idx * SCORING.FRUST_PER_RANK * w;
-  return { score: baseScore - frustration, forced: false, rank: idx };
+  // Le tier remplace la position : plusieurs jobs peuvent partager le même rang
+  const tier = getPrefTier(player, idx);
+  const baseScore = SCORING.FIRST_CHOICE - tier * SCORING.PREF_STEP;
+  const frustration = tier * SCORING.FRUST_PER_RANK * w;
+  return { score: baseScore - frustration, forced: false, rank: tier };
 }
 
 function benchScore(fairnessWeight) {
@@ -3863,10 +3918,15 @@ function buildResultFromAssignment(players, slots, assignment) {
   const benched = results.filter(r => !r.assigned).length;
   // Pire rang attribué (frustration max)
   const worstRank = assigned.length === 0 ? null : Math.max(...assigned.map(r => r.forced ? 999 : r.prefRank));
+  // Satisfaction : on plafonne le rang à 4 (= 5e choix) pour que les jobs
+  // au-delà du 5e n'enfoncent plus le score. Le total reste celui des prefs
+  // pour que la formule "rang/total" garde son sens.
+  const SAT_RANK_CAP = 4;
   const satisfaction = assigned.length === 0 ? 0 :
     Math.round(assigned.reduce((sum, r) => {
       if (r.forced) return sum;
-      return sum + (1 - r.prefRank / Math.max(r.preferences.length, 1)) * 100;
+      const cappedRank = Math.min(r.prefRank, SAT_RANK_CAP);
+      return sum + (1 - cappedRank / Math.max(r.preferences.length, 1)) * 100;
     }, 0) / assigned.length);
 
   return {
@@ -4558,6 +4618,11 @@ function buildPayload() {
       if (p.lockedJob) obj.l = p.lockedJob;
       if (p.claimedBy) obj.by = p.claimedBy;
       if (p.note && p.note.trim()) obj.nt = p.note.trim().slice(0, 200);
+      // pt : envoyé uniquement si tiers non-triviaux (différent de 0..n-1)
+      if (p.prefTiers && p.prefTiers.length === p.preferences.length) {
+        const isStrict = p.prefTiers.every((t, i) => t === i);
+        if (!isStrict) obj.pt = p.prefTiers.slice();
+      }
       return obj;
     })
   };
@@ -4607,6 +4672,11 @@ function validateAndNormalizePayload(payload) {
     }
     if (typeof raw.nt === 'string') {
       player.note = raw.nt.slice(0, 200);
+    }
+    // Tiers : valider que tableau de nombres positifs de la bonne taille
+    if (Array.isArray(raw.pt) && raw.pt.length === player.preferences.length) {
+      const validTiers = raw.pt.every(t => typeof t === 'number' && Number.isFinite(t) && t >= 0 && t < 50);
+      if (validTiers) player.prefTiers = raw.pt.slice();
     }
     return player;
   });

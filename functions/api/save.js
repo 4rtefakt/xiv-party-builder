@@ -118,6 +118,12 @@ function validatePayload(payload) {
     if (raw.id !== undefined && (typeof raw.id !== 'string' || !ROW_ID_PATTERN.test(raw.id))) return 'Invalid row id';
     if (raw.by !== undefined && raw.by !== null && (typeof raw.by !== 'string' || !USER_ID_PATTERN.test(raw.by))) return 'Invalid claimedBy';
     if (raw.nt !== undefined && (typeof raw.nt !== 'string' || raw.nt.length > MAX_NOTE_LEN)) return 'Invalid note';
+    if (raw.pt !== undefined) {
+      if (!Array.isArray(raw.pt) || raw.pt.length !== raw.j.length) return 'Invalid pref tiers length';
+      for (const tval of raw.pt) {
+        if (typeof tval !== 'number' || !Number.isFinite(tval) || tval < 0 || tval > 50) return 'Invalid tier value';
+      }
+    }
   }
   if (payload.admins !== undefined) {
     if (!Array.isArray(payload.admins) || payload.admins.length > MAX_ADMINS) return 'Invalid admins array';
@@ -135,6 +141,9 @@ function normalizePlayer(raw, existingRowId) {
   if (raw.l !== undefined) obj.l = raw.l;
   if (raw.by !== undefined && raw.by !== null && raw.by !== '') obj.by = raw.by;
   if (raw.nt !== undefined && raw.nt !== '') obj.nt = raw.nt.slice(0, MAX_NOTE_LEN);
+  if (raw.pt !== undefined && Array.isArray(raw.pt) && raw.pt.length === (raw.j ? raw.j.length : 0)) {
+    obj.pt = raw.pt.slice();
+  }
   obj.id = (raw.id && ROW_ID_PATTERN.test(raw.id)) ? raw.id : (existingRowId || generateRowId());
   return obj;
 }
