@@ -26,9 +26,14 @@ const ROLE_COLOR = {
 };
 const CONTENT_LABEL = { dungeon: 'Donjon · 4', raid8: 'Raid · 8', raid24: 'Alliance · 24' };
 
+// Satori (workers-og) ne décode pas les entités HTML dans les nœuds texte :
+// '&#39;' apparaîtrait littéralement à l'écran. On n'échappe donc que les
+// caractères qui cassent la structure HTML (<, >, &). Les apostrophes et
+// guillemets restent bruts (sans danger ici, on n'injecte rien dans des
+// attributs avec du contenu utilisateur).
 function esc(s) {
-  return String(s).replace(/[<>&'"]/g, c => ({
-    '<':'&lt;','>':'&gt;','&':'&amp;',"'":'&#39;','"':'&quot;'
+  return String(s).replace(/[<>&]/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;'
   }[c]));
 }
 
