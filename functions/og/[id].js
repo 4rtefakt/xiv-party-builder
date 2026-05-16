@@ -49,11 +49,42 @@ const ROLE_COLOR = {
   ranged: '#ffb547', caster: '#c084fc'
 };
 
-const CONTENT_BASE = {
+const CONTENT_BASE_FR = {
   dungeon: { label: 'Donjon',  size: 4,  comp: { tank: 1, heal: 1, dps: 2  } },
   raid8:   { label: 'Raid 8',  size: 8,  comp: { tank: 2, heal: 2, dps: 4  } },
   raid24:  { label: 'Raid 24', size: 24, comp: { tank: 3, heal: 6, dps: 15 } }
 };
+const CONTENT_BASE_EN = {
+  dungeon: { label: 'Dungeon', size: 4,  comp: { tank: 1, heal: 1, dps: 2  } },
+  raid8:   { label: 'Raid 8',  size: 8,  comp: { tank: 2, heal: 2, dps: 4  } },
+  raid24:  { label: 'Raid 24', size: 24, comp: { tank: 3, heal: 6, dps: 15 } }
+};
+
+const OG_STRINGS = {
+  fr: {
+    contentBase: CONTENT_BASE_FR,
+    playerLabel: (n) => n > 1 ? 'joueur·euse·s' : 'joueur·euse',
+    bench: ({ n }) => ` · ${n} au banc`,
+    locked: ({ n }) => ` · ${n} verrouillé·e·s`,
+    validated: '◆ COMPO VALIDÉE',
+    salon: ({ id }) => `salon ${id}`
+  },
+  en: {
+    contentBase: CONTENT_BASE_EN,
+    playerLabel: (n) => n > 1 ? 'players' : 'player',
+    bench: ({ n }) => ` · ${n} on bench`,
+    locked: ({ n }) => ` · ${n} locked`,
+    validated: '◆ COMP VALIDATED',
+    salon: ({ id }) => `room ${id}`
+  }
+};
+
+function pickLang(headers) {
+  const al = (headers.get('accept-language') || '').toLowerCase();
+  const first = al.split(',')[0].trim();
+  if (first.startsWith('en')) return 'en';
+  return 'fr';
+}
 
 // ============================================================
 // OPTIMIZER — branch & bound (top-1), miroir de computeOptimalAssignment
@@ -65,7 +96,8 @@ const SCORING = {
 };
 
 function buildSlots(contentKey, dpsMode) {
-  const base = CONTENT_BASE[contentKey];
+  // Le label n'a pas d'effet sur la composition de slots ; on prend FR par défaut
+  const base = CONTENT_BASE_FR[contentKey];
   if (!base) return [];
   const slots = [];
   for (let i = 0; i < base.comp.tank; i++) slots.push({ roles: ['tank'] });
@@ -240,10 +272,13 @@ function renderRow(roleKey, members) {
   return `<div style="display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:10px;">${cards}</div>`;
 }
 
-export async function onRequestGet({ params, env }) {
+export async function onRequestGet({ params, env, request }) {
   if (!env.PARTY_KV) return new Response('KV missing', { status: 500 });
   const id = params.id;
   if (!VALID_ID.test(id)) return new Response('Invalid id', { status: 400 });
+
+  const lang = pickLang(request.headers);
+  const dict = OG_STRINGS[lang];
 
   const raw = await env.PARTY_KV.get(id);
   if (!raw) return new Response('Not found', { status: 404 });
@@ -271,21 +306,22 @@ export async function onRequestGet({ params, env }) {
     (rows[rowKey] || rows.ranged).push({ name: playerName, job, locked });
   });
 
-  const ct = CONTENT_BASE[data.c] || { label: 'Party' };
+  const ct = dict.contentBase[data.c] || { label: 'Party' };
   const when = data.w ? String(data.w).slice(0, 70) : '';
   const titleText = when || ct.label;
   // Auto-shrink font size if title is long
   const titleSize = titleText.length > 38 ? 48 : titleText.length > 28 ? 56 : 68;
   const playerCount = players.length;
   const assignedCount = playerCount - bench.length;
-  const playerLabel = playerCount > 1 ? 'joueur·euse·s' : 'joueur·euse';
+  const playerLabel = dict.playerLabel(playerCount);
   let validationLabel = '';
   if (assignedCount > 0 && lockedCount === assignedCount) {
-    validationLabel = ' · ◆ COMPO VALIDÉE';
+    validationLabel = ' · ' + dict.validated;
   } else if (lockedCount > 0) {
-    validationLabel = ` · ${lockedCount} verrouillé·e·s`;
+    validationLabel = dict.locked({ n: lockedCount });
   }
-  const subtitle = `${ct.label} · ${playerCount} ${playerLabel}${bench.length > 0 ? ` · ${bench.length} au banc` : ''}${validationLabel}`;
+  const benchLabel = bench.length > 0 ? dict.bench({ n: bench.length }) : '';
+  const subtitle = `${ct.label} · ${playerCount} ${playerLabel}${benchLabel}${validationLabel}`;
 
   const html = `
     <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:46px 56px; font-family:sans-serif;">
@@ -299,7 +335,7 @@ export async function onRequestGet({ params, env }) {
       ${renderRow('ranged', rows.ranged)}
 
       <div style="display:flex; margin-top:auto; justify-content:space-between; align-items:flex-end;">
-        <div style="display:flex; font-size:20px; color:#3a4a5c;">salon ${esc(id)}</div>
+        <div style="display:flex; font-size:20px; color:#3a4a5c;">${esc(dict.salon({ id }))}</div>
         <div style="display:flex; font-size:20px; color:#3a4a5c;">party-builder.pages.dev</div>
       </div>
     </div>

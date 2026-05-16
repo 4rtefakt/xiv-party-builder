@@ -3,7 +3,25 @@
 // pour que Discord/Twitter affichent une preview personnalisée par salon.
 
 const ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
-const CONTENT_LABEL = { dungeon: 'Donjon', raid8: 'Raid 8', raid24: 'Alliance 24' };
+
+const STRINGS = {
+  fr: {
+    contentLabel: { dungeon: 'Donjon', raid8: 'Raid 8', raid24: 'Alliance 24' },
+    desc: (n) => `${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'} · clique pour rejoindre le salon et ajouter ta ligne.`
+  },
+  en: {
+    contentLabel: { dungeon: 'Dungeon', raid8: 'Raid 8', raid24: 'Alliance 24' },
+    desc: (n) => `${n} player${n > 1 ? 's' : ''} · click to join the room and add your line.`
+  }
+};
+
+function pickLang(headers) {
+  const al = (headers.get('accept-language') || '').toLowerCase();
+  // On regarde le 1er token : "fr-FR,fr;q=0.9,en;q=0.8" -> "fr-FR"
+  const first = al.split(',')[0].trim();
+  if (first.startsWith('en')) return 'en';
+  return 'fr';
+}
 
 function escAttr(s) {
   return String(s).replace(/[<>&"]/g, c => ({
@@ -42,13 +60,15 @@ export async function onRequest(context) {
   try { html = await response.text(); }
   catch { return context.next(); }
 
-  const contentLabel = CONTENT_LABEL[data.c] || data.c || 'Party';
+  const lang = pickLang(context.request.headers);
+  const dict = STRINGS[lang];
+  const contentLabel = dict.contentLabel[data.c] || data.c || 'Party';
   const when = data.w ? ' · ' + data.w : '';
   const title = `Party Builder · ${contentLabel}${when}`;
   const playerCount = Array.isArray(data.p)
     ? data.p.filter(x => x && x.n && x.s !== 'out').length
     : 0;
-  const desc = `${playerCount} ${playerCount > 1 ? 'joueur·euse·s' : 'joueur·euse'} · clique pour rejoindre le salon et ajouter ta ligne.`;
+  const desc = dict.desc(playerCount);
   const ogImage = `${url.origin}/og/${p}`;
 
   html = html

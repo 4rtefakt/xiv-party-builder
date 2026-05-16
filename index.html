@@ -1645,13 +1645,13 @@
   </header>
 
   <div class="recent-rooms-bar" id="recentRoomsBar" hidden>
-    <span class="recent-rooms-label">Salons récents</span>
+    <span class="recent-rooms-label" data-i18n="s_recentRooms">Salons récents</span>
   </div>
 
   <section class="section section-collapsible" id="paramsSection">
     <div class="section-header" id="paramsHeader">
       <span class="section-tag">01</span>
-      <h2>Paramètres</h2>
+      <h2 data-i18n="s_parameters">Paramètres</h2>
       <span class="section-summary" id="paramsSummary"></span>
       <div class="section-line"></div>
       <span class="section-toggle">▾</span>
@@ -1660,38 +1660,38 @@
     <div class="section-body">
       <div class="controls-row">
         <div>
-          <div class="control-block-label">Contenu</div>
+          <div class="control-block-label" data-i18n="p_content">Contenu</div>
           <div class="segment" id="contentSeg"></div>
         </div>
         <div>
-          <div class="control-block-label">Distinction DPS</div>
+          <div class="control-block-label" data-i18n="p_dpsDistinction">Distinction DPS</div>
           <div class="segment" id="dpsModeSeg"></div>
         </div>
       </div>
 
       <div class="balance-control">
         <div class="balance-header">
-          <span class="balance-title">Stratégie d'optimisation</span>
+          <span class="balance-title" data-i18n="p_strategy">Stratégie d'optimisation</span>
           <span class="balance-value" id="balanceValue">Équilibré</span>
         </div>
         <div class="balance-slider-wrap">
           <input type="range" id="balanceSlider" class="balance-slider" min="0" max="100" value="50" step="5">
         </div>
         <div class="balance-labels">
-          <span>◂ Satisfaction globale</span>
-          <span>Frustration limitée ▸</span>
+          <span data-i18n="p_balanceLeft">◂ Satisfaction globale</span>
+          <span data-i18n="p_balanceRight">Frustration limitée ▸</span>
         </div>
       </div>
 
       <div class="balance-control" style="margin-top:0.75rem">
-        <div class="control-block-label">Quand ?</div>
-        <div class="control-block-label-sub">Date / heure du raid · optionnel · partagé avec le salon</div>
-        <input type="text" id="raidWhenInput" class="raid-when-input" maxlength="80" placeholder="samedi 21h · ven prochain à 20h30 …">
+        <div class="control-block-label" data-i18n="p_when">Quand ?</div>
+        <div class="control-block-label-sub" data-i18n="p_whenHelp">Date / heure du raid · optionnel · partagé avec le salon</div>
+        <input type="text" id="raidWhenInput" class="raid-when-input" maxlength="80" data-i18n-placeholder="p_whenPlaceholder" placeholder="samedi 21h · ven prochain à 20h30 …">
       </div>
 
       <div class="balance-control" style="margin-top:0.75rem">
-        <div class="control-block-label">Jobs bannis pour ce raid</div>
-        <div class="control-block-label-sub">Aucun slot ne pourra leur être attribué · ignoré dans les préférences</div>
+        <div class="control-block-label" data-i18n="p_bannedJobs">Jobs bannis pour ce raid</div>
+        <div class="control-block-label-sub" data-i18n="p_bannedHelp">Aucun slot ne pourra leur être attribué · ignoré dans les préférences</div>
         <div class="banned-jobs-row" id="bannedJobsRow"></div>
       </div>
     </div>
@@ -1700,41 +1700,41 @@
   <section class="section">
     <div class="section-header">
       <span class="section-tag">02</span>
-      <h2>Roster</h2>
+      <h2 data-i18n="s_roster">Roster</h2>
       <div class="section-roster-info" id="rosterInfo"></div>
       <div class="section-line"></div>
     </div>
     <div class="players-list" id="playersList"></div>
     <div class="add-player">
-      <button class="btn-secondary" id="addPlayerBtn">+ Ajouter</button>
+      <button class="btn-secondary" id="addPlayerBtn" data-i18n="t_addPlayer">+ Ajouter</button>
     </div>
 
     <div class="suggestions" id="suggestions">
-      <div class="suggestion-header" id="suggestionHeader">Analyse</div>
+      <div class="suggestion-header" id="suggestionHeader" data-i18n="sg_header">Analyse</div>
       <div class="suggestion-body" id="suggestionBody"></div>
     </div>
 
     <div class="toolbar">
-      <button class="btn-tool" id="shareBtn"><span class="arrow">▸</span> Partager</button>
+      <button class="btn-tool" id="shareBtn"><span class="arrow">▸</span> <span data-i18n="t_share">Partager</span></button>
       <button class="btn-tool" id="syncBtn" hidden><span class="arrow">↻</span> <span id="syncStatus">Salon</span></button>
-      <button class="btn-tool" id="importBtn"><span class="arrow">◂</span> Importer</button>
-      <button class="btn-tool" id="resetBtn"><span class="arrow">×</span> Réinitialiser</button>
+      <button class="btn-tool" id="importBtn"><span class="arrow">◂</span> <span data-i18n="t_import">Importer</span></button>
+      <button class="btn-tool" id="resetBtn"><span class="arrow">×</span> <span data-i18n="t_reset">Réinitialiser</span></button>
     </div>
   </section>
 
   <section class="section result show" id="resultSection">
     <div class="section-header">
       <span class="section-tag">03</span>
-      <h2>Composition</h2>
+      <h2 data-i18n="s_composition">Composition</h2>
       <div class="section-line"></div>
-      <div class="live-indicator" id="liveIndicator">Live</div>
+      <div class="live-indicator" id="liveIndicator" data-i18n="res_live">Live</div>
     </div>
     <div class="alternatives-tabs" id="alternativesTabs"></div>
     <div class="result-summary" id="resultSummary"></div>
     <div class="result-actions" id="resultActions"></div>
     <div class="assignment-grid" id="assignmentGrid"></div>
     <div class="bench-area" id="benchArea" hidden>
-      <div class="bench-area-header">Banc</div>
+      <div class="bench-area-header" data-i18n="res_benchHeader">Banc</div>
       <div class="bench-area-cards" id="benchCards"></div>
     </div>
     <div id="warningArea"></div>
@@ -1750,13 +1750,13 @@
 <div class="modal-overlay" id="shareModal">
   <div class="modal">
     <button class="modal-close" data-modal-close>×</button>
-    <div class="modal-title">Partager ce groupe</div>
-    <div class="modal-subtitle">Lien copiable · contient noms + préférences</div>
+    <div class="modal-title" data-i18n="m_shareTitle">Partager ce groupe</div>
+    <div class="modal-subtitle" data-i18n="m_shareSubtitle">Lien copiable · contient noms + préférences</div>
     <textarea id="shareUrl" readonly></textarea>
     <div class="modal-actions">
-      <button class="btn-tool" id="copyLinkBtn"><span class="arrow">▸</span> Copier le lien</button>
-      <button class="btn-tool" id="copyDiscordBtn"><span class="arrow">▸</span> Copier pour Discord</button>
-      <button class="btn-tool" id="copyCodeBtn"><span class="arrow">▸</span> Copier le code seul</button>
+      <button class="btn-tool" id="copyLinkBtn"><span class="arrow">▸</span> <span data-i18n="m_copyLink">Copier le lien</span></button>
+      <button class="btn-tool" id="copyDiscordBtn"><span class="arrow">▸</span> <span data-i18n="m_copyDiscord">Copier pour Discord</span></button>
+      <button class="btn-tool" id="copyCodeBtn"><span class="arrow">▸</span> <span data-i18n="m_copyCode">Copier le code seul</span></button>
     </div>
   </div>
 </div>
@@ -1765,12 +1765,12 @@
 <div class="modal-overlay" id="importModal">
   <div class="modal">
     <button class="modal-close" data-modal-close>×</button>
-    <div class="modal-title">Importer un groupe</div>
-    <div class="modal-subtitle">Colle un lien partagé ou un code base64</div>
-    <textarea id="importInput" placeholder="https://... ou eyJjIjoicmFpZDgi..."></textarea>
+    <div class="modal-title" data-i18n="m_importTitle">Importer un groupe</div>
+    <div class="modal-subtitle" data-i18n="m_importSubtitle">Colle un lien partagé ou un code base64</div>
+    <textarea id="importInput" data-i18n-placeholder="m_importPlaceholder" placeholder="https://... ou eyJjIjoicmFpZDgi..."></textarea>
     <div class="modal-error" id="importError"></div>
     <div class="modal-actions">
-      <button class="btn-tool" id="doImportBtn"><span class="arrow">▸</span> Charger</button>
+      <button class="btn-tool" id="doImportBtn"><span class="arrow">▸</span> <span data-i18n="m_importLoad">Charger</span></button>
     </div>
   </div>
 </div>
@@ -1780,6 +1780,336 @@
 
 <script>
 'use strict';
+
+// ============================================================
+// i18n — détection de la langue + dictionnaire FR/EN
+// ============================================================
+
+const LANG = (() => {
+  const langs = navigator.languages && navigator.languages.length
+    ? navigator.languages
+    : [navigator.language || 'fr'];
+  for (const l of langs) {
+    const code = l.toLowerCase();
+    if (code.startsWith('en')) return 'en';
+    if (code.startsWith('fr')) return 'fr';
+  }
+  return 'fr';
+})();
+
+const STRINGS = {
+  fr: {
+    // — Sections
+    s_parameters: 'Paramètres',
+    s_roster: 'Roster',
+    s_composition: 'Composition',
+    s_recentRooms: 'Salons récents',
+    // — Paramètres
+    p_content: 'Contenu',
+    p_dpsDistinction: 'Distinction DPS',
+    p_dpsUnified: 'Unifiés',
+    p_dpsSplit: 'Mêlée / Distance',
+    p_strategy: "Stratégie d'optimisation",
+    p_balanceLeft: '◂ Satisfaction globale',
+    p_balanceRight: 'Frustration limitée ▸',
+    p_balanceMax: 'Satisfaction max',
+    p_balanceGlobal: 'Plutôt globale',
+    p_balanceEq: 'Équilibré',
+    p_balanceFair: 'Plutôt équitable',
+    p_balanceAnti: 'Anti-frustration',
+    p_when: 'Quand ?',
+    p_whenHelp: 'Date / heure du raid · optionnel · partagé avec le salon',
+    p_whenPlaceholder: 'samedi 21h · ven prochain à 20h30 …',
+    p_bannedJobs: 'Jobs bannis pour ce raid',
+    p_bannedHelp: 'Aucun slot ne pourra leur être attribué · ignoré dans les préférences',
+    p_summaryBanned: ({ n }) => `${n} banni${n > 1 ? 's' : ''}`,
+    p_summarySplit: 'Mêlée/Distance',
+    // — Content types
+    c_dungeon: 'Donjon',
+    c_raid8: 'Raid 8',
+    c_raid24: 'Raid 24',
+    // — Toolbar
+    t_share: 'Partager',
+    t_import: 'Importer',
+    t_reset: 'Réinitialiser',
+    t_addPlayer: '+ Ajouter',
+    t_salon: 'Salon',
+    t_syncing: 'Sync…',
+    t_salonAt: ({ time }) => `Salon · ${time}`,
+    // — Roster row
+    r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
+    r_presenceClick: 'Présence — clic pour changer',
+    r_dragHandle: 'Glisser pour réorganiser',
+    r_reorderUp: 'Monter',
+    r_reorderDown: 'Descendre',
+    r_remove: 'Retirer',
+    r_banJob: ({ name }) => `Bannir ${name}`,
+    r_unbanJob: ({ name }) => `Débannir ${name}`,
+    r_bannedTooltip: ({ name }) => `${name} · banni du raid`,
+    r_presetTip: 'Presets de préférences',
+    r_confirmReset: 'Réinitialiser le roster ?',
+    // — Modals
+    m_shareTitle: 'Partager ce groupe',
+    m_shareSubtitle: 'Lien copiable · contient noms + préférences',
+    m_copyLink: 'Copier le lien',
+    m_copyDiscord: 'Copier pour Discord',
+    m_copyCode: 'Copier le code seul',
+    m_importTitle: 'Importer un groupe',
+    m_importSubtitle: 'Colle un lien partagé ou un code base64',
+    m_importPlaceholder: 'https://... ou eyJjIjoicmFpZDgi...',
+    m_importLoad: 'Charger',
+    m_importMissing: 'Saisis un lien ou un code.',
+    // — Suggestions
+    sg_header: 'Analyse',
+    sg_viable: '◆ Composition viable',
+    sg_viableText: 'Toutes les positions requises peuvent être pourvues avec les préférences actuelles.',
+    sg_missingGroup: ({ n }) => `Il manque <strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> pour compléter le groupe.`,
+    sg_noPrefs: ({ n }) => `<strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> ${n > 1 ? 'n\'ont' : 'n\'a'} pas encore renseigné de préférence.`,
+    sg_needs: '⚠ Besoins identifiés',
+    sg_rosterState: '◆ État du roster',
+    sg_gapDetail: ({ gapText }) => `Il nous manque principalement ${gapText} dans les préférences.`,
+    sg_gapJoinOr: ' ou ',
+    sg_gapJoinComma: ', ',
+    // — Results
+    res_live: 'Live',
+    res_computing: 'Calcul...',
+    res_idle: 'En attente',
+    res_firstChoice: '1er choix',
+    res_avgSat: 'Satisfaction moy.',
+    res_worstRank: 'Pire rang',
+    res_forced: 'Forcé',
+    res_slots: 'Slots',
+    res_bench: 'Banc',
+    res_benchHeader: 'Banc',
+    res_nth: ({ n }) => `${n}e`,
+    res_colTanks: 'Tanks',
+    res_colHeals: 'Heals',
+    res_colMelee: 'Mêlée',
+    res_colDistance: 'Distance',
+    res_empty: '—',
+    res_slotTank: 'Tank',
+    res_slotHeal: 'Healer',
+    res_slotMelee: 'Mêlée',
+    res_slotRanged: 'Distance',
+    res_slotCaster: 'Caster',
+    res_slotDistance: 'Distance',
+    res_slotFlexDps: 'DPS',
+    res_forcedWarn: ({ n }) => `${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'} hors préférences — le groupe ne pouvait pas être formé autrement avec cette stratégie.`,
+    res_missingWarn: ({ n }) => `Il manque ${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'} pour compléter.`,
+    // — Lock
+    lk_unlocked: '◇ LOCK',
+    lk_locked: '◆ LOCK',
+    lk_unlockTitle: 'Déverrouiller cette position',
+    lk_lockTitle: ({ job }) => `Verrouiller cette personne sur ${job}`,
+    lk_lockAll: 'Verrouiller tout',
+    lk_unlockAll: 'Déverrouiller tout',
+    lk_status: ({ locked, total }) => `${locked}/${total} verrouillés`,
+    lk_validated: ({ locked, total }) => `◆ COMPO VALIDÉE · ${locked}/${total}`,
+    lk_reorderUp: 'Monter dans le rôle',
+    lk_reorderDown: 'Descendre dans le rôle',
+    lk_dragHandle: 'Glisser pour réorganiser (dans le rôle)',
+    // — Toasts
+    ts_linkCopied: 'Lien copié',
+    ts_codeCopied: 'Code copié',
+    ts_discordCopied: 'Compo copiée pour Discord',
+    ts_copyFail: 'Échec de la copie',
+    ts_groupImported: 'Groupe importé',
+    ts_roomLoaded: 'Salon chargé',
+    ts_linkLoaded: 'Groupe chargé depuis le lien',
+    ts_generating: 'Génération du lien…',
+    ts_shortUnavailable: 'Lien court indisponible, lien long généré',
+    ts_presetApplied: ({ name }) => `Preset "${name}" appliqué`,
+    ts_presetSaved: 'Preset enregistré',
+    ts_noPrefsForPreset: 'Pas de préférence à enregistrer',
+    ts_maxPresets: ({ n }) => `Maximum ${n} presets, supprime-en un d'abord`,
+    // — Recent rooms / chips
+    rr_open: ({ id }) => `Ouvrir le salon ${id}`,
+    rr_forget: 'Oublier ce salon',
+    // — Presets
+    pr_empty: 'Aucun preset enregistré',
+    pr_saveNew: '+ Enregistrer comme preset',
+    pr_needPrefs: "Choisis d'abord des prefs",
+    pr_maxReached: ({ n }) => `Max ${n} presets atteint`,
+    pr_delete: 'Supprimer ce preset',
+    pr_prompt: 'Nom du preset :',
+    // — Errors
+    e_invalidCode: 'Code invalide ou corrompu',
+    e_invalidFormat: 'Format invalide',
+    e_unknownContent: 'Type de contenu inconnu',
+    e_invalidDps: 'Mode DPS invalide',
+    e_invalidPlayers: 'Liste de joueur·euse·s invalide',
+    e_notFound: 'Lien introuvable ou expiré',
+    e_loadFail: ({ status }) => `Échec du chargement (${status})`,
+    e_noPlayers: 'Aucun·e aventurier·ère nommé·e.',
+    e_noComp: 'Aucune composition valide trouvée.',
+    // — Discord export
+    dc_titleSuffix: ({ when }) => when ? ` · ${when}` : '',
+    dc_rosterFallback: '▸ Roster',
+    dc_bench: ({ names }) => `📋 Banc : ${names}`,
+    dc_absents: ({ names }) => `Absent·e·s : ${names}`,
+    dc_banned: ({ names }) => `🚫 Bannis : ${names}`,
+    // — Footer
+    f_brand: 'Tural Datalink',
+  },
+  en: {
+    s_parameters: 'Settings',
+    s_roster: 'Roster',
+    s_composition: 'Composition',
+    s_recentRooms: 'Recent rooms',
+    p_content: 'Content',
+    p_dpsDistinction: 'DPS split',
+    p_dpsUnified: 'Unified',
+    p_dpsSplit: 'Melee / Ranged',
+    p_strategy: 'Optimization strategy',
+    p_balanceLeft: '◂ Global satisfaction',
+    p_balanceRight: 'Limited frustration ▸',
+    p_balanceMax: 'Max satisfaction',
+    p_balanceGlobal: 'Mostly global',
+    p_balanceEq: 'Balanced',
+    p_balanceFair: 'Mostly fair',
+    p_balanceAnti: 'Anti-frustration',
+    p_when: 'When?',
+    p_whenHelp: 'Date / time of the raid · optional · shared with the room',
+    p_whenPlaceholder: 'Saturday 9pm · next Fri at 8:30pm …',
+    p_bannedJobs: 'Jobs banned for this raid',
+    p_bannedHelp: 'No slot can be assigned to them · ignored in preferences',
+    p_summaryBanned: ({ n }) => `${n} banned`,
+    p_summarySplit: 'Melee/Ranged',
+    c_dungeon: 'Dungeon',
+    c_raid8: 'Raid 8',
+    c_raid24: 'Raid 24',
+    t_share: 'Share',
+    t_import: 'Import',
+    t_reset: 'Reset',
+    t_addPlayer: '+ Add',
+    t_salon: 'Room',
+    t_syncing: 'Sync…',
+    t_salonAt: ({ time }) => `Room · ${time}`,
+    r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
+    r_presenceClick: 'Attendance — click to change',
+    r_dragHandle: 'Drag to reorder',
+    r_reorderUp: 'Move up',
+    r_reorderDown: 'Move down',
+    r_remove: 'Remove',
+    r_banJob: ({ name }) => `Ban ${name}`,
+    r_unbanJob: ({ name }) => `Unban ${name}`,
+    r_bannedTooltip: ({ name }) => `${name} · banned from this raid`,
+    r_presetTip: 'Preference presets',
+    r_confirmReset: 'Reset the roster?',
+    m_shareTitle: 'Share this group',
+    m_shareSubtitle: 'Copyable link · contains names + preferences',
+    m_copyLink: 'Copy link',
+    m_copyDiscord: 'Copy for Discord',
+    m_copyCode: 'Copy code only',
+    m_importTitle: 'Import a group',
+    m_importSubtitle: 'Paste a shared link or a base64 code',
+    m_importPlaceholder: 'https://... or eyJjIjoicmFpZDgi...',
+    m_importLoad: 'Load',
+    m_importMissing: 'Enter a link or a code.',
+    sg_header: 'Analysis',
+    sg_viable: '◆ Viable composition',
+    sg_viableText: 'All required positions can be filled with the current preferences.',
+    sg_missingGroup: ({ n }) => `Need <strong>${n} more player${n > 1 ? 's' : ''}</strong> to complete the group.`,
+    sg_noPrefs: ({ n }) => `<strong>${n} player${n > 1 ? 's' : ''}</strong> ${n > 1 ? "haven't" : "hasn't"} set preferences yet.`,
+    sg_needs: '⚠ Needs identified',
+    sg_rosterState: '◆ Roster state',
+    sg_gapDetail: ({ gapText }) => `We mainly need ${gapText} in the preferences.`,
+    sg_gapJoinOr: ' or ',
+    sg_gapJoinComma: ', ',
+    res_live: 'Live',
+    res_computing: 'Computing...',
+    res_idle: 'Idle',
+    res_firstChoice: '1st choice',
+    res_avgSat: 'Avg satisfaction',
+    res_worstRank: 'Worst rank',
+    res_forced: 'Forced',
+    res_slots: 'Slots',
+    res_bench: 'Bench',
+    res_benchHeader: 'Bench',
+    res_nth: ({ n }) => n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`,
+    res_colTanks: 'Tanks',
+    res_colHeals: 'Healers',
+    res_colMelee: 'Melee',
+    res_colDistance: 'Ranged',
+    res_empty: '—',
+    res_slotTank: 'Tank',
+    res_slotHeal: 'Healer',
+    res_slotMelee: 'Melee',
+    res_slotRanged: 'Physical Ranged',
+    res_slotCaster: 'Caster',
+    res_slotDistance: 'Ranged',
+    res_slotFlexDps: 'DPS',
+    res_forcedWarn: ({ n }) => `${n} player${n > 1 ? 's' : ''} outside their preferences — no better group was possible with this strategy.`,
+    res_missingWarn: ({ n }) => `Need ${n} more player${n > 1 ? 's' : ''} to complete.`,
+    lk_unlocked: '◇ LOCK',
+    lk_locked: '◆ LOCK',
+    lk_unlockTitle: 'Unlock this position',
+    lk_lockTitle: ({ job }) => `Lock this person on ${job}`,
+    lk_lockAll: 'Lock all',
+    lk_unlockAll: 'Unlock all',
+    lk_status: ({ locked, total }) => `${locked}/${total} locked`,
+    lk_validated: ({ locked, total }) => `◆ COMP VALIDATED · ${locked}/${total}`,
+    lk_reorderUp: 'Move up in role',
+    lk_reorderDown: 'Move down in role',
+    lk_dragHandle: 'Drag to reorder (within role)',
+    ts_linkCopied: 'Link copied',
+    ts_codeCopied: 'Code copied',
+    ts_discordCopied: 'Comp copied for Discord',
+    ts_copyFail: 'Copy failed',
+    ts_groupImported: 'Group imported',
+    ts_roomLoaded: 'Room loaded',
+    ts_linkLoaded: 'Group loaded from link',
+    ts_generating: 'Generating link…',
+    ts_shortUnavailable: 'Short link unavailable, long link generated',
+    ts_presetApplied: ({ name }) => `Preset "${name}" applied`,
+    ts_presetSaved: 'Preset saved',
+    ts_noPrefsForPreset: 'No preferences to save',
+    ts_maxPresets: ({ n }) => `Max ${n} presets, delete one first`,
+    rr_open: ({ id }) => `Open room ${id}`,
+    rr_forget: 'Forget this room',
+    pr_empty: 'No preset saved',
+    pr_saveNew: '+ Save as preset',
+    pr_needPrefs: 'Pick some prefs first',
+    pr_maxReached: ({ n }) => `Max ${n} presets reached`,
+    pr_delete: 'Delete this preset',
+    pr_prompt: 'Preset name:',
+    e_invalidCode: 'Invalid or corrupt code',
+    e_invalidFormat: 'Invalid format',
+    e_unknownContent: 'Unknown content type',
+    e_invalidDps: 'Invalid DPS mode',
+    e_invalidPlayers: 'Invalid player list',
+    e_notFound: 'Link not found or expired',
+    e_loadFail: ({ status }) => `Load failed (${status})`,
+    e_noPlayers: 'No adventurer named.',
+    e_noComp: 'No valid composition found.',
+    dc_titleSuffix: ({ when }) => when ? ` · ${when}` : '',
+    dc_rosterFallback: '▸ Roster',
+    dc_bench: ({ names }) => `📋 Bench: ${names}`,
+    dc_absents: ({ names }) => `Absent: ${names}`,
+    dc_banned: ({ names }) => `🚫 Banned: ${names}`,
+    f_brand: 'Tural Datalink',
+  }
+};
+
+function t(key, params) {
+  const dict = STRINGS[LANG] || STRINGS.fr;
+  const v = dict[key];
+  if (v === undefined) return key;
+  return typeof v === 'function' ? v(params || {}) : v;
+}
+
+function applyStaticI18n() {
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+}
 
 // ============================================================
 // JOBS — Dawntrail (BLU & BST exclus)
@@ -1833,9 +2163,9 @@ const ROLE_GRID_ORDER = {
 const ROLE_GRID_COLS = { tank: 2, heal: 2, melee: 3, ranged: 2, caster: 2 };
 
 const CONTENT_BASE = {
-  dungeon: { label: 'Donjon', size: 4,  comp: { tank: 1, heal: 1, dps: 2  } },
-  raid8:   { label: 'Raid 8', size: 8,  comp: { tank: 2, heal: 2, dps: 4  } },
-  raid24:  { label: 'Raid 24', size: 24, comp: { tank: 3, heal: 6, dps: 15 } }
+  dungeon: { get label() { return t('c_dungeon'); }, size: 4,  comp: { tank: 1, heal: 1, dps: 2  } },
+  raid8:   { get label() { return t('c_raid8'); },   size: 8,  comp: { tank: 2, heal: 2, dps: 4  } },
+  raid24:  { get label() { return t('c_raid24'); },  size: 24, comp: { tank: 3, heal: 6, dps: 15 } }
 };
 
 function buildSlots(contentKey, dpsMode) {
@@ -1912,8 +2242,8 @@ function renderSegments() {
   const dpsSeg = document.getElementById('dpsModeSeg');
   dpsSeg.innerHTML = '';
   const modes = [
-    { id: 'unified', label: 'Unifiés' },
-    { id: 'split',   label: 'Mêlée / Distance' }
+    { id: 'unified', label: t('p_dpsUnified') },
+    { id: 'split',   label: t('p_dpsSplit') }
   ];
   modes.forEach(m => {
     const btn = document.createElement('button');
@@ -1950,7 +2280,7 @@ function renderPlayers() {
     handle.className = 'drag-handle';
     handle.textContent = '⋮⋮';
     handle.draggable = true;
-    handle.title = 'Glisser pour réorganiser';
+    handle.title = t('r_dragHandle');
     row.appendChild(handle);
 
     const idxEl = document.createElement('div');
@@ -1961,7 +2291,7 @@ function renderPlayers() {
     const presenceEl = document.createElement('button');
     presenceEl.className = 'presence-pill presence-' + presence;
     presenceEl.textContent = { in: 'OK', maybe: '?', out: 'ABS' }[presence];
-    presenceEl.title = 'Présence — clic pour changer';
+    presenceEl.title = t('r_presenceClick');
     presenceEl.addEventListener('click', () => {
       const cur = PRESENCE_VALUES.indexOf(player.presence || 'in');
       player.presence = PRESENCE_VALUES[(cur + 1) % PRESENCE_VALUES.length];
@@ -1974,7 +2304,7 @@ function renderPlayers() {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'player-name-input';
-    input.placeholder = `P${String(idx + 1).padStart(2, '0')}`;
+    input.placeholder = t('r_playerPlaceholder', { n: idx + 1 });
     input.value = player.name;
     input.addEventListener('input', e => {
       player.name = e.target.value;
@@ -1988,7 +2318,7 @@ function renderPlayers() {
     const presetBtn = document.createElement('button');
     presetBtn.className = 'preset-btn';
     presetBtn.textContent = '★';
-    presetBtn.title = 'Presets de préférences';
+    presetBtn.title = t('r_presetTip');
     presetBtn.addEventListener('click', e => {
       e.stopPropagation();
       if (presetMenuTarget && presetMenuTarget.btn === presetBtn) closePresetMenu();
@@ -2029,7 +2359,7 @@ function renderPlayers() {
         }
         if (state.bannedJobs.includes(job.id)) {
           icon.classList.add('banned');
-          icon.title = job.name + ' · banni du raid';
+          icon.title = t('r_bannedTooltip', { name: job.name });
         }
 
         icon.addEventListener('click', () => {
@@ -2052,13 +2382,13 @@ function renderPlayers() {
     const upBtn = document.createElement('button');
     upBtn.className = 'reorder-btn';
     upBtn.textContent = '↑';
-    upBtn.title = 'Monter';
+    upBtn.title = t('r_reorderUp');
     upBtn.disabled = idx === 0;
     upBtn.addEventListener('click', () => movePlayerInRoster(player.id, -1));
     const downBtn = document.createElement('button');
     downBtn.className = 'reorder-btn';
     downBtn.textContent = '↓';
-    downBtn.title = 'Descendre';
+    downBtn.title = t('r_reorderDown');
     downBtn.disabled = idx === state.players.length - 1;
     downBtn.addEventListener('click', () => movePlayerInRoster(player.id, 1));
     reorder.appendChild(upBtn);
@@ -2068,7 +2398,7 @@ function renderPlayers() {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'btn-remove';
     removeBtn.textContent = '×';
-    removeBtn.title = 'Retirer';
+    removeBtn.title = t('r_remove');
     removeBtn.addEventListener('click', () => {
       state.players = state.players.filter(p => p.id !== player.id);
       renderPlayers();
@@ -2269,7 +2599,7 @@ function renderBannedJobs() {
       icon.className = 'job-icon' + (bannedSet.has(job.id) ? ' banned' : '');
       icon.dataset.role = job.role;
       icon.dataset.jobId = job.id;
-      icon.title = (bannedSet.has(job.id) ? 'Débannir ' : 'Bannir ') + job.name;
+      icon.title = bannedSet.has(job.id) ? t('r_unbanJob', { name: job.name }) : t('r_banJob', { name: job.name });
       icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
       icon.addEventListener('click', () => {
         const i = state.bannedJobs.indexOf(job.id);
@@ -2299,11 +2629,11 @@ function updateParamsSummary() {
   const parts = [];
   const ct = CONTENT_BASE[state.contentType];
   if (ct) parts.push(ct.label);
-  if (state.dpsMode === 'split') parts.push('Mêlée/Distance');
+  if (state.dpsMode === 'split') parts.push(t('p_summarySplit'));
   const w = state.raidWhen.trim();
   if (w) parts.push(w);
   if (state.bannedJobs.length > 0) {
-    parts.push(state.bannedJobs.length + ' banni' + (state.bannedJobs.length > 1 ? 's' : ''));
+    parts.push(t('p_summaryBanned', { n: state.bannedJobs.length }));
   }
   el.textContent = parts.length > 0 ? '· ' + parts.join(' · ') : '';
 }
@@ -2397,7 +2727,7 @@ function computeOptimalAssignment(opts = {}) {
       preferences: p.preferences.filter(id => !banned.has(id))
     }));
 
-  if (players.length === 0) return { error: 'Aucun·e aventurier·ère nommé·e.' };
+  if (players.length === 0) return { error: t('e_noPlayers') };
 
   const n = players.length;
   const m = slots.length;
@@ -2528,7 +2858,7 @@ function computeOptimalAssignment(opts = {}) {
 
   recurse(0, 0, 0);
 
-  if (topSolutions.length === 0) return { error: 'Aucune composition valide trouvée.' };
+  if (topSolutions.length === 0) return { error: t('e_noComp') };
 
   // Transformer chaque solution en résultat lisible
   const solutions = topSolutions.map(sol => buildResultFromAssignment(players, slots, sol.assignment));
@@ -2592,10 +2922,13 @@ function buildResultFromAssignment(players, slots, assignment) {
 
 function slotShortLabel(slotRoles) {
   if (slotRoles.length === 1) {
-    return { tank: 'Tank', heal: 'Healer', melee: 'Mêlée', ranged: 'Distance', caster: 'Caster' }[slotRoles[0]];
+    return {
+      tank: t('res_slotTank'), heal: t('res_slotHeal'), melee: t('res_slotMelee'),
+      ranged: t('res_slotRanged'), caster: t('res_slotCaster')
+    }[slotRoles[0]];
   }
-  if (slotRoles.includes('melee') && slotRoles.includes('ranged') && slotRoles.includes('caster')) return 'DPS';
-  if (slotRoles.includes('ranged') && slotRoles.includes('caster')) return 'Distance';
+  if (slotRoles.includes('melee') && slotRoles.includes('ranged') && slotRoles.includes('caster')) return t('res_slotFlexDps');
+  if (slotRoles.includes('ranged') && slotRoles.includes('caster')) return t('res_slotDistance');
   return slotRoles.join('/');
 }
 
@@ -2665,31 +2998,31 @@ function renderSolution(sol) {
   // Stat "frustration max" : le pire rang attribué
   let worstRankDisplay = '—';
   if (stats.worstRank !== null && stats.worstRank !== undefined) {
-    if (stats.worstRank === 999) worstRankDisplay = 'Forcé';
-    else worstRankDisplay = (stats.worstRank + 1) + 'e';
+    if (stats.worstRank === 999) worstRankDisplay = t('res_forced');
+    else worstRankDisplay = t('res_nth', { n: stats.worstRank + 1 });
   }
 
   summary.innerHTML = `
     <div class="stat">
       <span class="stat-value">${stats.firstChoices}/${stats.assigned}</span>
-      <span class="stat-label">1er choix</span>
+      <span class="stat-label">${t('res_firstChoice')}</span>
     </div>
     <div class="stat">
       <span class="stat-value">${stats.satisfaction}<span style="font-size:0.7em">%</span></span>
-      <span class="stat-label">Satisfaction moy.</span>
+      <span class="stat-label">${t('res_avgSat')}</span>
     </div>
     <div class="stat">
       <span class="stat-value" style="color:${stats.forced > 0 ? 'var(--danger)' : 'var(--cyan)'}">${worstRankDisplay}</span>
-      <span class="stat-label">Pire rang</span>
+      <span class="stat-label">${t('res_worstRank')}</span>
     </div>
     <div class="stat">
       <span class="stat-value">${stats.assigned}/${stats.slotsTotal}</span>
-      <span class="stat-label">Slots</span>
+      <span class="stat-label">${t('res_slots')}</span>
     </div>
     ${stats.benched > 0 ? `
     <div class="stat">
       <span class="stat-value">${stats.benched}</span>
-      <span class="stat-label">Banc</span>
+      <span class="stat-label">${t('res_bench')}</span>
     </div>` : ''}
   `;
 
@@ -2710,8 +3043,8 @@ function renderSolution(sol) {
       `;
     } else {
       card.className = `assignment ${r.role}` + (r.locked ? ' locked' : '');
-      const lockGlyph = r.locked ? '◆ LOCK' : '◇ LOCK';
-      const lockTitle = r.locked ? 'Déverrouiller cette position' : 'Verrouiller cette personne sur ' + r.jobName;
+      const lockGlyph = r.locked ? t('lk_locked') : t('lk_unlocked');
+      const lockTitle = r.locked ? t('lk_unlockTitle') : t('lk_lockTitle', { job: r.jobName });
       // Compte des voisin·e·s de même rôle pour activer/désactiver les flèches
       const rowKey = r.role === 'caster' ? 'ranged' : r.role;
       const sameRow = results.filter(x => {
@@ -2724,7 +3057,7 @@ function renderSolution(sol) {
       const canRight = posInRow < sameRow.length - 1;
       card.innerHTML = `
         <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
-        <div class="drag-handle" draggable="true" title="Glisser pour réorganiser (dans le rôle)">⋮⋮</div>
+        <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
         <div class="assignment-left">
           <div class="assignment-job-icon">
             <img src="${r.iconUrl}" alt="${r.jobName}" loading="lazy" draggable="false">
@@ -2739,8 +3072,8 @@ function renderSolution(sol) {
           <div class="assigned-slot">${slotShortLabel(r.slotRoles)}</div>
         </div>
         <div class="reorder-controls" style="margin-left:6px;">
-          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="Monter dans le rôle"${canLeft ? '' : ' disabled'}>↑</button>
-          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="Descendre dans le rôle"${canRight ? '' : ' disabled'}>↓</button>
+          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
+          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
         </div>
       `;
       attachResultDragHandlers(card, r);
@@ -2756,11 +3089,11 @@ function renderSolution(sol) {
     const total = assignedResults.length;
     const allLocked = total > 0 && lockedCount === total;
     const statusText = allLocked
-      ? `◆ COMPO VALIDÉE · ${lockedCount}/${total}`
-      : `${lockedCount}/${total} verrouillés`;
+      ? t('lk_validated', { locked: lockedCount, total })
+      : t('lk_status', { locked: lockedCount, total });
     actionsEl.innerHTML = `
-      <button class="btn-tool" id="lockAllBtn"><span class="arrow">◆</span> Verrouiller tout</button>
-      <button class="btn-tool" id="unlockAllBtn"${lockedCount === 0 ? ' disabled' : ''}><span class="arrow">◇</span> Déverrouiller tout</button>
+      <button class="btn-tool" id="lockAllBtn"><span class="arrow">◆</span> ${t('lk_lockAll')}</button>
+      <button class="btn-tool" id="unlockAllBtn"${lockedCount === 0 ? ' disabled' : ''}><span class="arrow">◇</span> ${t('lk_unlockAll')}</button>
       <span class="lock-status${allLocked ? ' validated' : ''}">${statusText}</span>
     `;
     document.getElementById('lockAllBtn').addEventListener('click', () => {
@@ -2786,10 +3119,10 @@ function renderSolution(sol) {
   });
 
   const COL_DEFS = [
-    { key: 'tank',   label: 'Tanks' },
-    { key: 'heal',   label: 'Heals' },
-    { key: 'melee',  label: 'Mêlée' },
-    { key: 'ranged', label: 'Distance' }
+    { key: 'tank',   label: t('res_colTanks') },
+    { key: 'heal',   label: t('res_colHeals') },
+    { key: 'melee',  label: t('res_colMelee') },
+    { key: 'ranged', label: t('res_colDistance') }
   ];
 
   grid.innerHTML = '';
@@ -2803,7 +3136,7 @@ function renderSolution(sol) {
     if (columns[def.key].length === 0) {
       const empty = document.createElement('div');
       empty.className = 'result-col-empty';
-      empty.textContent = '—';
+      empty.textContent = t('res_empty');
       colEl.appendChild(empty);
     } else {
       columns[def.key].forEach(r => colEl.appendChild(buildAssignmentCard(r)));
@@ -2826,14 +3159,14 @@ function renderSolution(sol) {
   if (stats.forced > 0) {
     const w = document.createElement('div');
     w.className = 'warning';
-    w.textContent = `${stats.forced} ${stats.forced > 1 ? 'joueur·euse·s' : 'joueur·euse'} hors préférences — le groupe ne pouvait pas être formé autrement avec cette stratégie.`;
+    w.textContent = t('res_forcedWarn', { n: stats.forced });
     warningArea.appendChild(w);
   }
   if (stats.assigned < stats.slotsTotal) {
     const w = document.createElement('div');
     w.className = 'warning';
     const missing = stats.slotsTotal - stats.assigned;
-    w.textContent = `Il manque ${missing} ${missing > 1 ? 'joueur·euse·s' : 'joueur·euse'} pour compléter.`;
+    w.textContent = t('res_missingWarn', { n: missing });
     warningArea.appendChild(w);
   }
 }
@@ -2842,13 +3175,13 @@ function setLiveIndicator(state) {
   const ind = document.getElementById('liveIndicator');
   if (state === 'computing') {
     ind.classList.add('computing');
-    ind.textContent = 'Calcul...';
+    ind.textContent = t('res_computing');
   } else if (state === 'idle') {
     ind.classList.remove('computing');
-    ind.textContent = 'En attente';
+    ind.textContent = t('res_idle');
   } else {
     ind.classList.remove('computing');
-    ind.textContent = 'Live';
+    ind.textContent = t('res_live');
   }
 }
 
@@ -3014,8 +3347,8 @@ function renderSuggestions() {
   // Cas 1 : tout est couvert et roster complet
   if (gaps.length === 0 && playersWithName.length >= targetSize && noPref === 0) {
     el.classList.add('ok');
-    header.textContent = '◆ Composition viable';
-    body.innerHTML = `Toutes les positions requises peuvent être pourvues avec les préférences actuelles.`;
+    header.textContent = t('sg_viable');
+    body.innerHTML = t('sg_viableText');
     return;
   }
 
@@ -3024,21 +3357,21 @@ function renderSuggestions() {
 
   if (playersWithName.length < targetSize) {
     const missing = targetSize - playersWithName.length;
-    messages.push(`Il manque <strong>${missing} ${missing > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> pour compléter le groupe.`);
+    messages.push(t('sg_missingGroup', { n: missing }));
   }
 
   if (noPref > 0) {
-    messages.push(`<strong>${noPref} ${noPref > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> ${noPref > 1 ? 'n\'ont' : 'n\'a'} pas encore renseigné de préférence.`);
+    messages.push(t('sg_noPrefs', { n: noPref }));
   }
 
   if (gaps.length > 0) {
     el.classList.add('warn');
-    header.textContent = '⚠ Besoins identifiés';
-    const gapText = gaps.map(formatGap).join(gaps.length > 2 ? ', ' : ' ou ');
-    messages.push(`Il nous manque principalement ${gapText} dans les préférences.`);
+    header.textContent = t('sg_needs');
+    const gapText = gaps.map(formatGap).join(gaps.length > 2 ? t('sg_gapJoinComma') : t('sg_gapJoinOr'));
+    messages.push(t('sg_gapDetail', { gapText }));
   } else if (messages.length > 0) {
     el.classList.add('ok');
-    header.textContent = '◆ État du roster';
+    header.textContent = t('sg_rosterState');
   } else {
     el.classList.remove('show');
     return;
@@ -3093,10 +3426,10 @@ function encodeState() {
 }
 
 function validateAndNormalizePayload(payload) {
-  if (!payload || typeof payload !== 'object') throw new Error('Format invalide');
-  if (!CONTENT_BASE[payload.c]) throw new Error('Type de contenu inconnu');
-  if (!['unified', 'split'].includes(payload.d)) throw new Error('Mode DPS invalide');
-  if (!Array.isArray(payload.p)) throw new Error('Liste de joueur·euse·s invalide');
+  if (!payload || typeof payload !== 'object') throw new Error(t('e_invalidFormat'));
+  if (!CONTENT_BASE[payload.c]) throw new Error(t('e_unknownContent'));
+  if (!['unified', 'split'].includes(payload.d)) throw new Error(t('e_invalidDps'));
+  if (!Array.isArray(payload.p)) throw new Error(t('e_invalidPlayers'));
 
   // Valider les jobs : filtrer les IDs inconnus silencieusement
   const validJobIds = new Set(JOBS.map(j => j.id));
@@ -3150,7 +3483,7 @@ function decodeState(code) {
     const json = decodeURIComponent(escape(atob(b64)));
     payload = JSON.parse(json);
   } catch (e) {
-    throw new Error('Code invalide ou corrompu');
+    throw new Error(t('e_invalidCode'));
   }
 
   return validateAndNormalizePayload(payload);
@@ -3181,8 +3514,8 @@ async function requestShortId(payload) {
 async function fetchPayloadById(id) {
   const r = await fetch(`/api/load/${encodeURIComponent(id)}`);
   if (!r.ok) {
-    if (r.status === 404) throw new Error('Lien introuvable ou expiré');
-    throw new Error('Échec du chargement (' + r.status + ')');
+    if (r.status === 404) throw new Error(t('e_notFound'));
+    throw new Error(t('e_loadFail', { status: r.status }));
   }
   const payload = await r.json();
   return validateAndNormalizePayload(payload);
@@ -3241,7 +3574,7 @@ function openPresetMenu(btn, player) {
   if (presets.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'preset-empty';
-    empty.textContent = 'Aucun preset enregistré';
+    empty.textContent = t('pr_empty');
     menu.appendChild(empty);
   } else {
     presets.forEach(preset => {
@@ -3262,7 +3595,7 @@ function openPresetMenu(btn, player) {
       const rm = document.createElement('button');
       rm.className = 'preset-item-remove';
       rm.textContent = '×';
-      rm.title = 'Supprimer ce preset';
+      rm.title = t('pr_delete');
       rm.addEventListener('click', e => {
         e.stopPropagation();
         deletePreset(preset.name);
@@ -3275,7 +3608,7 @@ function openPresetMenu(btn, player) {
         renderPlayers();
         renderSuggestions();
         scheduleLiveCompute();
-        showToast('Preset "' + preset.name + '" appliqué');
+        showToast(t('ts_presetApplied', { name: preset.name }));
       });
       menu.appendChild(item);
     });
@@ -3289,14 +3622,14 @@ function openPresetMenu(btn, player) {
   const canSave = player.preferences.length > 0 && presets.length < MAX_PRESETS;
   add.className = 'preset-add' + (canSave ? '' : ' disabled');
   add.textContent = canSave
-    ? '+ Enregistrer comme preset'
-    : (presets.length >= MAX_PRESETS ? `Max ${MAX_PRESETS} presets atteint` : 'Choisis d\'abord des prefs');
+    ? t('pr_saveNew')
+    : (presets.length >= MAX_PRESETS ? t('pr_maxReached', { n: MAX_PRESETS }) : t('pr_needPrefs'));
   if (canSave) {
     add.addEventListener('click', () => {
-      const name = prompt('Nom du preset :', player.name || '');
+      const name = prompt(t('pr_prompt'), player.name || '');
       if (name && name.trim()) {
         savePreset(name.trim(), player.preferences);
-        showToast('Preset enregistré');
+        showToast(t('ts_presetSaved'));
         openPresetMenu(btn, player);
       }
     });
@@ -3375,14 +3708,14 @@ function renderRecentRooms() {
     const text = r.when ? r.when : r.id;
     const ctLabel = (CONTENT_BASE[r.contentType] || {}).label || r.contentType;
     chip.innerHTML = `<span>${escapeHtml(text)}</span><span class="chip-meta">${escapeHtml(ctLabel)}</span>`;
-    chip.title = `Ouvrir le salon ${r.id}`;
+    chip.title = t('rr_open', { id: r.id });
     chip.addEventListener('click', () => {
       window.location.search = '?p=' + encodeURIComponent(r.id);
     });
     const rm = document.createElement('button');
     rm.className = 'chip-remove';
     rm.textContent = '×';
-    rm.title = 'Oublier ce salon';
+    rm.title = t('rr_forget');
     rm.addEventListener('click', e => { e.stopPropagation(); forgetRoom(r.id); });
     chip.appendChild(rm);
     bar.appendChild(chip);
@@ -3410,12 +3743,12 @@ function updateSyncStatus() {
   }
   btn.hidden = false;
   if (saving) {
-    label.textContent = 'Sync…';
+    label.textContent = t('t_syncing');
   } else if (lastSavedAt) {
     const d = new Date(lastSavedAt);
-    label.textContent = `Salon · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    label.textContent = t('t_salonAt', { time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}` });
   } else {
-    label.textContent = 'Salon';
+    label.textContent = t('t_salon');
   }
 }
 
@@ -3599,7 +3932,7 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   // Local → on crée le salon
   const payload = buildPayload();
   const longUrl = buildShareUrl(code);
-  urlEl.value = 'Génération du lien…';
+  urlEl.value = t('ts_generating');
   copyLinkBtn.disabled = true;
   copyCodeBtn.disabled = true;
   openModal('shareModal');
@@ -3613,7 +3946,7 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
       urlEl.value = `${window.location.origin}${window.location.pathname}?p=${id}`;
     } else {
       urlEl.value = longUrl;
-      showToast('Lien court indisponible, lien long généré');
+      showToast(t('ts_shortUnavailable'));
     }
   } finally {
     copyLinkBtn.disabled = false;
@@ -3639,23 +3972,23 @@ document.addEventListener('visibilitychange', () => {
 
 document.getElementById('copyLinkBtn').addEventListener('click', async () => {
   const url = document.getElementById('shareUrl').value;
-  if (await copyToClipboard(url)) showToast('Lien copié');
-  else showToast('Échec de la copie');
+  if (await copyToClipboard(url)) showToast(t('ts_linkCopied'));
+  else showToast(t('ts_copyFail'));
 });
 
 document.getElementById('copyCodeBtn').addEventListener('click', async () => {
   const code = document.getElementById('shareUrl').dataset.code;
-  if (await copyToClipboard(code)) showToast('Code copié');
-  else showToast('Échec de la copie');
+  if (await copyToClipboard(code)) showToast(t('ts_codeCopied'));
+  else showToast(t('ts_copyFail'));
 });
 
 function buildDiscordText() {
   const ROLE_LABELS = {
-    tank:   '🛡️ Tank',
-    heal:   '💚 Heal',
-    melee:  '⚔️ Mêlée',
-    ranged: '🎯 Distance',
-    caster: '🔮 Caster'
+    tank:   '🛡️ ' + t('res_slotTank'),
+    heal:   '💚 ' + t('res_slotHeal'),
+    melee:  '⚔️ ' + t('res_slotMelee'),
+    ranged: '🎯 ' + t('res_slotDistance'),
+    caster: '🔮 ' + t('res_slotCaster')
   };
   const ct = CONTENT_BASE[state.contentType];
   const title = ct ? ct.label : state.contentType;
@@ -3683,11 +4016,11 @@ function buildDiscordText() {
     });
     if (bench.length > 0) {
       lines.push('');
-      lines.push(`📋 Banc : ${bench.map(r => r.name).join(', ')}`);
+      lines.push(t('dc_bench', { names: bench.map(r => r.name).join(', ') }));
     }
   } else {
     // Pas de compo possible : on liste juste le roster
-    lines.push('▸ Roster');
+    lines.push(t('dc_rosterFallback'));
     state.players
       .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
       .forEach(p => {
@@ -3702,12 +4035,12 @@ function buildDiscordText() {
   const absents = state.players.filter(p => p.name.trim() && p.presence === 'out');
   if (absents.length > 0) {
     lines.push('');
-    lines.push(`Absent·e·s : ${absents.map(p => p.name).join(', ')}`);
+    lines.push(t('dc_absents', { names: absents.map(p => p.name).join(', ') }));
   }
 
   if (state.bannedJobs.length > 0) {
     const names = state.bannedJobs.map(id => (JOB_BY_ID[id] || {}).name || id).join(', ');
-    lines.push(`🚫 Bannis : ${names}`);
+    lines.push(t('dc_banned', { names }));
   }
 
   lines.push('');
@@ -3717,8 +4050,8 @@ function buildDiscordText() {
 
 document.getElementById('copyDiscordBtn').addEventListener('click', async () => {
   const text = buildDiscordText();
-  if (await copyToClipboard(text)) showToast('Compo copiée pour Discord');
-  else showToast('Échec de la copie');
+  if (await copyToClipboard(text)) showToast(t('ts_discordCopied'));
+  else showToast(t('ts_copyFail'));
 });
 
 // Import
@@ -3735,7 +4068,7 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
   errorEl.classList.remove('show');
 
   if (!raw) {
-    errorEl.textContent = 'Saisis un lien ou un code.';
+    errorEl.textContent = t('m_importMissing');
     errorEl.classList.add('show');
     return;
   }
@@ -3766,7 +4099,7 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
       exitRoomMode();
     }
     closeModal('importModal');
-    showToast('Groupe importé');
+    showToast(t('ts_groupImported'));
   } catch (e) {
     errorEl.textContent = e.message;
     errorEl.classList.add('show');
@@ -3777,7 +4110,7 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
 
 // Reset
 document.getElementById('resetBtn').addEventListener('click', () => {
-  if (!confirm('Réinitialiser le roster ?')) return;
+  if (!confirm(t('r_confirmReset'))) return;
   exitRoomMode(); // quitte le salon avant le reset pour ne pas pousser un état vide
   state.players = [];
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
@@ -3809,11 +4142,11 @@ const balanceSlider = document.getElementById('balanceSlider');
 const balanceValue = document.getElementById('balanceValue');
 
 function balanceLabel(v) {
-  if (v <= 10) return 'Satisfaction max';
-  if (v <= 30) return 'Plutôt globale';
-  if (v <= 60) return 'Équilibré';
-  if (v <= 85) return 'Plutôt équitable';
-  return 'Anti-frustration';
+  if (v <= 10) return t('p_balanceMax');
+  if (v <= 30) return t('p_balanceGlobal');
+  if (v <= 60) return t('p_balanceEq');
+  if (v <= 85) return t('p_balanceFair');
+  return t('p_balanceAnti');
 }
 
 balanceSlider.addEventListener('input', e => {
@@ -3868,6 +4201,7 @@ document.addEventListener('keydown', e => {
 // ============================================================
 
 (async function initFromUrl() {
+  applyStaticI18n();
   const params = new URLSearchParams(window.location.search);
   const code = params.get('p');
   if (code) {
@@ -3890,7 +4224,7 @@ document.addEventListener('keydown', e => {
         lastSavedAt = Date.now();
         updateSyncStatus();
       }
-      showToast(isShortId ? 'Salon chargé' : 'Groupe chargé depuis le lien');
+      showToast(isShortId ? t('ts_roomLoaded') : t('ts_linkLoaded'));
       balanceValue.textContent = balanceLabel(state.fairnessWeight);
       return;
     } catch (e) {
