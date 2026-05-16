@@ -373,6 +373,45 @@
     flex-shrink: 0;
   }
 
+  .reorder-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .reorder-controls.horizontal {
+    flex-direction: row;
+  }
+  .reorder-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 1px 5px;
+    line-height: 1;
+    transition: all 0.15s;
+    width: 22px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .reorder-controls.horizontal .reorder-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+  }
+  .reorder-btn:hover:not(:disabled) {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+  .reorder-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+  }
+
   .preset-btn {
     background: transparent;
     border: 1px solid var(--line);
@@ -1969,6 +2008,24 @@ function renderPlayers() {
 
     row.appendChild(jobsRow);
 
+    const reorder = document.createElement('div');
+    reorder.className = 'reorder-controls';
+    const upBtn = document.createElement('button');
+    upBtn.className = 'reorder-btn';
+    upBtn.textContent = '↑';
+    upBtn.title = 'Monter';
+    upBtn.disabled = idx === 0;
+    upBtn.addEventListener('click', () => movePlayerInRoster(player.id, -1));
+    const downBtn = document.createElement('button');
+    downBtn.className = 'reorder-btn';
+    downBtn.textContent = '↓';
+    downBtn.title = 'Descendre';
+    downBtn.disabled = idx === state.players.length - 1;
+    downBtn.addEventListener('click', () => movePlayerInRoster(player.id, 1));
+    reorder.appendChild(upBtn);
+    reorder.appendChild(downBtn);
+    row.appendChild(reorder);
+
     const removeBtn = document.createElement('button');
     removeBtn.className = 'btn-remove';
     removeBtn.textContent = '×';
@@ -1984,6 +2041,43 @@ function renderPlayers() {
 
     list.appendChild(row);
   });
+}
+
+function movePlayerInRoster(playerId, direction) {
+  const idx = state.players.findIndex(p => p.id === playerId);
+  if (idx < 0) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= state.players.length) return;
+  [state.players[idx], state.players[newIdx]] = [state.players[newIdx], state.players[idx]];
+  renderPlayers();
+  renderSuggestions();
+  scheduleLiveCompute();
+}
+
+function moveResultPlayer(playerName, direction) {
+  const sol = currentSolutions && currentSolutions[currentAlternativeIndex] || (currentSolutions && currentSolutions[0]);
+  if (!sol) return;
+  const me = sol.results.find(r => r.name === playerName);
+  if (!me || !me.assigned) return;
+  // Même ligne d'affichage = même rôle, sauf caster qui partage la ligne "ranged"
+  const rowKey = me.role === 'caster' ? 'ranged' : me.role;
+  const sameRow = sol.results.filter(r => {
+    if (!r.assigned) return false;
+    const k = r.role === 'caster' ? 'ranged' : r.role;
+    return k === rowKey;
+  });
+  const idx = sameRow.findIndex(r => r.name === playerName);
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= sameRow.length) return;
+  const otherName = sameRow[newIdx].name;
+  const p1 = state.players.find(p => p.name.trim() === playerName);
+  const p2 = state.players.find(p => p.name.trim() === otherName);
+  if (!p1 || !p2) return;
+  const i1 = state.players.indexOf(p1);
+  const i2 = state.players.indexOf(p2);
+  [state.players[i1], state.players[i2]] = [state.players[i2], state.players[i1]];
+  renderPlayers();
+  scheduleLiveCompute();
 }
 
 function renderBannedJobs() {
@@ -2452,6 +2546,16 @@ function renderSolution(sol) {
       card.className = `assignment ${r.role}` + (r.locked ? ' locked' : '');
       const lockGlyph = r.locked ? '◆ LOCK' : '◇ LOCK';
       const lockTitle = r.locked ? 'Déverrouiller cette position' : 'Verrouiller cette personne sur ' + r.jobName;
+      // Compte des voisin·e·s de même rôle pour activer/désactiver les flèches
+      const rowKey = r.role === 'caster' ? 'ranged' : r.role;
+      const sameRow = results.filter(x => {
+        if (!x.assigned) return false;
+        const k = x.role === 'caster' ? 'ranged' : x.role;
+        return k === rowKey;
+      });
+      const posInRow = sameRow.findIndex(x => x.name === r.name);
+      const canLeft = posInRow > 0;
+      const canRight = posInRow < sameRow.length - 1;
       card.innerHTML = `
         <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
         <div class="assignment-left">
@@ -2466,6 +2570,10 @@ function renderSolution(sol) {
         <div class="assignment-right">
           <div class="assigned-job">${r.jobName}</div>
           <div class="assigned-slot">${slotShortLabel(r.slotRoles)}</div>
+        </div>
+        <div class="reorder-controls horizontal" style="margin-left:6px;">
+          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="Déplacer à gauche"${canLeft ? '' : ' disabled'}>◂</button>
+          <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="Déplacer à droite"${canRight ? '' : ' disabled'}>▸</button>
         </div>
       `;
     }
@@ -3508,20 +3616,24 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   renderAll();
 });
 
-// Lock / unlock individuel : délégation sur la grille de résultat
+// Lock / unlock + réordonnancement : délégation sur la grille de résultat
 document.getElementById('assignmentGrid').addEventListener('click', e => {
-  const btn = e.target.closest('.lock-toggle');
-  if (!btn) return;
-  const name = btn.dataset.name;
-  const jobId = btn.dataset.job;
-  const player = state.players.find(p => p.name.trim() === name);
-  if (!player) return;
-  if (player.lockedJob === jobId) {
-    player.lockedJob = null;
-  } else {
-    player.lockedJob = jobId;
+  const lockBtn = e.target.closest('.lock-toggle');
+  if (lockBtn) {
+    const name = lockBtn.dataset.name;
+    const jobId = lockBtn.dataset.job;
+    const player = state.players.find(p => p.name.trim() === name);
+    if (!player) return;
+    player.lockedJob = (player.lockedJob === jobId) ? null : jobId;
+    scheduleLiveCompute();
+    return;
   }
-  scheduleLiveCompute();
+  const reorderBtn = e.target.closest('[data-reorder-name]');
+  if (reorderBtn && !reorderBtn.disabled) {
+    const name = reorderBtn.dataset.reorderName;
+    const dir = parseInt(reorderBtn.dataset.reorderDir, 10);
+    moveResultPlayer(name, dir);
+  }
 });
 
 // Balance slider
