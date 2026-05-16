@@ -80,14 +80,16 @@ export async function onRequest(context) {
              `<meta property="og:description" content="${escAttr(desc)}">`)
     .replace(/<meta property="og:image" content="[^"]*">/i,
              `<meta property="og:image" content="${escAttr(ogImage)}">`)
+    .replace(/<meta property="og:image:secure_url" content="[^"]*">/i,
+             `<meta property="og:image:secure_url" content="${escAttr(ogImage)}">`)
+    .replace(/<meta property="og:url" content="[^"]*">/i,
+             `<meta property="og:url" content="${escAttr(url.origin + '/?p=' + p)}">`)
     .replace(/<meta name="twitter:title" content="[^"]*">/i,
              `<meta name="twitter:title" content="${escAttr(title)}">`)
     .replace(/<meta name="twitter:description" content="[^"]*">/i,
              `<meta name="twitter:description" content="${escAttr(desc)}">`)
     .replace(/<meta name="twitter:image" content="[^"]*">/i,
-             `<meta name="twitter:image" content="${escAttr(ogImage)}">`)
-    .replace(/<meta property="og:image:width" content="[^"]*">\s*<meta property="og:image:height" content="[^"]*">/i,
-             '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png">');
+             `<meta name="twitter:image" content="${escAttr(ogImage)}">`);
 
   // Nouveau Response avec body modifié, headers d'origine sauf content-length
   const headers = new Headers(response.headers);
