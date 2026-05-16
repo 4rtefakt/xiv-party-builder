@@ -1,0 +1,11 @@
+name = "xiv-party-builder"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "."
+
+# Local dev binding. Replace the id below with your real KV namespace id
+# (from `wrangler kv namespace create PARTY_KV`) before deploying via wrangler,
+# or rely on the Cloudflare dashboard binding when using Git-based deploys.
+[[kv_namespaces]]
+binding = "PARTY_KV"
+id = "0000000000000000000000000000000000"
+preview_id = "0000000000000000000000000000000000"

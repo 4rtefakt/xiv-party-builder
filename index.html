@@ -928,6 +928,258 @@
     content: '✓ ';
     color: var(--heal);
   }
+
+  /* ============ BALANCE SLIDER ============ */
+  .balance-control {
+    margin-top: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    position: relative;
+  }
+
+  .balance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .balance-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .balance-title::before {
+    content: '';
+    width: 4px; height: 4px;
+    background: var(--cyan);
+    transform: rotate(45deg);
+  }
+
+  .balance-value {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.78rem;
+    color: var(--cyan);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .balance-slider-wrap {
+    position: relative;
+    padding: 0.5rem 0;
+  }
+
+  .balance-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: linear-gradient(90deg, var(--magenta) 0%, var(--cyan) 100%);
+    outline: none;
+    border-radius: 0;
+    cursor: pointer;
+  }
+
+  .balance-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    background: var(--bg-deep);
+    border: 2px solid var(--cyan);
+    cursor: pointer;
+    transform: rotate(45deg);
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+    transition: box-shadow 0.15s;
+  }
+  .balance-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.9);
+  }
+
+  .balance-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    background: var(--bg-deep);
+    border: 2px solid var(--cyan);
+    cursor: pointer;
+    transform: rotate(45deg);
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+  }
+
+  .balance-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+  }
+  .balance-labels span:first-child { color: rgba(255, 46, 154, 0.9); }
+  .balance-labels span:last-child { color: rgba(0, 229, 255, 0.9); }
+
+  /* ============ LIVE PREVIEW INDICATOR ============ */
+  .live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.15em;
+    color: var(--heal);
+    text-transform: uppercase;
+    margin-left: auto;
+    padding: 0.2rem 0.5rem;
+    background: rgba(74, 222, 128, 0.08);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+  }
+  .live-indicator::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--heal);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--heal);
+    animation: pulseLive 1.5s ease-in-out infinite;
+  }
+  @keyframes pulseLive {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .live-indicator.computing {
+    color: var(--amber);
+    background: rgba(255, 181, 71, 0.08);
+    border-color: rgba(255, 181, 71, 0.3);
+  }
+  .live-indicator.computing::before {
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
+
+  /* ============ ALTERNATIVES TABS ============ */
+  .alternatives-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .alt-tab {
+    background: transparent;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    color: var(--ink-dim);
+    padding: 0.5rem 1rem;
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: -1px;
+    position: relative;
+  }
+  .alt-tab:hover { color: var(--ink); border-color: var(--line-bright); }
+  .alt-tab.active {
+    color: var(--cyan);
+    background: var(--bg-deep);
+    border-color: var(--cyan);
+    border-bottom-color: var(--bg-deep);
+    z-index: 1;
+  }
+  .alt-tab .alt-meta {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+    margin-top: 0.15rem;
+  }
+
+  /* ============ RANK HIGHLIGHT IN RESULT ============ */
+  .rank-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 0.2rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0;
+    font-weight: 600;
+  }
+
+  .rank-display.rank-1 {
+    color: var(--amber);
+    background: rgba(255, 181, 71, 0.12);
+    border: 1px solid rgba(255, 181, 71, 0.4);
+    text-shadow: 0 0 6px rgba(255, 181, 71, 0.6);
+  }
+  .rank-display.rank-2 {
+    color: var(--heal);
+    background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.35);
+  }
+  .rank-display.rank-3 {
+    color: var(--cyan);
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid rgba(0, 229, 255, 0.3);
+  }
+  .rank-display.rank-low {
+    color: var(--magenta);
+    background: rgba(255, 46, 154, 0.08);
+    border: 1px solid rgba(255, 46, 154, 0.3);
+  }
+  .rank-display.rank-forced {
+    color: var(--danger);
+    background: rgba(255, 71, 87, 0.1);
+    border: 1px solid rgba(255, 71, 87, 0.4);
+  }
+  .rank-display.rank-bench {
+    color: var(--ink-faint);
+    background: rgba(58, 74, 92, 0.15);
+    border: 1px solid var(--line);
+  }
+
+  .rank-num {
+    font-weight: 700;
+    font-size: 0.7rem;
+  }
+  .rank-icon {
+    font-size: 0.6rem;
+  }
+
+  /* Bouton dans le header pour activer/désactiver le live */
+  .live-toggle {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    padding: 0.3rem 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .live-toggle.active {
+    color: var(--cyan);
+    border-color: var(--cyan);
+    background: rgba(0, 229, 255, 0.06);
+  }
+  .live-toggle:hover { color: var(--ink); border-color: var(--line-bright); }
 </style>
 </head>
 <body>
@@ -961,6 +1213,20 @@
         <div class="segment" id="dpsModeSeg"></div>
       </div>
     </div>
+
+    <div class="balance-control">
+      <div class="balance-header">
+        <span class="balance-title">Stratégie d'optimisation</span>
+        <span class="balance-value" id="balanceValue">Équilibré</span>
+      </div>
+      <div class="balance-slider-wrap">
+        <input type="range" id="balanceSlider" class="balance-slider" min="0" max="100" value="50" step="5">
+      </div>
+      <div class="balance-labels">
+        <span>◂ Satisfaction globale</span>
+        <span>Frustration limitée ▸</span>
+      </div>
+    </div>
   </section>
 
   <section class="section">
@@ -987,16 +1253,14 @@
     </div>
   </section>
 
-  <div class="compose-area">
-    <button class="btn-primary" id="composeBtn">► Composer le groupe</button>
-  </div>
-
-  <section class="section result" id="resultSection">
+  <section class="section result show" id="resultSection">
     <div class="section-header">
       <span class="section-tag">03</span>
       <h2>Composition</h2>
       <div class="section-line"></div>
+      <div class="live-indicator" id="liveIndicator">Live</div>
     </div>
+    <div class="alternatives-tabs" id="alternativesTabs"></div>
     <div class="result-summary" id="resultSummary"></div>
     <div class="assignment-grid" id="assignmentGrid"></div>
     <div id="warningArea"></div>
@@ -1115,6 +1379,8 @@ function buildSlots(contentKey, dpsMode) {
 const state = {
   contentType: 'raid8',
   dpsMode: 'unified',
+  fairnessWeight: 50,  // 0 = max satisfaction globale, 100 = anti-frustration max
+  showAlternatives: false,
   players: []
 };
 
@@ -1154,7 +1420,7 @@ function renderSegments() {
   const dpsSeg = document.getElementById('dpsModeSeg');
   dpsSeg.innerHTML = '';
   const modes = [
-    { id: 'unified', label: 'Unifié' },
+    { id: 'unified', label: 'Unifiés' },
     { id: 'split',   label: 'Mêlée / Distance' }
   ];
   modes.forEach(m => {
@@ -1197,7 +1463,13 @@ function renderPlayers() {
     input.className = 'player-name-input';
     input.placeholder = `P${String(idx + 1).padStart(2, '0')}`;
     input.value = player.name;
-    input.addEventListener('input', e => { player.name = e.target.value; });
+    input.addEventListener('input', e => {
+      player.name = e.target.value;
+      // Le nom n'affecte que la présence dans le calcul (joueurs vides ignorés)
+      // Debounce plus long sur le nom pour ne pas calculer à chaque frappe
+      scheduleLiveCompute(400);
+      renderSuggestions();
+    });
     row.appendChild(input);
 
     const jobsRow = document.createElement('div');
@@ -1232,6 +1504,7 @@ function renderPlayers() {
           else          player.preferences.splice(i, 1);
           renderPlayers();
           renderSuggestions();
+          scheduleLiveCompute();
         });
         jobsRow.appendChild(icon);
       });
@@ -1248,6 +1521,7 @@ function renderPlayers() {
       renderPlayers();
       renderRosterInfo();
       renderSuggestions();
+      scheduleLiveCompute();
     });
     row.appendChild(removeBtn);
 
@@ -1260,10 +1534,33 @@ function renderAll() {
   renderRosterInfo();
   renderPlayers();
   renderSuggestions();
+  scheduleLiveCompute();
 }
 
 // ============================================================
 // OPTIMAL ASSIGNMENT
+// ============================================================
+
+// ============================================================
+// OPTIMAL ASSIGNMENT — Backtracking + Branch & Bound
+// ============================================================
+//
+// Scoring paramétrique avec fairnessWeight (0..100) :
+// - 0   = max satisfaction globale (somme des scores brute)
+// - 100 = anti-frustration (lourd malus sur les choix bas / forcés)
+//
+// Score brut par joueur :
+//   - 1er choix : 100, 2e : 90, 3e : 80...
+//   - Forcé (job hors prefs) : -50
+//   - Banc : -30
+//
+// Pénalité de frustration ajoutée à chaque assignment :
+//   frustrationPenalty(rank) = (rank * STEP_FRUSTRATION + (forced ? FORCED_FRUST : 0))
+//                              * fairnessWeight / 100
+// Plus le rang est mauvais, plus la pénalité grandit, modulée par le slider.
+//
+// On peut aussi retourner les top-K compositions distinctes pour proposer
+// des alternatives à l'utilisateur.
 // ============================================================
 
 const SCORING = {
@@ -1271,16 +1568,35 @@ const SCORING = {
   PREF_STEP: 10,
   FORCED_BASE: -50,
   BENCH: -30,
-  WORST_CASE_PENALTY: 200
+  // Pénalités de frustration (multipliées par fairnessWeight/100)
+  FRUST_PER_RANK: 30,    // chaque rang en dessous du 1er coûte ça
+  FRUST_FORCED: 400,     // bonus de pénalité si vraiment forcé
+  FRUST_BENCH: 150       // bonus si benché
 };
 
-function jobScoreForPlayer(player, jobId) {
+function jobScoreForPlayer(player, jobId, fairnessWeight) {
   const idx = player.preferences.indexOf(jobId);
-  if (idx === -1) return { score: SCORING.FORCED_BASE, forced: true };
-  return { score: SCORING.FIRST_CHOICE - idx * SCORING.PREF_STEP, forced: false };
+  const w = fairnessWeight / 100;
+  if (idx === -1) {
+    // Forcé
+    const baseScore = SCORING.FORCED_BASE;
+    const frustration = SCORING.FRUST_FORCED * w;
+    return { score: baseScore - frustration, forced: true, rank: -1 };
+  }
+  const baseScore = SCORING.FIRST_CHOICE - idx * SCORING.PREF_STEP;
+  const frustration = idx * SCORING.FRUST_PER_RANK * w;
+  return { score: baseScore - frustration, forced: false, rank: idx };
 }
 
-function computeOptimalAssignment() {
+function benchScore(fairnessWeight) {
+  const w = fairnessWeight / 100;
+  return SCORING.BENCH - SCORING.FRUST_BENCH * w;
+}
+
+function computeOptimalAssignment(opts = {}) {
+  const fairnessWeight = opts.fairnessWeight ?? state.fairnessWeight;
+  const topK = opts.topK ?? 1;  // nb de solutions distinctes à retourner
+
   const slots = buildSlots(state.contentType, state.dpsMode);
   const players = state.players.filter(p => p.name.trim() !== '');
 
@@ -1289,9 +1605,15 @@ function computeOptimalAssignment() {
   const n = players.length;
   const m = slots.length;
 
-  const bestPerPlayer = players.map(p =>
-    p.preferences.length === 0 ? SCORING.FORCED_BASE : SCORING.FIRST_CHOICE
-  );
+  const benchSc = benchScore(fairnessWeight);
+  const bestPerPlayer = players.map(p => {
+    if (p.preferences.length === 0) {
+      // Que ce soit forcé ou bench, c'est pas terrible. On prend le moins pire.
+      const forcedScore = jobScoreForPlayer(p, '__none__', fairnessWeight).score;
+      return Math.max(forcedScore, benchSc);
+    }
+    return SCORING.FIRST_CHOICE;  // optimiste : son 1er choix
+  });
 
   const upperBoundFrom = i => {
     let s = 0;
@@ -1299,25 +1621,50 @@ function computeOptimalAssignment() {
     return s;
   };
 
-  let bestScore = -Infinity;
-  let bestForcedCount = Infinity;
-  let bestAssignment = null;
+  // On garde top-K solutions distinctes via une liste triée
+  // Une solution = { score, assignment, signature }
+  // Signature = clé canonique pour détecter les doublons (joueur → jobId)
+  const topSolutions = [];
+
+  function signature(assignment) {
+    return players.map((p, i) => {
+      const a = assignment[i];
+      return p.name + '=' + (a ? a.jobId : '_bench');
+    }).join('|');
+  }
+
+  function tryAddSolution(score, forcedCount, assignment) {
+    const sig = signature(assignment);
+    // Éviter doublons (même signature)
+    if (topSolutions.some(s => s.signature === sig)) return;
+
+    const solution = {
+      score,
+      forcedCount,
+      assignment: assignment.map(a => a ? { ...a } : null),
+      signature: sig
+    };
+    topSolutions.push(solution);
+    // Tri descendant par score, on garde topK
+    topSolutions.sort((a, b) => b.score - a.score);
+    if (topSolutions.length > topK) topSolutions.length = topK;
+  }
 
   const current = new Array(n).fill(null);
   const slotTaken = new Array(m).fill(false);
 
+  // Le seuil de coupure est le score de la K-ième meilleure solution actuelle
+  function pruneThreshold() {
+    if (topSolutions.length < topK) return -Infinity;
+    return topSolutions[topSolutions.length - 1].score;
+  }
+
   function recurse(playerIdx, currentScore, forcedCount) {
-    const optimisticObjective =
-      currentScore + upperBoundFrom(playerIdx) - SCORING.WORST_CASE_PENALTY * forcedCount;
-    if (optimisticObjective <= bestScore) return;
+    const optimisticBest = currentScore + upperBoundFrom(playerIdx);
+    if (optimisticBest <= pruneThreshold()) return;
 
     if (playerIdx === n) {
-      const score = currentScore - SCORING.WORST_CASE_PENALTY * forcedCount;
-      if (score > bestScore || (score === bestScore && forcedCount < bestForcedCount)) {
-        bestScore = score;
-        bestForcedCount = forcedCount;
-        bestAssignment = current.map(a => a ? { ...a } : null);
-      }
+      tryAddSolution(currentScore, forcedCount, current);
       return;
     }
 
@@ -1342,12 +1689,12 @@ function computeOptimalAssignment() {
         const key = slotIdx + ':' + jobId;
         if (seen.has(key)) continue;
         seen.add(key);
-        const { score, forced } = jobScoreForPlayer(player, jobId);
+        const { score, forced } = jobScoreForPlayer(player, jobId, fairnessWeight);
         options.push({ slotIdx, jobId, score, forced });
       }
     }
 
-    options.push({ slotIdx: null, jobId: null, score: SCORING.BENCH, forced: false });
+    options.push({ slotIdx: null, jobId: null, score: benchSc, forced: false });
     options.sort((a, b) => b.score - a.score);
 
     for (const opt of options) {
@@ -1366,10 +1713,23 @@ function computeOptimalAssignment() {
 
   recurse(0, 0, 0);
 
-  if (!bestAssignment) return { error: 'Aucune composition valide trouvée.' };
+  if (topSolutions.length === 0) return { error: 'Aucune composition valide trouvée.' };
 
+  // Transformer chaque solution en résultat lisible
+  const solutions = topSolutions.map(sol => buildResultFromAssignment(players, slots, sol.assignment));
+
+  return {
+    solutions,
+    fairnessWeight,
+    // Pour rétrocompat : `results` et `stats` du best
+    results: solutions[0].results,
+    stats: solutions[0].stats
+  };
+}
+
+function buildResultFromAssignment(players, slots, assignment) {
   const results = players.map((p, i) => {
-    const a = bestAssignment[i];
+    const a = assignment[i];
     if (a === null) return { name: p.name, assigned: false, preferences: p.preferences };
     const job = JOB_BY_ID[a.jobId];
     const prefRank = p.preferences.indexOf(a.jobId);
@@ -1383,7 +1743,8 @@ function computeOptimalAssignment() {
       slotRoles: slots[a.slotIdx].roles,
       prefRank,
       forced: prefRank === -1,
-      preferences: p.preferences
+      preferences: p.preferences,
+      totalPrefs: p.preferences.length
     };
   });
 
@@ -1391,6 +1752,8 @@ function computeOptimalAssignment() {
   const firstChoices = assigned.filter(r => r.prefRank === 0).length;
   const forced = assigned.filter(r => r.forced).length;
   const benched = results.filter(r => !r.assigned).length;
+  // Pire rang attribué (frustration max)
+  const worstRank = assigned.length === 0 ? null : Math.max(...assigned.map(r => r.forced ? 999 : r.prefRank));
   const satisfaction = assigned.length === 0 ? 0 :
     Math.round(assigned.reduce((sum, r) => {
       if (r.forced) return sum;
@@ -1401,7 +1764,8 @@ function computeOptimalAssignment() {
     results,
     stats: {
       total: results.length, assigned: assigned.length, benched,
-      firstChoices, forced, satisfaction, slotsTotal: m
+      firstChoices, forced, satisfaction, slotsTotal: slots.length,
+      worstRank
     }
   };
 }
@@ -1415,23 +1779,75 @@ function slotShortLabel(slotRoles) {
   return slotRoles.join('/');
 }
 
-function renderResult() {
-  const result = computeOptimalAssignment();
-  const section = document.getElementById('resultSection');
+// ============================================================
+// LIVE PREVIEW + ALTERNATIVES
+// ============================================================
+
+let liveComputeTimer = null;
+let currentAlternativeIndex = 0;
+let currentSolutions = null;
+
+function rankBadge(r) {
+  // Renvoie le HTML du badge de rang avec coloration adéquate
+  if (!r.assigned) {
+    return `<div class="rank-display rank-bench"><span class="rank-icon">⊘</span>Banc</div>`;
+  }
+  if (r.forced) {
+    return `<div class="rank-display rank-forced"><span class="rank-icon">⚠</span>Hors prefs</div>`;
+  }
+  const rank = r.prefRank + 1;
+  let cls, icon;
+  if (rank === 1) { cls = 'rank-1'; icon = '★'; }
+  else if (rank === 2) { cls = 'rank-2'; icon = '◆'; }
+  else if (rank === 3) { cls = 'rank-3'; icon = '◇'; }
+  else { cls = 'rank-low'; icon = '◯'; }
+  const total = r.totalPrefs;
+  return `<div class="rank-display ${cls}">
+    <span class="rank-icon">${icon}</span>
+    <span class="rank-num">${rank}<sup style="font-size:0.7em;opacity:0.7">e</sup></span>
+    <span style="opacity:0.6">/ ${total}</span>
+  </div>`;
+}
+
+function renderAlternativesTabs() {
+  const tabs = document.getElementById('alternativesTabs');
+  if (!currentSolutions || currentSolutions.length <= 1) {
+    tabs.innerHTML = '';
+    return;
+  }
+  tabs.innerHTML = '';
+  currentSolutions.forEach((sol, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'alt-tab' + (idx === currentAlternativeIndex ? ' active' : '');
+    const label = idx === 0 ? 'Option A' : (idx === 1 ? 'Option B' : `Option ${String.fromCharCode(65 + idx)}`);
+    btn.innerHTML = `${label}<span class="alt-meta">${sol.stats.satisfaction}% sat · ${sol.stats.firstChoices} 1er</span>`;
+    btn.addEventListener('click', () => {
+      currentAlternativeIndex = idx;
+      renderAlternativesTabs();
+      renderActiveSolution();
+    });
+    tabs.appendChild(btn);
+  });
+}
+
+function renderActiveSolution() {
+  if (!currentSolutions || currentSolutions.length === 0) return;
+  const sol = currentSolutions[currentAlternativeIndex] || currentSolutions[0];
+  renderSolution(sol);
+}
+
+function renderSolution(sol) {
   const summary = document.getElementById('resultSummary');
   const grid = document.getElementById('assignmentGrid');
   const warningArea = document.getElementById('warningArea');
+  const { results, stats } = sol;
 
-  if (result.error) {
-    summary.innerHTML = `<div style="color:var(--danger)">${result.error}</div>`;
-    grid.innerHTML = '';
-    warningArea.innerHTML = '';
-    section.classList.add('show');
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    return;
+  // Stat "frustration max" : le pire rang attribué
+  let worstRankDisplay = '—';
+  if (stats.worstRank !== null && stats.worstRank !== undefined) {
+    if (stats.worstRank === 999) worstRankDisplay = 'Forcé';
+    else worstRankDisplay = (stats.worstRank + 1) + 'e';
   }
-
-  const { results, stats } = result;
 
   summary.innerHTML = `
     <div class="stat">
@@ -1440,7 +1856,11 @@ function renderResult() {
     </div>
     <div class="stat">
       <span class="stat-value">${stats.satisfaction}<span style="font-size:0.7em">%</span></span>
-      <span class="stat-label">Satisfaction</span>
+      <span class="stat-label">Satisfaction moy.</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" style="color:${stats.forced > 0 ? 'var(--danger)' : 'var(--cyan)'}">${worstRankDisplay}</span>
+      <span class="stat-label">Pire rang</span>
     </div>
     <div class="stat">
       <span class="stat-value">${stats.assigned}/${stats.slotsTotal}</span>
@@ -1462,7 +1882,7 @@ function renderResult() {
         <div class="assignment-left">
           <div class="assignment-text-left">
             <div class="assigned-name">${escapeHtml(r.name)}</div>
-            <div class="pref-rank unassigned">// Sur le banc</div>
+            ${rankBadge(r)}
           </div>
         </div>
         <div class="assignment-right">
@@ -1471,14 +1891,6 @@ function renderResult() {
       `;
     } else {
       card.className = `assignment ${r.role}`;
-      let rankText, rankClass;
-      if (r.forced) {
-        rankText = 'Hors prefs'; rankClass = 'bad';
-      } else if (r.prefRank === 0) {
-        rankText = '★ 1er choix'; rankClass = 'first';
-      } else {
-        rankText = `Choix ${r.prefRank + 1}`; rankClass = '';
-      }
       card.innerHTML = `
         <div class="assignment-left">
           <div class="assignment-job-icon">
@@ -1486,7 +1898,7 @@ function renderResult() {
           </div>
           <div class="assignment-text-left">
             <div class="assigned-name">${escapeHtml(r.name)}</div>
-            <div class="pref-rank ${rankClass}">${rankText}</div>
+            ${rankBadge(r)}
           </div>
         </div>
         <div class="assignment-right">
@@ -1502,7 +1914,7 @@ function renderResult() {
   if (stats.forced > 0) {
     const w = document.createElement('div');
     w.className = 'warning';
-    w.textContent = `${stats.forced} joueur${stats.forced > 1 ? 's' : ''} hors préférences — le groupe ne pouvait pas être formé autrement.`;
+    w.textContent = `${stats.forced} joueur${stats.forced > 1 ? 's' : ''} hors préférences — le groupe ne pouvait pas être formé autrement avec cette stratégie.`;
     warningArea.appendChild(w);
   }
   if (stats.assigned < stats.slotsTotal) {
@@ -1511,9 +1923,62 @@ function renderResult() {
     w.textContent = `Il manque ${stats.slotsTotal - stats.assigned} joueur${stats.slotsTotal - stats.assigned > 1 ? 's' : ''} pour compléter.`;
     warningArea.appendChild(w);
   }
+}
 
-  section.classList.add('show');
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+function setLiveIndicator(state) {
+  const ind = document.getElementById('liveIndicator');
+  if (state === 'computing') {
+    ind.classList.add('computing');
+    ind.textContent = 'Calcul...';
+  } else if (state === 'idle') {
+    ind.classList.remove('computing');
+    ind.textContent = 'En attente';
+  } else {
+    ind.classList.remove('computing');
+    ind.textContent = 'Live';
+  }
+}
+
+function renderResult() {
+  setLiveIndicator('computing');
+  const section = document.getElementById('resultSection');
+  const summary = document.getElementById('resultSummary');
+  const grid = document.getElementById('assignmentGrid');
+  const warningArea = document.getElementById('warningArea');
+  const tabs = document.getElementById('alternativesTabs');
+
+  // Calcule top-3 solutions distinctes pour proposer des alternatives
+  const result = computeOptimalAssignment({ topK: 3 });
+
+  if (result.error) {
+    summary.innerHTML = `<div style="color:var(--danger);font-family:'Chakra Petch';font-size:0.95rem">${result.error}</div>`;
+    grid.innerHTML = '';
+    warningArea.innerHTML = '';
+    tabs.innerHTML = '';
+    currentSolutions = null;
+    setLiveIndicator('idle');
+    return;
+  }
+
+  currentSolutions = result.solutions;
+  // Garder l'index si possible, sinon revenir au 1er
+  if (currentAlternativeIndex >= currentSolutions.length) {
+    currentAlternativeIndex = 0;
+  }
+
+  renderAlternativesTabs();
+  renderActiveSolution();
+  setLiveIndicator('live');
+}
+
+function scheduleLiveCompute(delay = 80) {
+  // Reset l'index d'alternative à 0 dès que l'état change
+  // (sauf si c'est le slider lui-même qui bouge — géré séparément)
+  if (liveComputeTimer) clearTimeout(liveComputeTimer);
+  setLiveIndicator('computing');
+  liveComputeTimer = setTimeout(() => {
+    renderResult();
+  }, delay);
 }
 
 function escapeHtml(s) {
@@ -1678,10 +2143,11 @@ function renderSuggestions() {
 //   }
 // ============================================================
 
-function encodeState() {
-  const payload = {
+function buildPayload() {
+  return {
     c: state.contentType,
     d: state.dpsMode,
+    f: state.fairnessWeight,
     p: state.players
       .filter(p => p.name.trim() !== '' || p.preferences.length > 0)
       .map(p => ({
@@ -1689,12 +2155,45 @@ function encodeState() {
         j: p.preferences.slice()
       }))
   };
-  const json = JSON.stringify(payload);
+}
+
+function encodeState() {
+  const json = JSON.stringify(buildPayload());
   // base64url encoding (sans padding ni / + qui posent problème dans URL)
   return btoa(unescape(encodeURIComponent(json)))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
+}
+
+function validateAndNormalizePayload(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('Format invalide');
+  if (!CONTENT_BASE[payload.c]) throw new Error('Type de contenu inconnu');
+  if (!['unified', 'split'].includes(payload.d)) throw new Error('Mode DPS invalide');
+  if (!Array.isArray(payload.p)) throw new Error('Liste de joueurs invalide');
+
+  // Valider les jobs : filtrer les IDs inconnus silencieusement
+  const validJobIds = new Set(JOBS.map(j => j.id));
+  const players = payload.p.map(raw => {
+    const player = makePlayer(typeof raw.n === 'string' ? raw.n : '');
+    if (Array.isArray(raw.j)) {
+      player.preferences = raw.j.filter(id => validJobIds.has(id));
+    }
+    return player;
+  });
+
+  // fairnessWeight optionnel (rétrocompat avec anciens liens)
+  let fairnessWeight = 50;
+  if (typeof payload.f === 'number' && payload.f >= 0 && payload.f <= 100) {
+    fairnessWeight = payload.f;
+  }
+
+  return {
+    contentType: payload.c,
+    dpsMode: payload.d,
+    fairnessWeight,
+    players
+  };
 }
 
 function decodeState(code) {
@@ -1711,32 +2210,49 @@ function decodeState(code) {
     throw new Error('Code invalide ou corrompu');
   }
 
-  if (!payload || typeof payload !== 'object') throw new Error('Format invalide');
-  if (!CONTENT_BASE[payload.c]) throw new Error('Type de contenu inconnu');
-  if (!['unified', 'split'].includes(payload.d)) throw new Error('Mode DPS invalide');
-  if (!Array.isArray(payload.p)) throw new Error('Liste de joueurs invalide');
+  return validateAndNormalizePayload(payload);
+}
 
-  // Valider les jobs : filtrer les IDs inconnus silencieusement
-  const validJobIds = new Set(JOBS.map(j => j.id));
-  const players = payload.p.map(raw => {
-    const player = makePlayer(typeof raw.n === 'string' ? raw.n : '');
-    if (Array.isArray(raw.j)) {
-      player.preferences = raw.j.filter(id => validJobIds.has(id));
+// Distingue un ID court (KV) d'un code base64 long.
+// Le payload minimal encodé fait ~48 chars, donc <= 12 + alphanumérique est sûr.
+const SHORT_ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
+
+async function requestShortId(payload) {
+  try {
+    const r = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (data && typeof data.id === 'string' && SHORT_ID_PATTERN.test(data.id)) {
+      return data.id;
     }
-    return player;
-  });
+    return null;
+  } catch {
+    return null;
+  }
+}
 
-  return {
-    contentType: payload.c,
-    dpsMode: payload.d,
-    players
-  };
+async function fetchPayloadById(id) {
+  const r = await fetch(`/api/load/${encodeURIComponent(id)}`);
+  if (!r.ok) {
+    if (r.status === 404) throw new Error('Lien introuvable ou expiré');
+    throw new Error('Échec du chargement (' + r.status + ')');
+  }
+  const payload = await r.json();
+  return validateAndNormalizePayload(payload);
 }
 
 function applyImportedState(imported) {
   state.contentType = imported.contentType;
   state.dpsMode = imported.dpsMode;
+  state.fairnessWeight = imported.fairnessWeight ?? 50;
   state.players = imported.players;
+  // Mettre à jour le slider visuellement
+  const slider = document.getElementById('balanceSlider');
+  if (slider) slider.value = state.fairnessWeight;
   // Si le roster est plus petit que la taille de contenu, on complète
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
@@ -1797,17 +2313,42 @@ document.getElementById('addPlayerBtn').addEventListener('click', () => {
   renderPlayers();
   renderRosterInfo();
   renderSuggestions();
+  scheduleLiveCompute();
 });
 
-document.getElementById('composeBtn').addEventListener('click', renderResult);
-
 // Share
-document.getElementById('shareBtn').addEventListener('click', () => {
+let shareBusy = false;
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  if (shareBusy) return;
+  shareBusy = true;
+
   const code = encodeState();
-  const url = buildShareUrl(code);
-  document.getElementById('shareUrl').value = url;
-  document.getElementById('shareUrl').dataset.code = code;
+  const payload = buildPayload();
+  const longUrl = buildShareUrl(code);
+
+  const urlEl = document.getElementById('shareUrl');
+  const copyLinkBtn = document.getElementById('copyLinkBtn');
+  const copyCodeBtn = document.getElementById('copyCodeBtn');
+
+  urlEl.value = 'Génération du lien…';
+  urlEl.dataset.code = code;
+  copyLinkBtn.disabled = true;
+  copyCodeBtn.disabled = true;
   openModal('shareModal');
+
+  try {
+    const id = await requestShortId(payload);
+    if (id) {
+      urlEl.value = `${window.location.origin}${window.location.pathname}?p=${id}`;
+    } else {
+      urlEl.value = longUrl;
+      showToast('Lien court indisponible, lien long généré');
+    }
+  } finally {
+    copyLinkBtn.disabled = false;
+    copyCodeBtn.disabled = false;
+    shareBusy = false;
+  }
 });
 
 document.getElementById('copyLinkBtn').addEventListener('click', async () => {
@@ -1829,9 +2370,10 @@ document.getElementById('importBtn').addEventListener('click', () => {
   openModal('importModal');
 });
 
-document.getElementById('doImportBtn').addEventListener('click', () => {
+document.getElementById('doImportBtn').addEventListener('click', async () => {
   const raw = document.getElementById('importInput').value.trim();
   const errorEl = document.getElementById('importError');
+  const importBtn = document.getElementById('doImportBtn');
   errorEl.classList.remove('show');
 
   if (!raw) {
@@ -1850,14 +2392,19 @@ document.getElementById('doImportBtn').addEventListener('click', () => {
     }
   } catch { /* on essaie quand même de décoder raw comme code */ }
 
+  importBtn.disabled = true;
   try {
-    const imported = decodeState(code);
+    const imported = SHORT_ID_PATTERN.test(code)
+      ? await fetchPayloadById(code)
+      : decodeState(code);
     applyImportedState(imported);
     closeModal('importModal');
     showToast('Groupe importé');
   } catch (e) {
     errorEl.textContent = e.message;
     errorEl.classList.add('show');
+  } finally {
+    importBtn.disabled = false;
   }
 });
 
@@ -1867,8 +2414,24 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   state.players = [];
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
-  // Hide result section
-  document.getElementById('resultSection').classList.remove('show');
+});
+
+// Balance slider
+const balanceSlider = document.getElementById('balanceSlider');
+const balanceValue = document.getElementById('balanceValue');
+
+function balanceLabel(v) {
+  if (v <= 10) return 'Satisfaction max';
+  if (v <= 30) return 'Plutôt globale';
+  if (v <= 60) return 'Équilibré';
+  if (v <= 85) return 'Plutôt équitable';
+  return 'Anti-frustration';
+}
+
+balanceSlider.addEventListener('input', e => {
+  state.fairnessWeight = parseInt(e.target.value, 10);
+  balanceValue.textContent = balanceLabel(state.fairnessWeight);
+  scheduleLiveCompute(50);
 });
 
 // Modal close buttons (générique)
@@ -1897,19 +2460,31 @@ document.addEventListener('keydown', e => {
 // INIT — charger depuis l'URL si paramètre ?p= présent
 // ============================================================
 
-(function initFromUrl() {
+(async function initFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('p');
   if (code) {
+    const isShortId = SHORT_ID_PATTERN.test(code);
+    // Pour un short ID, on doit await la Function : on rend d'abord la state
+    // par défaut pour éviter une UI vide pendant le fetch.
+    if (isShortId) {
+      renderAll();
+      balanceValue.textContent = balanceLabel(state.fairnessWeight);
+    }
     try {
-      const imported = decodeState(code);
+      const imported = isShortId
+        ? await fetchPayloadById(code)
+        : decodeState(code);
       applyImportedState(imported);
       showToast('Groupe chargé depuis le lien');
+      balanceValue.textContent = balanceLabel(state.fairnessWeight);
       return;
     } catch (e) {
       console.warn('Échec de l\'import depuis URL :', e.message);
+      if (isShortId) return; // déjà rendu plus haut
     }
   }
+  balanceValue.textContent = balanceLabel(state.fairnessWeight);
   renderAll();
 })();
 </script>
