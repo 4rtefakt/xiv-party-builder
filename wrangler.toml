@@ -2,9 +2,16 @@ name = "xiv-party-builder"
 compatibility_date = "2025-01-01"
 pages_build_output_dir = "."
 
-# Le binding KV PARTY_KV est défini côté dashboard Cloudflare Pages :
-#   Settings → Functions → KV namespace bindings
+# Cloudflare Pages utilise ce fichier comme source de vérité des bindings
+# dès qu'il est présent dans le repo (le dashboard est ignoré).
 #
+# Le namespace KV "party-builder-kv" a été créé via le dashboard ;
+# son ID est reporté ici.
+[[kv_namespaces]]
+binding = "PARTY_KV"
+id = "65caa924758b44a9bdf598d664e1cd6e"
+preview_id = "65caa924758b44a9bdf598d664e1cd6e"
+
 # Pour le dev local :
 #   wrangler pages dev . --kv PARTY_KV
-# (crée un KV éphémère Miniflare ; les données ne touchent pas la prod)
+# (KV éphémère Miniflare ; les données ne touchent pas la prod)
