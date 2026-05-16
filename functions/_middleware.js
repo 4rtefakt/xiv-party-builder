@@ -65,7 +65,7 @@ export async function onRequest(context) {
     .replace(/<meta name="twitter:image" content="[^"]*">/i,
              `<meta name="twitter:image" content="${escAttr(ogImage)}">`)
     .replace(/<meta property="og:image:width" content="[^"]*">\s*<meta property="og:image:height" content="[^"]*">/i,
-             '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/svg+xml">');
+             '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/png">');
 
   // Nouveau Response avec body modifié, headers d'origine sauf content-length
   const headers = new Headers(response.headers);

@@ -1,0 +1,9 @@
+{
+  "name": "xiv-party-builder",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cloudflare Pages Functions dependencies. Front-end is plain HTML/CSS/JS (no build step).",
+  "dependencies": {
+    "workers-og": "^0.0.25"
+  }
+}

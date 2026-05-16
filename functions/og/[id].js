@@ -1,5 +1,8 @@
 // GET /og/:id
-// Renvoie une image SVG personnalisée pour le salon (utilisée comme og:image)
+// Renvoie une image PNG personnalisée pour le salon (utilisée comme og:image)
+// Rendu via workers-og (satori + resvg-wasm), HTML/CSS-like syntax (flexbox only).
+
+import { ImageResponse } from 'workers-og';
 
 const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 
@@ -23,10 +26,14 @@ const ROLE_COLOR = {
 };
 const CONTENT_LABEL = { dungeon: 'Donjon · 4', raid8: 'Raid · 8', raid24: 'Alliance · 24' };
 
-function escapeXml(s) {
+function esc(s) {
   return String(s).replace(/[<>&'"]/g, c => ({
-    '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;'
+    '<':'&lt;','>':'&gt;','&':'&amp;',"'":'&#39;','"':'&quot;'
   }[c]));
+}
+
+function fallback(text) {
+  return new Response(text, { status: 500, headers: { 'Content-Type': 'text/plain' } });
 }
 
 export async function onRequestGet({ params, env }) {
@@ -48,75 +55,53 @@ export async function onRequestGet({ params, env }) {
     .filter(p => p && typeof p.n === 'string' && p.n.trim() && p.s !== 'out')
     .slice(0, 8);
 
-  const W = 1200, H = 630;
-  const rowsCount = Math.ceil(players.length / 2);
-  const rowH = 56;
-  const playersStartY = when ? 290 : 250;
+  const playerCount = players.length;
+  const countLabel = playerCount === 0
+    ? 'aucun joueur encore'
+    : `${playerCount} joueur${playerCount > 1 ? 's' : ''}`;
 
-  const playerSvg = players.map((p, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
-    const x = 60 + col * 560;
-    const y = playersStartY + row * rowH;
+  const playerCards = players.map(p => {
     const firstJobId = Array.isArray(p.j) && p.j[0] ? p.j[0] : null;
     const firstJobName = firstJobId ? (JOB_LABELS[firstJobId] || firstJobId) : '—';
     const role = firstJobId ? (ROLE_OF[firstJobId] || 'tank') : null;
     const color = role ? ROLE_COLOR[role] : '#6a8094';
-    const name = escapeXml(String(p.n).slice(0, 18));
+    const name = esc(String(p.n).slice(0, 18));
     const tag = p.s === 'maybe' ? ' (?)' : '';
-    return `
-      <circle cx="${x + 8}" cy="${y - 10}" r="6" fill="${color}"/>
-      <text x="${x + 28}" y="${y - 4}" font-family="'Chakra Petch', sans-serif" font-size="26" font-weight="500" fill="#d7e6f2">${name}${tag}</text>
-      <text x="${x + 28}" y="${y + 22}" font-family="'Chakra Petch', sans-serif" font-size="18" fill="${color}" opacity="0.85">${escapeXml(firstJobName)}</text>
-    `;
+    return `<div style="display:flex; align-items:center; width:520px; padding:6px 0;">
+      <div style="display:flex; width:14px; height:14px; border-radius:7px; background:${color}; margin-right:16px;"></div>
+      <div style="display:flex; flex-direction:column;">
+        <div style="display:flex; font-size:28px; font-weight:600; color:#d7e6f2;">${name}${tag}</div>
+        <div style="display:flex; font-size:20px; color:${color};">${esc(firstJobName)}</div>
+      </div>
+    </div>`;
   }).join('');
 
-  const playerCount = players.length;
-  const playerCountLabel = playerCount === 0
-    ? 'aucun joueur encore'
-    : `${playerCount} joueur${playerCount > 1 ? 's' : ''}`;
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:60px; font-family:sans-serif;">
+      <div style="display:flex; font-size:24px; color:#00e5ff; letter-spacing:6px; margin-bottom:24px;">◆ PARTY // BUILDER</div>
+      <div style="display:flex; font-size:84px; font-weight:700; color:#d7e6f2; line-height:1; margin-bottom:14px;">${esc(title)}</div>
+      ${when
+        ? `<div style="display:flex; font-size:36px; color:#ff2e9a; font-weight:500; margin-bottom:34px;">${esc(when)}</div>`
+        : `<div style="display:flex; height:50px;"></div>`}
+      <div style="display:flex; flex-wrap:wrap; gap:6px 40px;">${playerCards}</div>
+      <div style="display:flex; margin-top:auto; justify-content:space-between; align-items:flex-end;">
+        <div style="display:flex; font-size:22px; color:#6a8094;">${esc(countLabel)} · salon ${esc(id)}</div>
+        <div style="display:flex; font-size:20px; color:#3a4a5c;">party-builder.pages.dev</div>
+      </div>
+    </div>
+  `;
 
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#020308"/>
-      <stop offset="50%" stop-color="#050810"/>
-      <stop offset="100%" stop-color="#0a0f1a"/>
-    </linearGradient>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,229,255,0.06)" stroke-width="1"/>
-    </pattern>
-    <radialGradient id="glow" cx="20%" cy="0%" r="60%">
-      <stop offset="0%" stop-color="rgba(0,229,255,0.18)"/>
-      <stop offset="100%" stop-color="rgba(0,229,255,0)"/>
-    </radialGradient>
-    <radialGradient id="glow2" cx="100%" cy="100%" r="60%">
-      <stop offset="0%" stop-color="rgba(255,46,154,0.15)"/>
-      <stop offset="100%" stop-color="rgba(255,46,154,0)"/>
-    </radialGradient>
-  </defs>
-  <rect width="${W}" height="${H}" fill="url(#bg)"/>
-  <rect width="${W}" height="${H}" fill="url(#grid)"/>
-  <rect width="${W}" height="${H}" fill="url(#glow)"/>
-  <rect width="${W}" height="${H}" fill="url(#glow2)"/>
-
-  <text x="60" y="80" font-family="'Chakra Petch', sans-serif" font-size="24" font-weight="500" fill="#00e5ff" letter-spacing="8">◆ PARTY // BUILDER</text>
-  <text x="60" y="180" font-family="'Chakra Petch', sans-serif" font-size="84" font-weight="700" fill="#d7e6f2">${escapeXml(title)}</text>
-  ${when ? `<text x="60" y="240" font-family="'Chakra Petch', sans-serif" font-size="36" font-weight="500" fill="#ff2e9a">${escapeXml(when)}</text>` : ''}
-
-  ${playerSvg}
-
-  <text x="60" y="${H - 50}" font-family="'Chakra Petch', sans-serif" font-size="22" fill="#6a8094">${escapeXml(playerCountLabel)} · salon ${escapeXml(id)}</text>
-  <text x="${W - 60}" y="${H - 50}" text-anchor="end" font-family="'JetBrains Mono', monospace" font-size="20" fill="#3a4a5c">party-builder.pages.dev</text>
-</svg>`;
-
-  return new Response(svg, {
-    status: 200,
-    headers: {
-      'Content-Type': 'image/svg+xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=60',
-      'Access-Control-Allow-Origin': '*'
-    }
-  });
+  try {
+    return new ImageResponse(html, {
+      width: 1200,
+      height: 630,
+      format: 'png',
+      headers: {
+        'Cache-Control': 'public, max-age=60',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  } catch (e) {
+    return fallback('OG render error: ' + (e && e.message ? e.message : 'unknown'));
+  }
 }
