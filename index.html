@@ -498,6 +498,22 @@
     align-items: center;
   }
 
+  /* PC : on dispose les icônes en 2 lignes par rôle pour gagner de la place */
+  .role-group {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 2), auto);
+    gap: 4px;
+  }
+
+  /* Mobile : on laisse les icônes flotter naturellement, prio au scroll vertical */
+  @media (max-width: 768px) {
+    .role-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+  }
+
   /* JOB ICON — SVG glyph */
   .job-icon {
     position: relative;
@@ -616,7 +632,8 @@
 
   .role-sep {
     width: 1px;
-    height: 22px;
+    align-self: stretch;
+    min-height: 22px;
     background: var(--line);
     margin: 0 2px;
     flex-shrink: 0;
@@ -1610,6 +1627,19 @@ const JOBS_BY_ROLE = JOBS.reduce((acc, j) => {
   return acc;
 }, {});
 
+// Ordre d'affichage dans la grille 2 lignes par rôle (PC uniquement).
+// Lecture en row-flow : item 1 = haut-gauche, item 2 = haut-droite, item 3 = bas-gauche, etc.
+// Les colonnes regroupent par sous-rôle :
+//   heal : col1 = shield (SCH/SGE), col2 = pure (AST/WHM)
+const ROLE_GRID_ORDER = {
+  tank:   ['PLD', 'WAR', 'DRK', 'GNB'],            // PLD WAR / DRK GNB
+  heal:   ['SCH', 'AST', 'SGE', 'WHM'],            // SCH AST / SGE WHM
+  melee:  ['MNK', 'DRG', 'NIN', 'SAM', 'RPR', 'VPR'], // 3 col
+  ranged: ['BRD', 'MCH', 'DNC'],                   // BRD MCH / DNC _
+  caster: ['BLM', 'SMN', 'RDM', 'PCT']             // BLM SMN / RDM PCT
+};
+const ROLE_GRID_COLS = { tank: 2, heal: 2, melee: 3, ranged: 2, caster: 2 };
+
 const CONTENT_BASE = {
   dungeon: { label: 'Donjon', size: 4,  comp: { tank: 1, heal: 1, dps: 2  } },
   raid8:   { label: 'Raid 8', size: 8,  comp: { tank: 2, heal: 2, dps: 4  } },
@@ -1777,7 +1807,13 @@ function renderPlayers() {
         sep.className = 'role-sep';
         jobsRow.appendChild(sep);
       }
-      JOBS_BY_ROLE[role].forEach(job => {
+      const group = document.createElement('div');
+      group.className = 'role-group';
+      group.style.setProperty('--cols', ROLE_GRID_COLS[role]);
+
+      ROLE_GRID_ORDER[role].forEach(jobId => {
+        const job = JOB_BY_ID[jobId];
+        if (!job) return;
         const icon = document.createElement('div');
         icon.className = 'job-icon';
         icon.dataset.role = role;
@@ -1805,8 +1841,9 @@ function renderPlayers() {
           renderSuggestions();
           scheduleLiveCompute();
         });
-        jobsRow.appendChild(icon);
+        group.appendChild(icon);
       });
+      jobsRow.appendChild(group);
     });
 
     row.appendChild(jobsRow);
@@ -1833,22 +1870,38 @@ function renderBannedJobs() {
   if (!row) return;
   row.innerHTML = '';
   const bannedSet = new Set(state.bannedJobs);
-  JOBS.forEach(job => {
-    const icon = document.createElement('div');
-    icon.className = 'job-icon' + (bannedSet.has(job.id) ? ' banned' : '');
-    icon.dataset.role = job.role;
-    icon.dataset.jobId = job.id;
-    icon.title = (bannedSet.has(job.id) ? 'Débannir ' : 'Bannir ') + job.name;
-    icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
-    icon.addEventListener('click', () => {
-      const i = state.bannedJobs.indexOf(job.id);
-      if (i === -1) state.bannedJobs.push(job.id);
-      else state.bannedJobs.splice(i, 1);
-      renderBannedJobs();
-      renderSuggestions();
-      scheduleLiveCompute();
+  const roles = ['tank', 'heal', 'melee', 'ranged', 'caster'];
+  roles.forEach((role, roleIdx) => {
+    if (roleIdx > 0) {
+      const sep = document.createElement('div');
+      sep.className = 'role-sep';
+      row.appendChild(sep);
+    }
+    const group = document.createElement('div');
+    group.className = 'role-group';
+    group.style.setProperty('--cols', ROLE_GRID_COLS[role]);
+
+    ROLE_GRID_ORDER[role].forEach(jobId => {
+      const job = JOB_BY_ID[jobId];
+      if (!job) return;
+      const icon = document.createElement('div');
+      icon.className = 'job-icon' + (bannedSet.has(job.id) ? ' banned' : '');
+      icon.dataset.role = job.role;
+      icon.dataset.jobId = job.id;
+      icon.title = (bannedSet.has(job.id) ? 'Débannir ' : 'Bannir ') + job.name;
+      icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
+      icon.addEventListener('click', () => {
+        const i = state.bannedJobs.indexOf(job.id);
+        if (i === -1) state.bannedJobs.push(job.id);
+        else state.bannedJobs.splice(i, 1);
+        renderBannedJobs();
+        renderSuggestions();
+        updateParamsSummary();
+        scheduleLiveCompute();
+      });
+      group.appendChild(icon);
     });
-    row.appendChild(icon);
+    row.appendChild(group);
   });
 }
 
