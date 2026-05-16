@@ -1248,6 +1248,7 @@
 
     <div class="toolbar">
       <button class="btn-tool" id="shareBtn"><span class="arrow">▸</span> Partager</button>
+      <button class="btn-tool" id="syncBtn" hidden><span class="arrow">↻</span> <span id="syncStatus">Salon</span></button>
       <button class="btn-tool" id="importBtn"><span class="arrow">◂</span> Importer</button>
       <button class="btn-tool" id="resetBtn"><span class="arrow">×</span> Réinitialiser</button>
     </div>
@@ -1979,6 +1980,8 @@ function scheduleLiveCompute(delay = 80) {
   liveComputeTimer = setTimeout(() => {
     renderResult();
   }, delay);
+  // Salon : auto-save 2 s après la dernière modif (no-op si pas en room mode)
+  if (typeof scheduleAutoSave === 'function') scheduleAutoSave();
 }
 
 function escapeHtml(s) {
@@ -2245,6 +2248,96 @@ async function fetchPayloadById(id) {
   return validateAndNormalizePayload(payload);
 }
 
+// ============================================================
+// SALON COLLABORATIF — auto-save sur un même ID
+// ============================================================
+
+let currentRoomId = null;
+let autoSaveTimer = null;
+let lastSavedAt = null;
+let saving = false;
+let suppressAutoSave = false;
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function updateSyncStatus() {
+  const btn = document.getElementById('syncBtn');
+  const label = document.getElementById('syncStatus');
+  if (!currentRoomId) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  if (saving) {
+    label.textContent = 'Sync…';
+  } else if (lastSavedAt) {
+    const d = new Date(lastSavedAt);
+    label.textContent = `Salon · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  } else {
+    label.textContent = 'Salon';
+  }
+}
+
+function enterRoomMode(id) {
+  currentRoomId = id;
+  const url = new URL(window.location.href);
+  url.searchParams.set('p', id);
+  window.history.replaceState({}, '', url.toString());
+  updateSyncStatus();
+}
+
+function exitRoomMode() {
+  currentRoomId = null;
+  lastSavedAt = null;
+  if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+  const url = new URL(window.location.href);
+  url.searchParams.delete('p');
+  window.history.replaceState({}, '', url.toString());
+  updateSyncStatus();
+}
+
+async function saveRoom() {
+  if (!currentRoomId || saving) return;
+  saving = true;
+  updateSyncStatus();
+  try {
+    const r = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: currentRoomId, ...buildPayload() })
+    });
+    if (r.ok) lastSavedAt = Date.now();
+  } catch { /* silencieux */ }
+  saving = false;
+  updateSyncStatus();
+}
+
+function scheduleAutoSave(delay = 2000) {
+  if (!currentRoomId || suppressAutoSave) return;
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(saveRoom, delay);
+}
+
+async function syncRoom() {
+  if (!currentRoomId || saving) return;
+  // Ne pas écraser ce que l'utilisateur est en train de taper
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) {
+    return;
+  }
+  saving = true;
+  updateSyncStatus();
+  suppressAutoSave = true;
+  try {
+    const imported = await fetchPayloadById(currentRoomId);
+    applyImportedState(imported);
+    lastSavedAt = Date.now();
+  } catch { /* silencieux */ }
+  suppressAutoSave = false;
+  saving = false;
+  updateSyncStatus();
+}
+
 function applyImportedState(imported) {
   state.contentType = imported.contentType;
   state.dpsMode = imported.dpsMode;
@@ -2322,16 +2415,26 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   if (shareBusy) return;
   shareBusy = true;
 
-  const code = encodeState();
-  const payload = buildPayload();
-  const longUrl = buildShareUrl(code);
-
   const urlEl = document.getElementById('shareUrl');
   const copyLinkBtn = document.getElementById('copyLinkBtn');
   const copyCodeBtn = document.getElementById('copyCodeBtn');
-
-  urlEl.value = 'Génération du lien…';
+  const code = encodeState();
   urlEl.dataset.code = code;
+
+  // Déjà dans un salon : on affiche juste l'URL existante, pas de nouvelle création
+  if (currentRoomId) {
+    urlEl.value = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`;
+    copyLinkBtn.disabled = false;
+    copyCodeBtn.disabled = false;
+    openModal('shareModal');
+    shareBusy = false;
+    return;
+  }
+
+  // Local → on crée le salon
+  const payload = buildPayload();
+  const longUrl = buildShareUrl(code);
+  urlEl.value = 'Génération du lien…';
   copyLinkBtn.disabled = true;
   copyCodeBtn.disabled = true;
   openModal('shareModal');
@@ -2339,6 +2442,9 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   try {
     const id = await requestShortId(payload);
     if (id) {
+      enterRoomMode(id);
+      lastSavedAt = Date.now();
+      updateSyncStatus();
       urlEl.value = `${window.location.origin}${window.location.pathname}?p=${id}`;
     } else {
       urlEl.value = longUrl;
@@ -2349,6 +2455,14 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
     copyCodeBtn.disabled = false;
     shareBusy = false;
   }
+});
+
+// Sync (bouton salon)
+document.getElementById('syncBtn').addEventListener('click', syncRoom);
+
+// Auto-sync quand l'onglet reprend le focus
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') syncRoom();
 });
 
 document.getElementById('copyLinkBtn').addEventListener('click', async () => {
@@ -2394,10 +2508,19 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
 
   importBtn.disabled = true;
   try {
-    const imported = SHORT_ID_PATTERN.test(code)
+    const isShortIdImport = SHORT_ID_PATTERN.test(code);
+    const imported = isShortIdImport
       ? await fetchPayloadById(code)
       : decodeState(code);
     applyImportedState(imported);
+    if (isShortIdImport) {
+      enterRoomMode(code);
+      lastSavedAt = Date.now();
+      updateSyncStatus();
+    } else {
+      // Import d'un snapshot base64 → on quitte le salon courant si on en avait un
+      exitRoomMode();
+    }
     closeModal('importModal');
     showToast('Groupe importé');
   } catch (e) {
@@ -2411,6 +2534,7 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
 // Reset
 document.getElementById('resetBtn').addEventListener('click', () => {
   if (!confirm('Réinitialiser le roster ?')) return;
+  exitRoomMode(); // quitte le salon avant le reset pour ne pas pousser un état vide
   state.players = [];
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
@@ -2472,14 +2596,22 @@ document.addEventListener('keydown', e => {
       balanceValue.textContent = balanceLabel(state.fairnessWeight);
     }
     try {
+      suppressAutoSave = true; // évite un save inutile pendant le chargement
       const imported = isShortId
         ? await fetchPayloadById(code)
         : decodeState(code);
       applyImportedState(imported);
-      showToast('Groupe chargé depuis le lien');
+      suppressAutoSave = false;
+      if (isShortId) {
+        enterRoomMode(code);
+        lastSavedAt = Date.now();
+        updateSyncStatus();
+      }
+      showToast(isShortId ? 'Salon chargé' : 'Groupe chargé depuis le lien');
       balanceValue.textContent = balanceLabel(state.fairnessWeight);
       return;
     } catch (e) {
+      suppressAutoSave = false;
       console.warn('Échec de l\'import depuis URL :', e.message);
       if (isShortId) return; // déjà rendu plus haut
     }

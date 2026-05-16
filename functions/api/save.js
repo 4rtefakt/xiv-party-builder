@@ -1,5 +1,7 @@
 // POST /api/save
-// Body: { c, d, f, p: [{ n, j: [...] }] }
+// Body: { id?, c, d, f, p: [{ n, j: [...] }] }
+//   - sans id : crée un nouveau salon, renvoie l'ID généré
+//   - avec id valide : upsert (écrase l'entrée), renvoie le même ID
 // Resp: { id }
 
 const VALID_CONTENT = new Set(['dungeon', 'raid8', 'raid24']);
@@ -18,6 +20,7 @@ const ID_LEN = 6;
 const TTL_SECONDS = 31536000; // 1 year
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
 
 function generateId() {
   const bytes = new Uint8Array(ID_LEN);
@@ -127,6 +130,17 @@ export async function onRequestPost(context) {
     return jsonResponse({ error: validationError }, 400);
   }
 
+  // ID optionnel : upsert si fourni et valide ; sinon génère un nouveau
+  let id;
+  if (payload.id !== undefined) {
+    if (typeof payload.id !== 'string' || !ID_PATTERN.test(payload.id)) {
+      return jsonResponse({ error: 'Invalid id' }, 400);
+    }
+    id = payload.id;
+  } else {
+    id = generateId();
+  }
+
   // Re-serialize from validated structure (drops any unknown keys, normalizes shape)
   const normalized = {
     c: payload.c,
@@ -135,8 +149,6 @@ export async function onRequestPost(context) {
   };
   if (payload.f !== undefined) normalized.f = payload.f;
   const stored = JSON.stringify(normalized);
-
-  const id = generateId();
 
   try {
     await env.PARTY_KV.put(id, stored, { expirationTtl: TTL_SECONDS });
