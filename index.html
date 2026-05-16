@@ -419,6 +419,25 @@
     filter: grayscale(0) brightness(1.15);
   }
 
+  .job-icon.banned {
+    border-color: rgba(255, 71, 87, 0.4);
+    background: rgba(255, 71, 87, 0.05);
+    color: var(--danger);
+  }
+  .job-icon.banned img {
+    filter: grayscale(1) brightness(0.4);
+    opacity: 0.45;
+  }
+  .job-icon.banned::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-top: 2px solid var(--danger);
+    transform: rotate(-30deg);
+    transform-origin: center;
+    pointer-events: none;
+  }
+
   .job-icon .order-badge {
     position: absolute;
     top: -5px;
@@ -938,6 +957,48 @@
     position: relative;
   }
 
+  .raid-when-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.95rem;
+    padding: 0.3rem 0.4rem;
+    width: 100%;
+    max-width: 360px;
+  }
+  .raid-when-input:focus {
+    outline: none;
+    border-bottom-color: var(--cyan);
+  }
+  .raid-when-input::placeholder {
+    color: var(--ink-faint);
+    font-style: italic;
+  }
+
+  .banned-jobs-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+  }
+  .banned-jobs-row .job-icon {
+    width: 30px;
+    height: 30px;
+  }
+  .banned-jobs-row .job-icon img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .control-block-label-sub {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    font-style: italic;
+    margin-bottom: 0.3rem;
+  }
+
   .balance-header {
     display: flex;
     justify-content: space-between;
@@ -1227,6 +1288,18 @@
         <span>Frustration limitée ▸</span>
       </div>
     </div>
+
+    <div class="balance-control" style="margin-top:0.75rem">
+      <div class="control-block-label">Quand ?</div>
+      <div class="control-block-label-sub">Date / heure du raid · optionnel · partagé avec le salon</div>
+      <input type="text" id="raidWhenInput" class="raid-when-input" maxlength="80" placeholder="samedi 21h · ven prochain à 20h30 …">
+    </div>
+
+    <div class="balance-control" style="margin-top:0.75rem">
+      <div class="control-block-label">Jobs bannis pour ce raid</div>
+      <div class="control-block-label-sub">Aucun slot ne pourra leur être attribué · ignoré dans les préférences</div>
+      <div class="banned-jobs-row" id="bannedJobsRow"></div>
+    </div>
   </section>
 
   <section class="section">
@@ -1381,6 +1454,8 @@ const state = {
   contentType: 'raid8',
   dpsMode: 'unified',
   fairnessWeight: 50,  // 0 = max satisfaction globale, 100 = anti-frustration max
+  raidWhen: '',
+  bannedJobs: [],      // IDs de jobs interdits dans la compo
   showAlternatives: false,
   players: []
 };
@@ -1498,6 +1573,10 @@ function renderPlayers() {
           badge.textContent = prefIdx + 1;
           icon.appendChild(badge);
         }
+        if (state.bannedJobs.includes(job.id)) {
+          icon.classList.add('banned');
+          icon.title = job.name + ' · banni du raid';
+        }
 
         icon.addEventListener('click', () => {
           const i = player.preferences.indexOf(job.id);
@@ -1530,11 +1609,42 @@ function renderPlayers() {
   });
 }
 
+function renderBannedJobs() {
+  const row = document.getElementById('bannedJobsRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const bannedSet = new Set(state.bannedJobs);
+  JOBS.forEach(job => {
+    const icon = document.createElement('div');
+    icon.className = 'job-icon' + (bannedSet.has(job.id) ? ' banned' : '');
+    icon.dataset.role = job.role;
+    icon.dataset.jobId = job.id;
+    icon.title = (bannedSet.has(job.id) ? 'Débannir ' : 'Bannir ') + job.name;
+    icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
+    icon.addEventListener('click', () => {
+      const i = state.bannedJobs.indexOf(job.id);
+      if (i === -1) state.bannedJobs.push(job.id);
+      else state.bannedJobs.splice(i, 1);
+      renderBannedJobs();
+      renderSuggestions();
+      scheduleLiveCompute();
+    });
+    row.appendChild(icon);
+  });
+}
+
+function renderRaidWhen() {
+  const input = document.getElementById('raidWhenInput');
+  if (input && input.value !== state.raidWhen) input.value = state.raidWhen;
+}
+
 function renderAll() {
   renderSegments();
   renderRosterInfo();
   renderPlayers();
   renderSuggestions();
+  renderBannedJobs();
+  renderRaidWhen();
   scheduleLiveCompute();
 }
 
@@ -1599,7 +1709,14 @@ function computeOptimalAssignment(opts = {}) {
   const topK = opts.topK ?? 1;  // nb de solutions distinctes à retourner
 
   const slots = buildSlots(state.contentType, state.dpsMode);
-  const players = state.players.filter(p => p.name.trim() !== '');
+  const banned = new Set(state.bannedJobs);
+  // Vue effective : prefs des joueurs filtrées des jobs bannis (sans muter l'état)
+  const players = state.players
+    .filter(p => p.name.trim() !== '')
+    .map(p => ({
+      ...p,
+      preferences: p.preferences.filter(id => !banned.has(id))
+    }));
 
   if (players.length === 0) return { error: 'Aucun aventurier nommé.' };
 
@@ -1680,10 +1797,14 @@ function computeOptimalAssignment(opts = {}) {
       const candidates = new Set();
       for (const role of slot.roles) {
         for (const job of JOBS_BY_ROLE[role]) {
+          if (banned.has(job.id)) continue;
           if (player.preferences.includes(job.id)) candidates.add(job.id);
         }
-        const hasPref = JOBS_BY_ROLE[role].some(j => player.preferences.includes(j.id));
-        if (!hasPref) candidates.add(JOBS_BY_ROLE[role][0].id);
+        const hasPref = JOBS_BY_ROLE[role].some(j => !banned.has(j.id) && player.preferences.includes(j.id));
+        if (!hasPref) {
+          const fallback = JOBS_BY_ROLE[role].find(j => !banned.has(j.id));
+          if (fallback) candidates.add(fallback.id);
+        }
       }
 
       for (const jobId of candidates) {
@@ -2019,7 +2140,11 @@ function getRoleRequirements() {
 }
 
 function analyzeCoverage() {
-  const playersWithName = state.players.filter(p => p.name.trim() !== '');
+  // Prefs effectives : on retire les jobs bannis (ne contribuent pas à la couverture)
+  const banned = new Set(state.bannedJobs);
+  const playersWithName = state.players
+    .filter(p => p.name.trim() !== '')
+    .map(p => ({ ...p, preferences: p.preferences.filter(id => !banned.has(id)) }));
   const playersWithPrefs = playersWithName.filter(p => p.preferences.length > 0);
   const reqs = getRoleRequirements();
 
@@ -2147,7 +2272,7 @@ function renderSuggestions() {
 // ============================================================
 
 function buildPayload() {
-  return {
+  const payload = {
     c: state.contentType,
     d: state.dpsMode,
     f: state.fairnessWeight,
@@ -2158,6 +2283,10 @@ function buildPayload() {
         j: p.preferences.slice()
       }))
   };
+  const w = state.raidWhen.trim();
+  if (w) payload.w = w;
+  if (state.bannedJobs.length > 0) payload.bj = state.bannedJobs.slice();
+  return payload;
 }
 
 function encodeState() {
@@ -2191,10 +2320,21 @@ function validateAndNormalizePayload(payload) {
     fairnessWeight = payload.f;
   }
 
+  // Quand ? optionnel
+  const raidWhen = (typeof payload.w === 'string' ? payload.w : '').slice(0, 80);
+
+  // Jobs bannis optionnels (filtrés au passage)
+  let bannedJobs = [];
+  if (Array.isArray(payload.bj)) {
+    bannedJobs = payload.bj.filter(id => typeof id === 'string' && validJobIds.has(id));
+  }
+
   return {
     contentType: payload.c,
     dpsMode: payload.d,
     fairnessWeight,
+    raidWhen,
+    bannedJobs,
     players
   };
 }
@@ -2342,10 +2482,14 @@ function applyImportedState(imported) {
   state.contentType = imported.contentType;
   state.dpsMode = imported.dpsMode;
   state.fairnessWeight = imported.fairnessWeight ?? 50;
+  state.raidWhen = imported.raidWhen ?? '';
+  state.bannedJobs = Array.isArray(imported.bannedJobs) ? imported.bannedJobs.slice() : [];
   state.players = imported.players;
   // Mettre à jour le slider visuellement
   const slider = document.getElementById('balanceSlider');
   if (slider) slider.value = state.fairnessWeight;
+  const whenInput = document.getElementById('raidWhenInput');
+  if (whenInput) whenInput.value = state.raidWhen;
   // Si le roster est plus petit que la taille de contenu, on complète
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
@@ -2556,6 +2700,12 @@ balanceSlider.addEventListener('input', e => {
   state.fairnessWeight = parseInt(e.target.value, 10);
   balanceValue.textContent = balanceLabel(state.fairnessWeight);
   scheduleLiveCompute(50);
+});
+
+// Quand ? (date/heure du raid)
+document.getElementById('raidWhenInput').addEventListener('input', e => {
+  state.raidWhen = e.target.value.slice(0, 80);
+  scheduleAutoSave(2000);
 });
 
 // Modal close buttons (générique)

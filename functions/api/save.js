@@ -1,5 +1,5 @@
 // POST /api/save
-// Body: { id?, c, d, f, p: [{ n, j: [...] }] }
+// Body: { id?, c, d, f, w?, bj?, p: [{ n, j: [...] }] }
 //   - sans id : crée un nouveau salon, renvoie l'ID généré
 //   - avec id valide : upsert (écrase l'entrée), renvoie le même ID
 // Resp: { id }
@@ -16,6 +16,7 @@ const VALID_JOBS = new Set([
 const MAX_BODY_BYTES = 4096;
 const MAX_PLAYERS = 24;
 const MAX_NAME_LEN = 32;
+const MAX_WHEN_LEN = 80;
 const ID_LEN = 6;
 const TTL_SECONDS = 31536000; // 1 year
 
@@ -59,6 +60,21 @@ function validatePayload(payload) {
   if (payload.f !== undefined) {
     if (typeof payload.f !== 'number' || !Number.isFinite(payload.f) || payload.f < 0 || payload.f > 100) {
       return 'Invalid fairness weight';
+    }
+  }
+  // w (raidWhen) optionnel
+  if (payload.w !== undefined) {
+    if (typeof payload.w !== 'string' || payload.w.length > MAX_WHEN_LEN) {
+      return 'Invalid raidWhen';
+    }
+  }
+  // bj (banned jobs) optionnel
+  if (payload.bj !== undefined) {
+    if (!Array.isArray(payload.bj) || payload.bj.length > VALID_JOBS.size) {
+      return 'Invalid banned jobs array';
+    }
+    for (const id of payload.bj) {
+      if (typeof id !== 'string' || !VALID_JOBS.has(id)) return 'Invalid banned job id';
     }
   }
   if (!Array.isArray(payload.p) || payload.p.length > MAX_PLAYERS) {
@@ -148,6 +164,8 @@ export async function onRequestPost(context) {
     p: payload.p.map(raw => ({ n: raw.n, j: raw.j.slice() }))
   };
   if (payload.f !== undefined) normalized.f = payload.f;
+  if (payload.w !== undefined && payload.w !== '') normalized.w = payload.w;
+  if (payload.bj !== undefined && payload.bj.length > 0) normalized.bj = payload.bj.slice();
   const stored = JSON.stringify(normalized);
 
   try {
