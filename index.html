@@ -2282,6 +2282,8 @@
       <button class="btn-tool" id="copyDiscordBtn"><span class="arrow">▸</span> <span data-i18n="m_copyDiscord">Copier pour Discord</span></button>
       <button class="btn-tool" id="copyCodeBtn"><span class="arrow">▸</span> <span data-i18n="m_copyCode">Copier le code seul</span></button>
       <button class="btn-tool" id="copyAdminLinkBtn" hidden style="border-color:var(--amber);color:var(--amber)" data-i18n-title="perm_copyAdminLinkTitle"><span data-i18n="perm_copyAdminLink">◆ Copier le lien admin</span></button>
+      <button class="btn-tool" id="publishDiscordBtn" hidden style="border-color:#5865F2;color:#5865F2" data-i18n-title="dc_publishTitle"><span data-i18n="dc_publish">▸ Publier sur Discord</span></button>
+      <button class="btn-tool" id="reconfigureWebhookBtn" hidden style="font-size:0.6rem;opacity:0.7"><span data-i18n="dc_reconfigure">↻ Reconfigurer le webhook</span></button>
       <button class="btn-tool" id="modalSyncBtn" hidden><span data-i18n="t_syncNow">↻ Synchroniser</span></button>
     </div>
   </div>
@@ -2546,6 +2548,17 @@ const STRINGS = {
     tpl_saved: 'Template enregistré',
     tpl_maxReached: ({ n }) => `Max ${n} templates atteint`,
     tpl_meta: ({ content, bans }) => `${content}${bans > 0 ? ' · ' + bans + ' banni' + (bans > 1 ? 's' : '') : ''}`,
+    dc_publish: '▸ Publier sur Discord',
+    dc_publishTitle: 'Poster la compo dans ton canal Discord configuré',
+    dc_reconfigure: '↻ Reconfigurer le webhook',
+    dc_promptUrl: 'URL du webhook Discord :\n\nCrée-le dans : Paramètres du canal > Intégrations > Webhooks > Nouveau webhook > Copier l\'URL.\nIl reste stocké uniquement dans ton navigateur.',
+    dc_invalidUrl: 'URL de webhook invalide',
+    dc_published: 'Publié sur Discord ✓',
+    dc_failed: ({ status }) => `Échec Discord (HTTP ${status})`,
+    dc_networkError: 'Erreur réseau Discord',
+    dc_saved: 'Webhook enregistré',
+    dc_cleared: 'Webhook retiré',
+    dc_confirmClear: 'Retirer le webhook Discord configuré ?',
     // — Errors
     e_invalidCode: 'Code invalide ou corrompu',
     e_invalidFormat: 'Format invalide',
@@ -2729,6 +2742,17 @@ const STRINGS = {
     tpl_saved: 'Template saved',
     tpl_maxReached: ({ n }) => `Max ${n} templates reached`,
     tpl_meta: ({ content, bans }) => `${content}${bans > 0 ? ' · ' + bans + ' banned' : ''}`,
+    dc_publish: '▸ Publish to Discord',
+    dc_publishTitle: 'Post the comp to your configured Discord channel',
+    dc_reconfigure: '↻ Reconfigure webhook',
+    dc_promptUrl: 'Discord webhook URL:\n\nCreate one in: Channel Settings > Integrations > Webhooks > New webhook > Copy URL.\nStored only in your browser.',
+    dc_invalidUrl: 'Invalid webhook URL',
+    dc_published: 'Published to Discord ✓',
+    dc_failed: ({ status }) => `Discord failed (HTTP ${status})`,
+    dc_networkError: 'Discord network error',
+    dc_saved: 'Webhook saved',
+    dc_cleared: 'Webhook removed',
+    dc_confirmClear: 'Remove the configured Discord webhook?',
     e_invalidCode: 'Invalid or corrupt code',
     e_invalidFormat: 'Invalid format',
     e_unknownContent: 'Unknown content type',
@@ -5311,6 +5335,7 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
 
   function refreshAdminLinkVisibility() {
     adminLinkBtn.hidden = !(state.isAdmin && currentRoomId && getAdminSecret(currentRoomId));
+    refreshDiscordButtons();
   }
 
   // Déjà dans un salon : on affiche l'URL existante, on flushe les modifs en
@@ -5330,6 +5355,7 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   // Local → on déclenche un save immédiat pour créer le salon
   modalSyncBtn.hidden = true;
   adminLinkBtn.hidden = true;
+  refreshDiscordButtons(); // cache aussi les boutons Discord en attendant le save
   const longUrl = buildShareUrl(code);
   urlEl.value = t('ts_generating');
   copyLinkBtn.disabled = true;
@@ -5362,6 +5388,143 @@ document.getElementById('modalSyncBtn').addEventListener('click', async () => {
     document.getElementById('shareUrl').value = `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`;
   }
 });
+
+// ============================================================
+// WEBHOOK DISCORD — config locale, POST direct au webhook
+// ============================================================
+
+const DISCORD_WEBHOOK_KEY = 'xiv-discord-webhook';
+const DISCORD_WEBHOOK_PATTERN = /^https:\/\/discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/;
+
+function getDiscordWebhook() {
+  try { return localStorage.getItem(DISCORD_WEBHOOK_KEY) || null; } catch { return null; }
+}
+function setDiscordWebhook(url) {
+  try { localStorage.setItem(DISCORD_WEBHOOK_KEY, url); } catch {}
+}
+function clearDiscordWebhook() {
+  try { localStorage.removeItem(DISCORD_WEBHOOK_KEY); } catch {}
+}
+
+function buildDiscordPayload() {
+  const ct = CONTENT_BASE[state.contentType];
+  const when = state.raidWhen.trim();
+  const title = when || (ct ? ct.label : 'Party Builder');
+  const link = currentRoomId
+    ? `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`
+    : window.location.href;
+
+  const fields = [];
+
+  if (isRaid24()) {
+    // 1 field par alliance (compo + roles), pour respecter la limite Discord
+    for (let a = 0; a < 3; a++) {
+      const start = a * ALLIANCE_SIZE;
+      const allPlayers = state.players.slice(start, start + ALLIANCE_SIZE);
+      const result = computeOptimalAssignment({ topK: 1, playersOverride: allPlayers });
+      if (result.error) continue;
+      const sol = result.solutions[0];
+      const lines = sol.results.filter(r => r.assigned).map(r => `${r.name} — ${r.jobName}`);
+      if (lines.length > 0) {
+        fields.push({
+          name: `Alliance ${ALLIANCE_NAMES[a]}`,
+          value: lines.join('\n').slice(0, 1024),
+          inline: false
+        });
+      }
+    }
+  } else {
+    const result = computeOptimalAssignment();
+    if (result && !result.error) {
+      const byRole = { tank: [], heal: [], dps: [] };
+      result.results.forEach(r => {
+        if (!r.assigned) return;
+        const k = (r.role === 'tank' || r.role === 'heal') ? r.role : 'dps';
+        byRole[k].push(`${r.name} — ${r.jobName}`);
+      });
+      if (byRole.tank.length) fields.push({ name: '🛡️ Tank', value: byRole.tank.join('\n'), inline: true });
+      if (byRole.heal.length) fields.push({ name: '💚 Heal', value: byRole.heal.join('\n'), inline: true });
+      if (byRole.dps.length)  fields.push({ name: '⚔️ DPS',  value: byRole.dps.join('\n'),  inline: true });
+    }
+  }
+
+  // Description : type de contenu + nb joueurs
+  const activePlayers = state.players.filter(p => p.name.trim() && (p.presence || 'in') !== 'out').length;
+  const description = `${ct ? ct.label : ''} · ${activePlayers} joueur${activePlayers > 1 ? 's' : ''}`;
+
+  const embed = {
+    title: title.slice(0, 256),
+    url: link,
+    description: description.slice(0, 2048),
+    color: 0x00e5ff,
+    fields,
+    footer: { text: 'party-builder.pages.dev' },
+    timestamp: new Date().toISOString()
+  };
+  if (currentRoomId) {
+    embed.image = { url: `${window.location.origin}/og/${currentRoomId}` };
+  }
+  return { username: 'Party Builder', embeds: [embed] };
+}
+
+function promptForDiscordWebhook() {
+  const current = getDiscordWebhook() || '';
+  const url = prompt(t('dc_promptUrl'), current);
+  if (url === null) return false; // user cancelled
+  const trimmed = url.trim();
+  if (!trimmed) { // empty → effacer
+    if (current && confirm(t('dc_confirmClear'))) {
+      clearDiscordWebhook();
+      showToast(t('dc_cleared'));
+      refreshDiscordButtons();
+    }
+    return false;
+  }
+  if (!DISCORD_WEBHOOK_PATTERN.test(trimmed)) {
+    showToast(t('dc_invalidUrl'));
+    return false;
+  }
+  setDiscordWebhook(trimmed);
+  showToast(t('dc_saved'));
+  refreshDiscordButtons();
+  return true;
+}
+
+async function publishToDiscord() {
+  let url = getDiscordWebhook();
+  if (!url) {
+    const ok = promptForDiscordWebhook();
+    if (!ok) return;
+    url = getDiscordWebhook();
+    if (!url) return;
+  }
+  if (!DISCORD_WEBHOOK_PATTERN.test(url)) {
+    showToast(t('dc_invalidUrl'));
+    return;
+  }
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildDiscordPayload())
+    });
+    if (r.ok) showToast(t('dc_published'));
+    else showToast(t('dc_failed', { status: r.status }));
+  } catch {
+    showToast(t('dc_networkError'));
+  }
+}
+
+function refreshDiscordButtons() {
+  const publishBtn = document.getElementById('publishDiscordBtn');
+  const reconfBtn = document.getElementById('reconfigureWebhookBtn');
+  const isAdminInRoom = state.isAdmin && currentRoomId;
+  if (publishBtn) publishBtn.hidden = !isAdminInRoom;
+  if (reconfBtn) reconfBtn.hidden = !(isAdminInRoom && getDiscordWebhook());
+}
+
+document.getElementById('publishDiscordBtn').addEventListener('click', () => publishToDiscord());
+document.getElementById('reconfigureWebhookBtn').addEventListener('click', () => promptForDiscordWebhook());
 
 // Copier le lien admin de récupération (admin avec secret en LS uniquement)
 document.getElementById('copyAdminLinkBtn').addEventListener('click', async () => {
