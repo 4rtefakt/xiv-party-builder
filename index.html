@@ -1437,6 +1437,7 @@
     <textarea id="shareUrl" readonly></textarea>
     <div class="modal-actions">
       <button class="btn-tool" id="copyLinkBtn"><span class="arrow">▸</span> Copier le lien</button>
+      <button class="btn-tool" id="copyDiscordBtn"><span class="arrow">▸</span> Copier pour Discord</button>
       <button class="btn-tool" id="copyCodeBtn"><span class="arrow">▸</span> Copier le code seul</button>
     </div>
   </div>
@@ -2795,6 +2796,78 @@ document.getElementById('copyLinkBtn').addEventListener('click', async () => {
 document.getElementById('copyCodeBtn').addEventListener('click', async () => {
   const code = document.getElementById('shareUrl').dataset.code;
   if (await copyToClipboard(code)) showToast('Code copié');
+  else showToast('Échec de la copie');
+});
+
+function buildDiscordText() {
+  const ROLE_LABELS = {
+    tank:   '🛡️ Tank',
+    heal:   '💚 Heal',
+    melee:  '⚔️ Mêlée',
+    ranged: '🎯 Distance',
+    caster: '🔮 Caster'
+  };
+  const ct = CONTENT_BASE[state.contentType];
+  const title = ct ? ct.label : state.contentType;
+  const when = state.raidWhen.trim();
+  const lines = [];
+  lines.push(`**Party Builder · ${title}${when ? ' · ' + when : ''}**`);
+  lines.push('');
+
+  const opt = computeOptimalAssignment();
+  if (opt && !opt.error) {
+    const byRole = { tank: [], heal: [], melee: [], ranged: [], caster: [] };
+    const bench = [];
+    opt.results.forEach(r => {
+      if (!r.assigned) { bench.push(r); return; }
+      byRole[r.role].push(r);
+    });
+    ['tank','heal','melee','ranged','caster'].forEach(role => {
+      const list = byRole[role];
+      if (list.length === 0) return;
+      lines.push(ROLE_LABELS[role]);
+      list.forEach(r => {
+        const tag = r.prefRank === 0 ? ' ★' : (r.forced ? ' ⚠️' : '');
+        lines.push(`  • ${r.name} — ${r.jobName}${tag}`);
+      });
+    });
+    if (bench.length > 0) {
+      lines.push('');
+      lines.push(`📋 Banc : ${bench.map(r => r.name).join(', ')}`);
+    }
+  } else {
+    // Pas de compo possible : on liste juste le roster
+    lines.push('▸ Roster');
+    state.players
+      .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
+      .forEach(p => {
+        const prefs = p.preferences
+          .map(id => (JOB_BY_ID[id] || {}).name || id)
+          .join(' > ') || '—';
+        const tag = p.presence === 'maybe' ? ' (?)' : '';
+        lines.push(`• ${p.name}${tag} : ${prefs}`);
+      });
+  }
+
+  const absents = state.players.filter(p => p.name.trim() && p.presence === 'out');
+  if (absents.length > 0) {
+    lines.push('');
+    lines.push(`Absents : ${absents.map(p => p.name).join(', ')}`);
+  }
+
+  if (state.bannedJobs.length > 0) {
+    const names = state.bannedJobs.map(id => (JOB_BY_ID[id] || {}).name || id).join(', ');
+    lines.push(`🚫 Bannis : ${names}`);
+  }
+
+  lines.push('');
+  lines.push(`🔗 ${window.location.href}`);
+  return lines.join('\n');
+}
+
+document.getElementById('copyDiscordBtn').addEventListener('click', async () => {
+  const text = buildDiscordText();
+  if (await copyToClipboard(text)) showToast('Compo copiée pour Discord');
   else showToast('Échec de la copie');
 });
 
