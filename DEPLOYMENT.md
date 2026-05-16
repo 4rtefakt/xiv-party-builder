@@ -83,13 +83,12 @@ Pour tester Functions + KV en local sans toucher à la prod :
 
 ```sh
 npm i -g wrangler
-# Si ce n'est pas déjà fait : créer les namespaces et reporter les IDs dans wrangler.toml
-wrangler pages dev .
+wrangler pages dev . --kv PARTY_KV
 ```
 
 L'app + les Functions sont servies sur `http://localhost:8788`.
 
-> Note : `wrangler pages dev` utilise par défaut un KV local (Miniflare). Les données ne touchent pas la prod.
+> Note : Miniflare crée un KV local éphémère pour le binding `PARTY_KV`. Les données ne touchent pas la prod.
 
 ## Migration depuis GitHub Pages
 

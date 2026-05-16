@@ -47,12 +47,10 @@ Si l'API `/api/save` est indisponible (réseau, KV down), l'app retombe automati
 
 ```sh
 npm i -g wrangler
-wrangler kv namespace create PARTY_KV --preview
-# copie l'id renvoyé dans wrangler.toml
-wrangler pages dev .
+wrangler pages dev . --kv PARTY_KV
 ```
 
-Ouvre `http://localhost:8788`.
+Ouvre `http://localhost:8788`. Miniflare crée un KV local éphémère ; rien ne touche la prod.
 
 ## Déploiement
 
