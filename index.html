@@ -3525,6 +3525,22 @@ const state = {
   isAdmin: true        // en local mode, on est toujours "admin" de ce qu'on créera
 };
 
+// Helper de debug : exposé sur window pour pouvoir l'appeler depuis la
+// console (le script est en module ES, donc `state` n'est pas global).
+// Tape `__pb()` dans la console pour un dump synthétique des permissions.
+window.__pb = function debugPermissionState() {
+  return {
+    isAdmin: state.isAdmin,
+    ownerId: state.ownerId,
+    admins: state.admins,
+    userId: USER_ID,
+    currentRoomId,
+    hasSecret: !!getAdminSecret(currentRoomId),
+    inAdminsList: Array.isArray(state.admins) && state.admins.includes(USER_ID),
+    isReallyAdmin: isReallyAdminInRoom()
+  };
+};
+
 // Helper : le user courant a-t-il atteint sa limite de réservations ?
 // Admin = pas de limite. claimLimit = 0 → illimité.
 function userAtClaimLimit() {
