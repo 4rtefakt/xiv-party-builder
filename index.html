@@ -3112,9 +3112,13 @@ const STRINGS = {
       `Il manque <strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> pour compléter le groupe ` +
       `<span style="opacity:0.7">(${absent} ${absent > 1 ? 'absent·e·s non compté·e·s' : 'absent·e non compté·e'})</span>.`,
     sg_idealPrefix: '<span style="opacity:0.75">▸ Idéalement&nbsp;:</span> ',
-    sg_idealRole: ({ n, role, jobs }) => {
+    sg_idealRole: ({ n, role, recommendation }) => {
       const roleLabel = ({ tank: 'tank', heal: 'healer', dps: 'DPS' })[role] || role;
-      return `<strong>${n} ${roleLabel}${n > 1 ? 's' : ''}</strong> <span style="opacity:0.7">(${jobs})</span>`;
+      const prio = recommendation.priority.join(', ');
+      const fb = recommendation.fallback.length > 0
+        ? ` <span style="opacity:0.5">— ou ${recommendation.fallback.join(', ')}</span>`
+        : '';
+      return `<strong>${n} ${roleLabel}${n > 1 ? 's' : ''}</strong> <span style="opacity:0.8">(${prio}${fb})</span>`;
     },
     sg_noPrefs: ({ n }) => `<strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> ${n > 1 ? 'n\'ont' : 'n\'a'} pas encore renseigné de préférence.`,
     sg_needs: '⚠ Besoins identifiés',
@@ -3396,9 +3400,13 @@ const STRINGS = {
       `Need <strong>${n} more player${n > 1 ? 's' : ''}</strong> to complete the group ` +
       `<span style="opacity:0.7">(${absent} absentee${absent > 1 ? 's' : ''} not counted)</span>.`,
     sg_idealPrefix: '<span style="opacity:0.75">▸ Ideally:</span> ',
-    sg_idealRole: ({ n, role, jobs }) => {
+    sg_idealRole: ({ n, role, recommendation }) => {
       const roleLabel = ({ tank: 'tank', heal: 'healer', dps: 'DPS' })[role] || role;
-      return `<strong>${n} ${roleLabel}${n > 1 ? 's' : ''}</strong> <span style="opacity:0.7">(${jobs})</span>`;
+      const prio = recommendation.priority.join(', ');
+      const fb = recommendation.fallback.length > 0
+        ? ` <span style="opacity:0.5">— or ${recommendation.fallback.join(', ')}</span>`
+        : '';
+      return `<strong>${n} ${roleLabel}${n > 1 ? 's' : ''}</strong> <span style="opacity:0.8">(${prio}${fb})</span>`;
     },
     sg_noPrefs: ({ n }) => `<strong>${n} player${n > 1 ? 's' : ''}</strong> ${n > 1 ? "haven't" : "hasn't"} set preferences yet.`,
     sg_needs: '⚠ Needs identified',
@@ -5106,23 +5114,80 @@ function formatGap(gap) {
   return `<strong>${gap.missing} ${label}</strong>`;
 }
 
-// Construit un message du type "Idéalement : 1 DPS (MNK, DRG, …)" en
-// analysant les slots laissés vides par la compo optimale. Retourne '' si
-// la compo est complète ou que l'analyse échoue.
+// Heals "pures" : WHM, AST (régen-based). Heals "shields" : SCH, SGE
+// (mitigation-based). Convention FFXIV : un raid 8 équilibré a 1 de chaque.
+const PURE_HEALS = new Set(['WHM', 'AST']);
+const SHIELD_HEALS = new Set(['SCH', 'SGE']);
+
+// Recommande les jobs pour combler un trou de rôle, EN PRIORISANT le
+// sous-rôle qui équilibre la compo actuelle.
+//   - heal : si déjà 1 pur → priorité aux shields, et inversement
+//   - dps  : si plus de melees que d'autres → priorité aux ranged/casters,
+//            et inversement (cible "balanced" 2M + 2R/C en raid 8)
+//   - tank : pas de sous-rôle (modern FFXIV, tous tanks interchangeables)
 //
-// Sert à donner des recommandations CONCRÈTES quand on cherche un·e
-// joueur·euse en plus, plutôt que juste "il manque 1 joueur".
+// Renvoie { priority: [jobIds], fallback: [jobIds] } — le caller affiche
+// la priorité en premier, le fallback en seconde ligne / dim.
+function recommendJobsForGap(roleNeeded, assignedResults, bannedJobs) {
+  const banned = new Set(bannedJobs || []);
+  const assigned = (assignedResults || []).filter(r => r && r.assigned);
+
+  if (roleNeeded === 'tank') {
+    const all = JOBS_BY_ROLE.tank.filter(j => !banned.has(j.id)).map(j => j.id);
+    return { priority: all, fallback: [] };
+  }
+
+  if (roleNeeded === 'heal') {
+    const heals = assigned.filter(r => r.role === 'heal');
+    const pureCount   = heals.filter(r => PURE_HEALS.has(r.jobId)).length;
+    const shieldCount = heals.filter(r => SHIELD_HEALS.has(r.jobId)).length;
+    const pures   = JOBS_BY_ROLE.heal.filter(j => PURE_HEALS.has(j.id)   && !banned.has(j.id)).map(j => j.id);
+    const shields = JOBS_BY_ROLE.heal.filter(j => SHIELD_HEALS.has(j.id) && !banned.has(j.id)).map(j => j.id);
+    if (pureCount > shieldCount)   return { priority: shields, fallback: pures };
+    if (shieldCount > pureCount)   return { priority: pures, fallback: shields };
+    // Égalité (0+0 ou 1+1 rare) → pas de priorité, tout au même niveau
+    return { priority: [...pures, ...shields], fallback: [] };
+  }
+
+  if (roleNeeded === 'dps') {
+    const dps = assigned.filter(r => r.role === 'melee' || r.role === 'ranged' || r.role === 'caster');
+    const meleeCount  = dps.filter(r => r.role === 'melee').length;
+    const rangedCount = dps.filter(r => r.role === 'ranged').length;
+    const casterCount = dps.filter(r => r.role === 'caster').length;
+    const nonMeleeCount = rangedCount + casterCount;
+    const melees  = JOBS_BY_ROLE.melee.filter(j  => !banned.has(j.id)).map(j => j.id);
+    const rangeds = JOBS_BY_ROLE.ranged.filter(j => !banned.has(j.id)).map(j => j.id);
+    const casters = JOBS_BY_ROLE.caster.filter(j => !banned.has(j.id)).map(j => j.id);
+
+    if (meleeCount > nonMeleeCount) {
+      // Trop de melees → on suggère ranged + caster en priorité, avec une
+      // sub-priorité au sous-type le moins représenté pour finir d'équilibrer.
+      const nonMelee = rangedCount > casterCount
+        ? [...casters, ...rangeds]   // déjà plus de ranged → caster en tête
+        : [...rangeds, ...casters];
+      return { priority: nonMelee, fallback: melees };
+    }
+    if (nonMeleeCount > meleeCount) {
+      return { priority: melees, fallback: [...rangeds, ...casters] };
+    }
+    // Égalité → pas de priorité forte
+    return { priority: [...melees, ...rangeds, ...casters], fallback: [] };
+  }
+
+  return { priority: [], fallback: [] };
+}
+
+// Construit un message du type "Idéalement : 1 healer (SCH, SGE — ou
+// WHM, AST)" en analysant les slots laissés vides par la compo optimale
+// ET en priorisant les sous-rôles qui équilibrent la compo actuelle.
 function buildIdealRecruitMessage() {
   const result = computeOptimalAssignment({ topK: 1 });
   if (!result || result.error) return '';
   const compRaw = CONTENT_BASE[state.contentType];
   if (!compRaw) return '';
-  // Pour les contenus alliancés, allianceComp donne le besoin par alliance ;
-  // sinon comp = compo totale.
   const comp = compRaw.allianceComp || compRaw.comp;
   if (!comp) return '';
 
-  // Compte par rôle ce qui est déjà assigné par le solver
   const filled = { tank: 0, heal: 0, melee: 0, ranged: 0, caster: 0 };
   const sol = result.solutions ? result.solutions[0] : result;
   sol.results.forEach(r => {
@@ -5136,20 +5201,9 @@ function buildIdealRecruitMessage() {
   if (dpsFilled < comp.dps) missing.push({ role: 'dps', n: comp.dps - dpsFilled });
   if (missing.length === 0) return '';
 
-  // Liste des jobs disponibles par rôle, filtre les bannis
-  function jobsForRole(roleKey) {
-    let jobs;
-    if (roleKey === 'dps') {
-      jobs = [...JOBS_BY_ROLE.melee, ...JOBS_BY_ROLE.ranged, ...JOBS_BY_ROLE.caster];
-    } else {
-      jobs = JOBS_BY_ROLE[roleKey] || [];
-    }
-    return jobs.filter(j => !state.bannedJobs.includes(j.id)).map(j => j.id);
-  }
-
   const parts = missing.map(m => {
-    const jobs = jobsForRole(m.role);
-    return t('sg_idealRole', { n: m.n, role: m.role, jobs: jobs.join(', ') });
+    const rec = recommendJobsForGap(m.role, sol.results, state.bannedJobs);
+    return t('sg_idealRole', { n: m.n, role: m.role, recommendation: rec });
   });
   return t('sg_idealPrefix') + parts.join(' · ');
 }
