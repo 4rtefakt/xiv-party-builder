@@ -1923,6 +1923,11 @@
     align-items: center;
     gap: 0.4rem;
   }
+  /* Override critique : `display: inline-flex` ci-dessus gagne par
+     spécificité égale + ordre source sur la règle UA `[hidden] { display:
+     none }`, donc un bouton .btn-tool[hidden] restait visible. C'était la
+     cause du bug "boutons admin visibles pour les non-admins". */
+  .btn-tool[hidden] { display: none; }
   .btn-tool:hover {
     border-color: var(--cyan);
     color: var(--cyan);
@@ -3523,22 +3528,6 @@ const state = {
   ownerId: null,
   admins: [],
   isAdmin: true        // en local mode, on est toujours "admin" de ce qu'on créera
-};
-
-// Helper de debug : exposé sur window pour pouvoir l'appeler depuis la
-// console (le script est en module ES, donc `state` n'est pas global).
-// Tape `__pb()` dans la console pour un dump synthétique des permissions.
-window.__pb = function debugPermissionState() {
-  return {
-    isAdmin: state.isAdmin,
-    ownerId: state.ownerId,
-    admins: state.admins,
-    userId: USER_ID,
-    currentRoomId,
-    hasSecret: !!getAdminSecret(currentRoomId),
-    inAdminsList: Array.isArray(state.admins) && state.admins.includes(USER_ID),
-    isReallyAdmin: isReallyAdminInRoom()
-  };
 };
 
 // Helper : le user courant a-t-il atteint sa limite de réservations ?
