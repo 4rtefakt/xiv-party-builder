@@ -2816,7 +2816,7 @@ import {
   VALID_AVAIL_HOURS, VALID_AVAIL_DAYS, normalizeAvail
 } from './lib/codec.js';
 import {
-  analyzeAvailability, bestSlots,
+  analyzeAvailability, bestSlotWithTail,
   countAvailCells, AVAIL_PRESETS, applyAvailPreset
 } from './lib/availability.js';
 import {
@@ -3048,7 +3048,10 @@ const STRINGS = {
     av_cellTitle: ({ day, hour, count, total, missing }) =>
       `${day} ${hour}h · ${count}/${total} dispos` + (missing && missing.length > 0 ? ` · manque ${missing.join(', ')}` : ''),
     av_legend: 'Densité : 0 → 100% dispos',
-    av_best: ({ day, hour, count, total }) => `Meilleur créneau : ${day} ${hour}h (${count}/${total})`,
+    av_best: ({ day, hour, endHour, count, total }) => {
+      const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
+      return `Meilleur créneau : ${day} ${range} (${count}/${total})`;
+    },
     undo_btn: 'Annuler',
     undo_done: 'Action annulée',
     undo_reset: 'Roster réinitialisé',
@@ -3312,7 +3315,10 @@ const STRINGS = {
     av_cellTitle: ({ day, hour, count, total, missing }) =>
       `${day} ${hour}h · ${count}/${total} available` + (missing && missing.length > 0 ? ` · missing: ${missing.join(', ')}` : ''),
     av_legend: 'Density: 0 → 100% available',
-    av_best: ({ day, hour, count, total }) => `Best slot: ${day} ${hour}h (${count}/${total})`,
+    av_best: ({ day, hour, endHour, count, total }) => {
+      const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
+      return `Best slot: ${day} ${range} (${count}/${total})`;
+    },
     undo_btn: 'Undo',
     undo_done: 'Action undone',
     undo_reset: 'Roster reset',
@@ -5527,15 +5533,17 @@ function renderAvailHeatmap() {
   });
   body.appendChild(grid);
 
-  // Meilleur créneau en tête (texte d'aide)
-  const best = bestSlots(analysis, { limit: 1 });
-  if (best.length > 0 && best[0].count > 0) {
+  // Meilleur créneau en tête : on utilise bestSlotWithTail pour avoir le
+  // range complet (start → end) au lieu d'une heure unique.
+  const best = bestSlotWithTail(analysis);
+  if (best && best.count > 0) {
     const bestEl = document.createElement('div');
     bestEl.className = 'avail-heatmap-best';
     bestEl.textContent = t('av_best', {
-      day: (daysLong && daysLong[VALID_AVAIL_DAYS.indexOf(best[0].day)]) || best[0].day,
-      hour: best[0].hour,
-      count: best[0].count,
+      day: (daysLong && daysLong[VALID_AVAIL_DAYS.indexOf(best.day)]) || best.day,
+      hour: best.hour,
+      endHour: best.endHour,
+      count: best.count,
       total: analysis.respondentCount
     });
     body.appendChild(bestEl);

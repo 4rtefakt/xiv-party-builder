@@ -234,13 +234,21 @@ test('bestSlotWithTail : null si pas de répondants', () => {
   assert.equal(bestSlotWithTail(analyzeAvailability([])), null);
 });
 
-test('bestSlotWithTail : un seul slot max → retourné direct avec tail', () => {
+test('bestSlotWithTail : un seul slot max → retourné direct avec tail et endHour', () => {
   const a = analyzeAvailability([p('Alice', { mon: [20, 21, 22] })]);
   const b = bestSlotWithTail(a);
   assert.equal(b.day, 'mon');
   assert.equal(b.hour, 20);
   assert.equal(b.count, 1);
   assert.equal(b.tail, 2, '21h et 22h ont la même densité → tail = 2');
+  assert.equal(b.endHour, 22, 'endHour = hours[idx+tail] = 22h');
+});
+
+test('bestSlotWithTail : tail = 0 → endHour === hour (single slot)', () => {
+  const a = analyzeAvailability([p('Alice', { mon: [20] })]);
+  const b = bestSlotWithTail(a);
+  assert.equal(b.tail, 0);
+  assert.equal(b.endHour, b.hour, 'pas de queue → endHour = start');
 });
 
 test('bestSlotWithTail : départage 2 ex-æquo par la longueur de tail', () => {

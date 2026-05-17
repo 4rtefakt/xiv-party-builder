@@ -18,7 +18,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 4;  // v4 : meilleur créneau aussi pour raid24 (vue globale 24 joueur·euses)
+const OG_LAYOUT_VERSION = 5;  // v5 : meilleur créneau en range "Mardi 21h → 23h"
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -38,8 +38,10 @@ const OG_STRINGS = {
     validated: '◆ COMPO VALIDÉE',
     salon: ({ id }) => `salon ${id}`,
     colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS',
-    bestSlot: ({ day, hour, count, total, tail }) =>
-      `📅 ${day} ${hour}h · ${count}/${total} dispos` + (tail > 0 ? ` · +${tail}h` : ''),
+    bestSlot: ({ day, hour, endHour, count, total }) => {
+      const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
+      return `📅 ${day} ${range} · ${count}/${total} dispos`;
+    },
     daysLong: { mon: 'Lundi', tue: 'Mardi', wed: 'Mercredi', thu: 'Jeudi', fri: 'Vendredi', sat: 'Samedi', sun: 'Dimanche' }
   },
   en: {
@@ -50,8 +52,10 @@ const OG_STRINGS = {
     validated: '◆ COMP VALIDATED',
     salon: ({ id }) => `room ${id}`,
     colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS',
-    bestSlot: ({ day, hour, count, total, tail }) =>
-      `📅 ${day} ${hour}h · ${count}/${total} available` + (tail > 0 ? ` · +${tail}h` : ''),
+    bestSlot: ({ day, hour, endHour, count, total }) => {
+      const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
+      return `📅 ${day} ${range} · ${count}/${total} available`;
+    },
     daysLong: { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' }
   }
 };
@@ -330,8 +334,8 @@ export async function onRequestGet({ params, env, request }) {
     if (best && best.count > 0 && avAnalysis.respondentCount >= 2) {
       const dayName = (dict.daysLong && dict.daysLong[best.day]) || best.day;
       const text = dict.bestSlot({
-        day: dayName, hour: best.hour,
-        count: best.count, total: avAnalysis.respondentCount, tail: best.tail
+        day: dayName, hour: best.hour, endHour: best.endHour,
+        count: best.count, total: avAnalysis.respondentCount
       });
       bestSlotLine = `<div style="display:flex; font-size:18px; color:#4ade80; margin-bottom:14px;">${esc(text)}</div>`;
     }
