@@ -1150,12 +1150,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    font-weight: 700;
     flex-shrink: 0;
     transition: all 0.15s;
     align-self: center;
+    padding: 0;
+  }
+  .role-bulk-btn svg {
+    width: 14px;
+    height: 14px;
+    display: block;
   }
   .role-bulk-btn[data-role="tank"]:hover   { color: var(--tank);   border-color: var(--tank);   background: rgba(43, 158, 255, 0.08); }
   .role-bulk-btn[data-role="heal"]:hover   { color: var(--heal);   border-color: var(--heal);   background: rgba(74, 222, 128, 0.08); }
@@ -2483,8 +2486,8 @@ const STRINGS = {
     // — Content types
     c_dungeon: 'Donjon',
     c_raid8: 'Raid',
-    c_raid24: 'Raid alliance',
-    c_raid24chaotic: 'Raid chaotic',
+    c_raid24: 'Raid Alliance',
+    c_raid24chaotic: 'Raid Chaotic',
     al_title: ({ name }) => `Alliance ${name}`,
     al_collapseHint: 'Cliquer pour replier',
     al_expandHint: 'Cliquer pour déplier',
@@ -3195,7 +3198,19 @@ function buildPlayerRow(player, idx) {
     }
 
     const roles = ['tank', 'heal', 'melee', 'ranged', 'caster'];
-    const ROLE_LETTERS = { tank: 'T', heal: 'H', melee: 'M', ranged: 'R', caster: 'C' };
+    // Icônes inline inspirées des conventions FFXIV (bouclier / croix / épée /
+    // cible / étoile). SVG mono-color avec stroke="currentColor" : héritent
+    // automatiquement de la teinte CSS du rôle (var(--tank), var(--heal), ...).
+    // Préféré aux fichiers externes : pas de 404 potentiel, pas de flicker au
+    // chargement, taille négligeable (~150 octets par bouton).
+    const ROLE_ICONS = {
+      tank:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>',
+      heal:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3z"/></svg>',
+      melee:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 17.5L19 22 22 19 17.5 14.5M3 3l8 8M11 11l3 3 3-3-3-3-3 3z"/></svg>',
+      ranged: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
+      caster: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l4 4M15 15l4 4M19 5l-4 4M9 15l-4 4"/></svg>'
+    };
+    const ROLE_ARIA = { tank: 'Tank', heal: 'Healer', melee: 'Melee', ranged: 'Ranged', caster: 'Caster' };
     roles.forEach((role, roleIdx) => {
       if (roleIdx > 0) {
         const sep = document.createElement('div');
@@ -3207,7 +3222,8 @@ function buildPlayerRow(player, idx) {
       const bulkBtn = document.createElement('button');
       bulkBtn.className = 'role-bulk-btn';
       bulkBtn.dataset.role = role;
-      bulkBtn.textContent = ROLE_LETTERS[role];
+      bulkBtn.innerHTML = ROLE_ICONS[role];
+      bulkBtn.setAttribute('aria-label', ROLE_ARIA[role]);
       bulkBtn.title = t('r_bulkRole', { role });
       bulkBtn.addEventListener('click', e => {
         if (!canEditPlayer(player)) return;

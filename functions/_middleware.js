@@ -6,7 +6,7 @@ const ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
 
 const STRINGS = {
   fr: {
-    contentLabel: { dungeon: 'Donjon', raid8: 'Raid', raid24: 'Raid alliance', raid24chaotic: 'Raid chaotic' },
+    contentLabel: { dungeon: 'Donjon', raid8: 'Raid', raid24: 'Raid Alliance', raid24chaotic: 'Raid Chaotic' },
     desc: (n) => `${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'} · clique pour rejoindre le salon et ajouter ta ligne.`
   },
   en: {

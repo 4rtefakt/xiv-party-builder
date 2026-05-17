@@ -15,7 +15,7 @@ const iconUrl = (job) => ICON_BASE + job.icon + '.png';
 
 const OG_STRINGS = {
   fr: {
-    contentLabels: { dungeon: 'Donjon',  raid8: 'Raid', raid24: 'Raid alliance', raid24chaotic: 'Raid chaotic' },
+    contentLabels: { dungeon: 'Donjon',  raid8: 'Raid', raid24: 'Raid Alliance', raid24chaotic: 'Raid Chaotic' },
     playerLabel: (n) => n > 1 ? 'joueur·euse·s' : 'joueur·euse',
     bench: ({ n }) => ` · ${n} au banc`,
     locked: ({ n }) => ` · ${n} verrouillé·e·s`,
