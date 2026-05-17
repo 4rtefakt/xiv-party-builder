@@ -6092,11 +6092,34 @@ async function syncRoom() {
       if (old === undefined) continue;
       if (snapshotPlayerForDiff(p) !== old) changed.add(p.rowId);
     }
-    if (changed.size > 0) highlightChangedRows(changed);
+    if (changed.size > 0) {
+      highlightChangedRows(changed);
+      // Si l'onglet est en arrière-plan au moment du sync, on flash le titre
+      // pour que l'utilisateur·ice voie qu'il y a eu une activité au retour
+      // sur l'onglet (sans push notif).
+      flashTitleIfHidden();
+    }
   } catch { /* silencieux */ }
   suppressAutoSave = false;
   saving = false;
   updateSyncStatus();
+}
+
+// Flash titre : préfixe le <title> avec "(•) " quand l'onglet est en
+// arrière-plan ET qu'un sync a apporté des changements. Le visibilitychange
+// vers visible le restaure.
+const _ORIGINAL_TITLE = document.title;
+let _titleFlashed = false;
+function flashTitleIfHidden() {
+  if (document.visibilityState !== 'hidden') return;
+  if (_titleFlashed) return;
+  _titleFlashed = true;
+  document.title = '(•) ' + _ORIGINAL_TITLE;
+}
+function clearTitleFlash() {
+  if (!_titleFlashed) return;
+  _titleFlashed = false;
+  document.title = _ORIGINAL_TITLE;
 }
 
 function applyImportedState(imported) {
@@ -6743,6 +6766,7 @@ if (copyIdentityUrlBtn) copyIdentityUrlBtn.addEventListener('click', () => {
 // Auto-sync quand l'onglet reprend le focus ; flush quand il part au second plan
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
+    clearTitleFlash();
     syncRoom();
   } else if (document.visibilityState === 'hidden') {
     // Best-effort : on tente de pousser les modifs en attente avant que le
