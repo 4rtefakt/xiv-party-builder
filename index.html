@@ -2765,7 +2765,7 @@ const STRINGS = {
     perm_yours: 'Toi',
     perm_owner: 'Owner',
     perm_admin: 'Admin',
-    perm_readonly: 'Lecture seule — réserve une ligne pour participer',
+    perm_readonly: 'Pour participer, modifie une ligne libre — elle sera automatiquement à toi',
     perm_crown: '👑',
     perm_crownGrant: 'Promouvoir cette personne admin',
     perm_crownRevoke: 'Retirer les droits admin',
@@ -3009,7 +3009,7 @@ const STRINGS = {
     perm_yours: 'You',
     perm_owner: 'Owner',
     perm_admin: 'Admin',
-    perm_readonly: 'Read-only — claim a row to take part',
+    perm_readonly: 'To take part, edit a free row — it will be claimed for you',
     perm_crown: '👑',
     perm_crownGrant: 'Promote to admin',
     perm_crownRevoke: 'Remove admin rights',
@@ -3308,13 +3308,35 @@ function userClaimCount() {
 }
 
 function isCurrentAdmin() { return !!state.isAdmin; }
+
+// Une ligne est éditable par le user actuel si :
+//  - admin (toujours)
+//  - sa propre ligne déjà claim
+//  - ligne libre ET il/elle n'est pas à la limite de claims → toute édition
+//    sur la ligne va l'auto-claim (cf. ensureClaim ci-dessous)
 function canEditPlayer(p) {
   if (state.isAdmin) return true;
-  return p.claimedBy === USER_ID;
+  if (p.claimedBy === USER_ID) return true;
+  if (!p.claimedBy && !userAtClaimLimit()) return true;
+  return false;
 }
 function canClaimPlayer(p) {
   if (state.isAdmin) return false; // admin n'a pas besoin de claim
   return !p.claimedBy;
+}
+
+// À appeler au début de tout handler qui modifie un player. Si la ligne est
+// libre et que le user peut encore claim, on auto-claim et on marque pour un
+// re-render différé (pour afficher le badge "Toi" sans casser le focus si
+// l'utilisateur·ice est en train de taper).
+// Retourne true si un claim vient d'avoir lieu.
+function ensureClaim(player) {
+  if (player.claimedBy) return false;
+  if (state.isAdmin) return false;          // admin auto-claim géré ailleurs
+  if (userAtClaimLimit()) return false;     // hors limite : pas de claim
+  player.claimedBy = USER_ID;
+  player._needsBadgeRender = true;          // trigger re-render au prochain blur/click idle
+  return true;
 }
 
 let nextPlayerId = 1;
@@ -3484,22 +3506,10 @@ function buildPlayerRow(player, idx) {
       }
     }
 
-    // Bouton Réserver pour les non-admins sur ligne libre. Caché quand la
-    // limite de claims est atteinte (cf. userAtClaimLimit / state.claimLimit),
-    // un mini-message global dans renderRosterInfo l'explique.
-    if (!state.isAdmin && isUnclaimed && !userAtClaimLimit()) {
-      const claimBtn = document.createElement('button');
-      claimBtn.className = 'claim-btn';
-      claimBtn.textContent = t('perm_claim');
-      claimBtn.title = t('perm_claimTitle');
-      claimBtn.addEventListener('click', () => {
-        player.claimedBy = USER_ID;
-        renderPlayers();
-        renderSuggestions();
-        scheduleAutoSave(150); // save rapide pour matérialiser le claim côté serveur
-      });
-      row.appendChild(claimBtn);
-    }
+    // Auto-claim : pas de bouton "Réserver" explicite — toute modif d'une
+    // ligne libre par un non-admin claim cette ligne (cf. ensureClaim,
+    // appelé dans chaque handler ci-dessous). Le visuel `.unclaimed` (cyan)
+    // signale que la ligne est libre, et le badge "Toi" apparaît dès le claim.
 
     // Bouton Libérer : visible sur SA propre ligne. Permet de rendre la
     // ligne disponible (claimedBy → null) sans toucher au reste. Côté
@@ -3526,6 +3536,7 @@ function buildPlayerRow(player, idx) {
     presenceEl.disabled = !editable;
     presenceEl.addEventListener('click', () => {
       if (!canEditPlayer(player)) return;
+      ensureClaim(player);
       const cur = PRESENCE_VALUES.indexOf(player.presence || 'in');
       player.presence = PRESENCE_VALUES[(cur + 1) % PRESENCE_VALUES.length];
       renderPlayers();
@@ -3545,12 +3556,15 @@ function buildPlayerRow(player, idx) {
     input.readOnly = !editable;
     input.addEventListener('input', e => {
       if (!canEditPlayer(player)) return;
+      const hasContent = e.target.value.trim().length > 0;
+      // Auto-claim non-admin (uniquement si on tape vraiment quelque chose,
+      // pas si l'utilisateur·ice ouvre puis vide la case)
+      if (hasContent) ensureClaim(player);
       player.name = e.target.value;
-      // Auto-claim pour l'admin : dès qu'iel tape un nom dans une ligne libre,
-      // la ligne est claim à son userId pour afficher le badge "Toi"/"Owner"
-      if (state.isAdmin && !player.claimedBy && e.target.value.trim().length > 0) {
+      // Auto-claim admin : pareil mais pour avoir le badge "Toi"/"Owner"
+      if (state.isAdmin && !player.claimedBy && hasContent) {
         player.claimedBy = USER_ID;
-        player._needsBadgeRender = true; // marqueur pour re-render au blur
+        player._needsBadgeRender = true;
       }
       scheduleLiveCompute(400);
       renderSuggestions();
@@ -3574,8 +3588,17 @@ function buildPlayerRow(player, idx) {
     noteInput.maxLength = 200;
     noteInput.addEventListener('input', e => {
       if (!canEditPlayer(player)) return;
+      if (e.target.value.trim().length > 0) ensureClaim(player);
       player.note = e.target.value;
       scheduleAutoSave(800); // debounce un peu plus long pour la note
+    });
+    // Le blur de la note est aussi un moment où on flush le re-render du badge
+    // si un auto-claim a été marqué côté name input ou note (cf. _needsBadgeRender)
+    noteInput.addEventListener('blur', () => {
+      if (player._needsBadgeRender) {
+        player._needsBadgeRender = false;
+        renderPlayers();
+      }
     });
     info.appendChild(noteInput);
 
@@ -3652,6 +3675,7 @@ function buildPlayerRow(player, idx) {
       bulkBtn.title = t('r_bulkRole', { role });
       bulkBtn.addEventListener('click', e => {
         if (!canEditPlayer(player)) return;
+        ensureClaim(player);
         e.stopPropagation();
         // Synchronise prefTiers avec preferences (au cas où il aurait été tronqué)
         while (player.prefTiers.length < player.preferences.length) {
@@ -3740,6 +3764,7 @@ function buildPlayerRow(player, idx) {
 
         icon.addEventListener('click', () => {
           if (!canEditPlayer(player)) return;
+          ensureClaim(player);
           const i = player.preferences.indexOf(job.id);
           // Sync prefTiers en cas de désync (taille différente de preferences)
           while (player.prefTiers.length < player.preferences.length) {
@@ -4986,6 +5011,8 @@ function openPresetMenu(btn, player) {
       });
       item.appendChild(rm);
       item.addEventListener('click', () => {
+        if (!canEditPlayer(player)) return;
+        ensureClaim(player);
         player.preferences = preset.jobs.filter(id => validJobIds.has(id));
         closePresetMenu();
         renderPlayers();
