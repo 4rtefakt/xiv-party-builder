@@ -1751,6 +1751,122 @@
     color: var(--cyan);
     text-shadow: 0 0 6px rgba(0, 229, 255, 0.5);
   }
+
+  /* Badge Role Composition Bonus à droite de la barre d'actions.
+     "+X%" + un (?) qui ouvre un mini-popover détaillé au click. */
+  .role-bonus-badge {
+    margin-left: auto;            /* pousse tout à droite de la flex row */
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    position: relative;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .rbb-value {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--ink-dim);
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--line);
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .role-bonus-badge.full .rbb-value {
+    color: var(--heal);
+    border-color: rgba(74, 222, 128, 0.5);
+    background: rgba(74, 222, 128, 0.08);
+  }
+  .role-bonus-badge.good .rbb-value {
+    color: var(--cyan);
+    border-color: rgba(0, 229, 255, 0.45);
+    background: rgba(0, 229, 255, 0.06);
+  }
+  .rbb-info {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    padding: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .rbb-info:hover, .rbb-info:focus-visible {
+    color: var(--cyan);
+    border-color: var(--cyan);
+    background: rgba(0, 229, 255, 0.1);
+    outline: none;
+  }
+  .rbb-popover {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 50;
+    background: var(--panel-2);
+    border: 1px solid var(--line-bright);
+    padding: 0.65rem 0.85rem;
+    min-width: 240px;
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.85rem;
+    text-align: left;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+  .rbb-popover.show { display: block; }
+  .rbb-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .rbb-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.15rem 0;
+    font-size: 0.85rem;
+  }
+  .rbb-line.ok   { color: var(--heal); }
+  .rbb-line.miss { color: var(--ink-faint); text-decoration: line-through; opacity: 0.8; }
+  .rbb-icon {
+    display: inline-flex;
+    width: 14px;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+  }
+
+  /* Raid24 : badge avec popover qui détaille les 3 alliances */
+  .rbb-popover-raid24 { min-width: 280px; }
+  .rbb-alliance {
+    border-top: 1px solid var(--line);
+    padding-top: 0.4rem;
+    margin-top: 0.4rem;
+  }
+  .rbb-alliance:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+  .rbb-alliance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--ink);
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+  }
+  .rbb-alliance-pct.full { color: var(--heal); }
+  .rbb-alliance-pct.good { color: var(--cyan); }
+  .rbb-alliance-pct.meh  { color: var(--ink-dim); }
   .assignment.tank::before   { background: var(--tank);   box-shadow: 0 0 8px var(--tank);   }
   .assignment.heal::before   { background: var(--heal);   box-shadow: 0 0 8px var(--heal);   }
   .assignment.melee::before  { background: var(--melee);  box-shadow: 0 0 8px var(--melee);  }
@@ -3136,6 +3252,10 @@ const STRINGS = {
     res_roleBonusFullTitle: 'Bonus de Role Composition FFXIV : tous les sous-rôles présents (tank, heal, melee, ranged physique, caster) → +5% dégâts.',
     res_roleBonusMissingTitle: ({ missing }) => `Bonus Role Composition FFXIV : +1% par sous-rôle présent (max 5%). Manque : ${missing}.`,
     res_roleBonusRaid24Title: 'Moyenne du bonus Role Composition sur les 3 alliances (chacune applique son propre buff côté jeu).',
+    rbb_aria: 'Détails du bonus Role Composition',
+    rbb_titleFull: 'Bonus complet — tous les sous-rôles présents',
+    rbb_titleMissing: ({ n }) => `Pour le +5% complet, il manque ${n} sous-rôle${n > 1 ? 's' : ''} :`,
+    rbb_titleRaid24: 'Bonus par alliance (chacune applique son propre buff)',
     role_tank: 'tank',
     role_heal: 'heal',
     role_melee: 'mêlée',
@@ -3432,6 +3552,10 @@ const STRINGS = {
     res_roleBonusFullTitle: 'FFXIV Role Composition bonus: all sub-roles present (tank, healer, melee, physical ranged, caster) → +5% damage.',
     res_roleBonusMissingTitle: ({ missing }) => `FFXIV Role Composition bonus: +1% per present sub-role (max 5%). Missing: ${missing}.`,
     res_roleBonusRaid24Title: 'Average Role Composition bonus across the 3 alliances (each applies its own buff in-game).',
+    rbb_aria: 'Role Composition bonus details',
+    rbb_titleFull: 'Full bonus — all sub-roles present',
+    rbb_titleMissing: ({ n }) => `For the full +5%, you still need ${n} sub-role${n > 1 ? 's' : ''}:`,
+    rbb_titleRaid24: 'Bonus per alliance (each applies its own buff)',
     role_tank: 'tank',
     role_heal: 'healer',
     role_melee: 'melee',
@@ -4599,6 +4723,108 @@ let liveComputeTimer = null;
 let currentAlternativeIndex = 0;
 let currentSolutions = null;
 
+// Construit le badge "+X% Bonus rôles" affiché à droite de la barre
+// d'actions (lock all / unlock all). Inclut un (?) qui révèle au click
+// un mini-popover listant chaque sous-rôle requis avec ✓ (présent) ou ·
+// (absent), coloré vert / gris.
+const ROLE_BONUS_REQUIRED = ['tank', 'heal', 'melee', 'ranged', 'caster'];
+
+function buildRoleBonusLines(subRolesPresent) {
+  const present = new Set(subRolesPresent || []);
+  return ROLE_BONUS_REQUIRED.map(role => {
+    const ok = present.has(role);
+    const icon = ok ? '✓' : '·';
+    const label = '1 ' + t('role_' + role);
+    return `<div class="rbb-line ${ok ? 'ok' : 'miss'}"><span class="rbb-icon">${icon}</span>${escapeHtml(label)}</div>`;
+  }).join('');
+}
+
+function renderRoleBonusBadge(subRolesPresent) {
+  const present = new Set(subRolesPresent || []);
+  const percent = ROLE_BONUS_REQUIRED.filter(r => present.has(r)).length;
+  const cls = percent === 5 ? 'full' : (percent >= 4 ? 'good' : 'meh');
+  const tooltipTitle = percent === 5
+    ? t('rbb_titleFull')
+    : t('rbb_titleMissing', { n: 5 - percent });
+  return `
+    <span class="role-bonus-badge ${cls}">
+      <span class="rbb-value">+${percent}<span style="font-size:0.7em">%</span></span>
+      <button class="rbb-info" type="button" aria-label="${escapeHtml(t('rbb_aria'))}" title="${escapeHtml(t('rbb_aria'))}">?</button>
+      <div class="rbb-popover">
+        <div class="rbb-title">${escapeHtml(tooltipTitle)}</div>
+        ${buildRoleBonusLines(subRolesPresent)}
+      </div>
+    </span>
+  `;
+}
+
+// Variante raid24 : un badge affichant la moyenne, tooltip qui détaille
+// chaque alliance séparément (chacune applique son propre buff côté jeu).
+function renderRoleBonusBadgeRaid24(allianceStats) {
+  // allianceStats = [{ subRolesPresent }, ...] (3 entrées, même celles en
+  // erreur peuvent être []). On filtre les erreurs avant la moyenne.
+  const valid = (allianceStats || []).filter(a => Array.isArray(a.subRolesPresent));
+  if (valid.length === 0) return '';
+  const percents = valid.map(a =>
+    ROLE_BONUS_REQUIRED.filter(r => a.subRolesPresent.includes(r)).length
+  );
+  const avg = Math.round(percents.reduce((s, p) => s + p, 0) / percents.length);
+  const cls = avg === 5 ? 'full' : (avg >= 4 ? 'good' : 'meh');
+  const tooltipTitle = t('rbb_titleRaid24');
+  const allianceLines = valid.map((a, i) => {
+    const pct = percents[i];
+    return `
+      <div class="rbb-alliance">
+        <div class="rbb-alliance-header">
+          <span>${escapeHtml(t('al_title', { name: ALLIANCE_NAMES[i] }))}</span>
+          <span class="rbb-alliance-pct ${pct === 5 ? 'full' : pct >= 4 ? 'good' : 'meh'}">+${pct}%</span>
+        </div>
+        ${buildRoleBonusLines(a.subRolesPresent)}
+      </div>
+    `;
+  }).join('');
+  return `
+    <span class="role-bonus-badge ${cls}">
+      <span class="rbb-value">+${avg}<span style="font-size:0.7em">%</span></span>
+      <button class="rbb-info" type="button" aria-label="${escapeHtml(t('rbb_aria'))}" title="${escapeHtml(t('rbb_aria'))}">?</button>
+      <div class="rbb-popover rbb-popover-raid24">
+        <div class="rbb-title">${escapeHtml(tooltipTitle)}</div>
+        ${allianceLines}
+      </div>
+    </span>
+  `;
+}
+
+// Attache les handlers click/outside pour les badges role-bonus rendus
+// dans `container` (toggle .show sur .rbb-popover).
+function bindRoleBonusBadges(container) {
+  container.querySelectorAll('.rbb-info').forEach(btn => {
+    const pop = btn.nextElementSibling;
+    if (!pop || !pop.classList.contains('rbb-popover')) return;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      // Ferme les autres tooltips ouverts
+      document.querySelectorAll('.rbb-popover.show').forEach(p => {
+        if (p !== pop) p.classList.remove('show');
+      });
+      pop.classList.toggle('show');
+    });
+  });
+}
+
+// Un seul listener global pour fermer au clic-extérieur (idempotent grâce
+// au check sur la cible).
+if (!window.__rbbClickOutsideBound) {
+  document.addEventListener('click', e => {
+    document.querySelectorAll('.rbb-popover.show').forEach(p => {
+      if (!p.contains(e.target) && !p.previousElementSibling?.contains(e.target)) {
+        p.classList.remove('show');
+      }
+    });
+  });
+  window.__rbbClickOutsideBound = true;
+}
+
 function rankBadge(r) {
   // Renvoie le HTML du badge de rang avec coloration adéquate
   if (!r.assigned) {
@@ -4779,16 +5005,6 @@ function renderSolution(sol) {
     else worstRankDisplay = t('res_nth', { n: stats.worstRank + 1 });
   }
 
-  // Bonus Role Composition FFXIV : +1% dégâts par sous-rôle distinct présent
-  // (tank, heal, melee, ranged physique, caster). Max = 5%.
-  const bonusPct = stats.roleBonusPercent || 0;
-  const bonusColor = bonusPct === 5 ? 'var(--heal)' : bonusPct >= 4 ? 'var(--cyan)' : 'var(--ink-dim)';
-  const missingSubRoles = ['tank', 'heal', 'melee', 'ranged', 'caster']
-    .filter(r => !(stats.subRolesPresent || []).includes(r));
-  const bonusTitle = missingSubRoles.length === 0
-    ? t('res_roleBonusFullTitle')
-    : t('res_roleBonusMissingTitle', { missing: missingSubRoles.map(r => t('role_' + r)).join(', ') });
-
   summary.innerHTML = `
     <div class="stat">
       <span class="stat-value">${stats.firstChoices}/${stats.assigned}</span>
@@ -4797,10 +5013,6 @@ function renderSolution(sol) {
     <div class="stat">
       <span class="stat-value">${stats.satisfaction}<span style="font-size:0.7em">%</span></span>
       <span class="stat-label">${t('res_avgSat')}</span>
-    </div>
-    <div class="stat" title="${escapeHtml(bonusTitle)}">
-      <span class="stat-value" style="color:${bonusColor}">+${bonusPct}<span style="font-size:0.7em">%</span></span>
-      <span class="stat-label">${t('res_roleBonus')}</span>
     </div>
     <div class="stat">
       <span class="stat-value" style="color:${stats.forced > 0 ? 'var(--danger)' : 'var(--cyan)'}">${worstRankDisplay}</span>
@@ -4831,7 +5043,9 @@ function renderSolution(sol) {
       <button class="btn-tool" id="lockAllBtn"><span class="arrow">◆</span> ${t('lk_lockAll')}</button>
       <button class="btn-tool" id="unlockAllBtn"${lockedCount === 0 ? ' disabled' : ''}><span class="arrow">◇</span> ${t('lk_unlockAll')}</button>
       <span class="lock-status${allLocked ? ' validated' : ''}">${statusText}</span>
+      ${renderRoleBonusBadge(stats.subRolesPresent)}
     `;
+    bindRoleBonusBadges(actionsEl);
     document.getElementById('lockAllBtn').addEventListener('click', () => {
       assignedResults.forEach(r => {
         const player = state.players.find(p => p.name.trim() === r.name);
@@ -4937,8 +5151,6 @@ function renderRaid24Result() {
     else worstRankDisplay = t('res_nth', { n: worstRank + 1 });
   }
 
-  const bonusColor24 = avgBonus === 5 ? 'var(--heal)' : avgBonus >= 4 ? 'var(--cyan)' : 'var(--ink-dim)';
-
   summary.innerHTML = `
     <div class="stat">
       <span class="stat-value">${totalFirst}/${totalAssigned}</span>
@@ -4947,10 +5159,6 @@ function renderRaid24Result() {
     <div class="stat">
       <span class="stat-value">${avgSat}<span style="font-size:0.7em">%</span></span>
       <span class="stat-label">${t('res_avgSat')}</span>
-    </div>
-    <div class="stat" title="${escapeHtml(t('res_roleBonusRaid24Title'))}">
-      <span class="stat-value" style="color:${bonusColor24}">+${avgBonus}<span style="font-size:0.7em">%</span></span>
-      <span class="stat-label">${t('res_roleBonus')}</span>
     </div>
     <div class="stat">
       <span class="stat-value" style="color:${totalForced > 0 ? 'var(--danger)' : 'var(--cyan)'}">${worstRankDisplay}</span>
@@ -4967,7 +5175,7 @@ function renderRaid24Result() {
     </div>` : ''}
   `;
 
-  // Action bar global (lock all / unlock all / status)
+  // Action bar global (lock all / unlock all / status + role bonus raid24)
   const allAssigned = allianceResults.flatMap(r => r.error ? [] : r.solutions[0].results.filter(x => x.assigned));
   const lockedCount = allAssigned.filter(r => r.locked).length;
   const total = allAssigned.length;
@@ -4975,12 +5183,20 @@ function renderRaid24Result() {
   const statusText = allLocked
     ? t('lk_validated', { locked: lockedCount, total })
     : t('lk_status', { locked: lockedCount, total });
+  // Per-alliance stats pour le tooltip détaillé du badge bonus rôles
+  const allianceStatsForBadge = allianceResults.map(r =>
+    (r && !r.error && r.solutions && r.solutions[0])
+      ? { subRolesPresent: r.solutions[0].stats.subRolesPresent || [] }
+      : { subRolesPresent: [] }
+  );
   if (actionsEl) {
     actionsEl.innerHTML = `
       <button class="btn-tool" id="lockAllBtn"><span class="arrow">◆</span> ${t('lk_lockAll')}</button>
       <button class="btn-tool" id="unlockAllBtn"${lockedCount === 0 ? ' disabled' : ''}><span class="arrow">◇</span> ${t('lk_unlockAll')}</button>
       <span class="lock-status${allLocked ? ' validated' : ''}">${statusText}</span>
+      ${renderRoleBonusBadgeRaid24(allianceStatsForBadge)}
     `;
+    bindRoleBonusBadges(actionsEl);
     document.getElementById('lockAllBtn').addEventListener('click', () => {
       allAssigned.forEach(r => {
         const player = state.players.find(p => p.name.trim() === r.name);
