@@ -11,7 +11,7 @@
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, ROLE_COLOR } from '../lib/jobs.js';
 
-const HOME_OG_VERSION = 2;  // bump quand on change le visuel (v2 : fix esc() pour '&' qui cassait satori)
+const HOME_OG_VERSION = 3;  // v3 : force render to buffer + remove width:fit-content (satori-incompat) + esc() pour '&'
 const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
 const iconUrl = (jobId) => {
   const j = JOB_BY_ID[jobId];
@@ -115,7 +115,7 @@ export async function onRequestGet({ request }) {
         <div style="display:flex; flex-direction:column; gap:6px;">
           <div style="display:flex; flex-direction:row; gap:6px;">${row1}</div>
           <div style="display:flex; flex-direction:row; gap:6px;">${row2}</div>
-          <div style="display:flex; align-items:center; gap:6px; margin-top:8px; padding:6px 10px; border:1px solid rgba(74,222,128,0.5); background:rgba(74,222,128,0.08); width:fit-content;">
+          <div style="display:flex; flex-direction:row; align-self:flex-start; align-items:center; gap:6px; margin-top:8px; padding:6px 10px; border:1px solid rgba(74,222,128,0.5); background:rgba(74,222,128,0.08);">
             <span style="display:flex; color:#4ade80; font-size:18px; font-weight:700; font-family:monospace;">+5%</span>
             <span style="display:flex; color:#d7e6f2; font-size:14px;">Role Composition Bonus</span>
           </div>
@@ -129,12 +129,27 @@ export async function onRequestGet({ request }) {
     </div>
   `;
 
+  // ImageResponse est paresseux : le body est généré au moment où on le lit.
+  // Si satori échoue côté workers-og, le constructor sync ne throw pas →
+  // on récupère un PNG 0 byte. On force le rendu en buffer ici pour capter
+  // les erreurs (et pouvoir les retourner en text/plain pour debug).
   try {
-    return new ImageResponse(html, {
+    const response = new ImageResponse(html, {
       width: 1200,
       height: 630,
-      format: 'png',
+      format: 'png'
+    });
+    const bytes = await response.arrayBuffer();
+    if (!bytes || bytes.byteLength === 0) {
+      return new Response('OG home render returned empty body (satori probably choked silently)', {
+        status: 500, headers: { 'Content-Type': 'text/plain' }
+      });
+    }
+    return new Response(bytes, {
+      status: 200,
       headers: {
+        'Content-Type': 'image/png',
+        'Content-Length': String(bytes.byteLength),
         // Cache long : ce visuel ne dépend pas de l'état d'un salon.
         // Bumper HOME_OG_VERSION quand on change le design pour invalider.
         'Cache-Control': 'public, max-age=3600, s-maxage=86400, immutable',
@@ -143,7 +158,7 @@ export async function onRequestGet({ request }) {
       }
     });
   } catch (e) {
-    return new Response('OG home render error: ' + (e && e.message ? e.message : 'unknown'), {
+    return new Response('OG home render error: ' + (e && e.message ? e.message : 'unknown') + (e && e.stack ? '\n' + e.stack : ''), {
       status: 500, headers: { 'Content-Type': 'text/plain' }
     });
   }
