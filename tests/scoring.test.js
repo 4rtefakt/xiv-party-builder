@@ -228,12 +228,12 @@ test('job banni : un joueur dont toutes les prefs sont bannies préfère le banc
   assert.equal(r.results.filter(rr => rr.assigned && rr.jobId === 'PLD').length, 0);
 });
 
-test('job banni : avec fairness=0 (satisfaction pure), forcer est préférable au banc', () => {
-  // Symétrique du précédent : à fairness=0, FRUST_FORCED et FRUST_BENCH sont
-  // tous deux annulés ; seuls les scores de base comptent (-50 vs -30 ≈ banc
-  // préféré). Mais on a 1 slot tank vide à remplir et 4 joueurs pour 4 slots
-  // → soit l'algo bench Tank et bench un autre, soit il force.
-  // L'algo doit au moins remplir tous les slots possibles via fallback.
+test('job banni : à fairness=0, le bonus de Role Composition force l\'assignation', () => {
+  // Setup : Tank ne peut jouer que PLD qui est banni. À fairness=0 sans
+  // bonus, force=-50 vs banc=-30 → banc gagnerait. MAIS le bonus de
+  // Role Composition (+30 pour activer le sous-rôle tank) inverse la
+  // balance : force-WAR(-50) + bonus(+30) > banc(-30).
+  // C'est le comportement souhaité : "1% damage matters in raid".
   const players = [
     P('Tank',  ['PLD']),
     P('Heal',  ['WHM']),
@@ -244,10 +244,10 @@ test('job banni : avec fairness=0 (satisfaction pure), forcer est préférable a
     players, slots: buildSlots('dungeon', 'unified'),
     bannedJobs: ['PLD'], fairnessWeight: 0
   });
-  // Avec fairness=0, le banc coûte -30 et un forcé coûte -50. Le banc gagne.
-  // Mais l'algo essaye d'abord les autres slots : Heal va sur slot heal,
-  // M1/M2 sur slots DPS. Tank fini en bench.
-  assert.equal(r.results[0].assigned, false);
+  assert.equal(r.results[0].assigned, true, 'Tank doit être forcé (job fallback) pour activer le sous-rôle tank');
+  assert.equal(r.results[0].forced, true);
+  // Et le team bonus inclut bien les 4 sous-rôles (tank, heal, melee, caster)
+  assert.equal(r.stats.roleBonusPercent, 4);
 });
 
 test('fairness=0 (satisfaction pure) accepte plus de frustration pour 1 joueur si ça augmente le score total', () => {
