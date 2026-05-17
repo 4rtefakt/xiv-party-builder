@@ -7,7 +7,7 @@
 //   X-Admin-Secret: secret de récupération admin (optionnel, depuis URL fragment)
 // Resp: { id, isAdmin, ownerId, admins, recoverySecret? (sur création uniquement) }
 
-const VALID_CONTENT = new Set(['dungeon', 'raid8', 'raid24']);
+const VALID_CONTENT = new Set(['dungeon', 'raid8', 'raid24', 'raid24chaotic']);
 const VALID_DPS_MODE = new Set(['unified', 'split']);
 const VALID_JOBS = new Set([
   'PLD','WAR','DRK','GNB',
@@ -32,21 +32,47 @@ const USER_ID_PATTERN = /^[A-Za-z0-9_-]{4,64}$/;
 const ROW_ID_PATTERN = /^[A-Za-z0-9_-]{4,16}$/;
 const SECRET_PATTERN = /^[A-Fa-f0-9]{32,128}$/;
 
-// Rate-limit : max N saves/heure par userId. KV est eventually-consistent donc
-// best-effort (deux saves quasi-simultanés peuvent passer ensemble), mais
-// suffit pour bloquer un client qui boucle.
-const RATE_LIMIT_MAX = 100;
-const RATE_LIMIT_WINDOW_SECONDS = 3600;
+// Rate-limit : max N saves/heure par userId, en fenêtre glissante.
+//
+// Algorithme "sliding window counter" : deux buckets contigus de WINDOW
+// secondes. Le bucket actuel et le précédent. À l'instant t, l'estimation
+// du nombre de saves dans la dernière WINDOW seconde est :
+//   estimated = prev * (1 - elapsed/WINDOW) + current
+// où `elapsed` est le temps écoulé depuis le début du bucket courant.
+// Cela évite les "edge bursts" de la version naïve (où on pouvait faire
+// MAX saves à t=59:59 puis MAX à t=60:00, soit 2×MAX en 1s).
+//
+// KV n'a pas d'increment atomique → race possible entre deux saves
+// simultanés du même userId (best-effort, comme la version précédente).
+export const RATE_LIMIT_MAX = 100;
+export const RATE_LIMIT_WINDOW_SECONDS = 3600;
 
-async function checkRateLimit(env, userId) {
-  const key = 'rl:' + userId;
-  const current = parseInt(await env.PARTY_KV.get(key) || '0', 10);
-  if (current >= RATE_LIMIT_MAX) return { allowed: false, current };
-  // expirationTtl s'applique à la NOUVELLE entrée ; chaque save prolonge la
-  // fenêtre. Pour une vraie fenêtre glissante il faudrait une approche
-  // différente, mais c'est OK pour notre usage.
-  await env.PARTY_KV.put(key, String(current + 1), { expirationTtl: RATE_LIMIT_WINDOW_SECONDS });
-  return { allowed: true, current: current + 1 };
+export async function checkRateLimit(env, userId) {
+  const now = Math.floor(Date.now() / 1000);
+  const W = RATE_LIMIT_WINDOW_SECONDS;
+  const bucket = Math.floor(now / W);
+  const elapsed = now - bucket * W;          // 0..W-1
+  const weightPrev = 1 - elapsed / W;        // poids du bucket précédent
+
+  const curKey = `rl:${userId}:${bucket}`;
+  const prevKey = `rl:${userId}:${bucket - 1}`;
+
+  const [curRaw, prevRaw] = await Promise.all([
+    env.PARTY_KV.get(curKey),
+    env.PARTY_KV.get(prevKey)
+  ]);
+  const cur = parseInt(curRaw || '0', 10);
+  const prev = parseInt(prevRaw || '0', 10);
+
+  const estimated = prev * weightPrev + cur;
+  if (estimated >= RATE_LIMIT_MAX) {
+    return { allowed: false, estimated };
+  }
+
+  // TTL = 2×W pour que le bucket reste lisible comme "précédent" pendant
+  // la fenêtre suivante. Au-delà, il s'auto-expire (pas de cleanup à faire).
+  await env.PARTY_KV.put(curKey, String(cur + 1), { expirationTtl: 2 * W });
+  return { allowed: true, estimated: estimated + 1 };
 }
 
 function generateId() {
@@ -89,7 +115,7 @@ function jsonResponse(data, status = 200, extraHeaders = {}) {
   });
 }
 
-function validatePayload(payload) {
+export function validatePayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'Invalid payload object';
   if (typeof payload.c !== 'string' || !VALID_CONTENT.has(payload.c)) return 'Invalid content type';
   if (typeof payload.d !== 'string' || !VALID_DPS_MODE.has(payload.d)) return 'Invalid DPS mode';
@@ -134,16 +160,36 @@ function validatePayload(payload) {
   return null;
 }
 
+// Déduplique les préférences en préservant l'ordre (1ʳᵉ occurrence gagne) et
+// en synchronisant les tiers `pt` associés. L'algo de scoring lit indexOf(j),
+// donc l'ordre est sémantiquement signifiant (rang de préférence).
+export function dedupPrefs(jobs, tiers) {
+  const seen = new Set();
+  const outJ = [];
+  const outT = (Array.isArray(tiers) && tiers.length === jobs.length) ? [] : null;
+  for (let i = 0; i < jobs.length; i++) {
+    const id = jobs[i];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    outJ.push(id);
+    if (outT) outT.push(tiers[i]);
+  }
+  return { jobs: outJ, tiers: outT };
+}
+
 // Construit l'objet player tel qu'il sera stocké
-function normalizePlayer(raw, existingRowId) {
-  const obj = { n: raw.n, j: raw.j.slice() };
+export function normalizePlayer(raw, existingRowId) {
+  // Dedup les prefs + tiers de façon synchro avant de stocker, sinon un
+  // client buggé / malicieux peut envoyer `j: ['PLD','PLD',...]` qui ne
+  // casse rien fonctionnellement mais pollue le stockage et fausse les
+  // longueurs perçues côté front.
+  const { jobs: dedJ, tiers: dedT } = dedupPrefs(raw.j, raw.pt);
+  const obj = { n: raw.n, j: dedJ };
   if (raw.s !== undefined && raw.s !== 'in') obj.s = raw.s;
   if (raw.l !== undefined) obj.l = raw.l;
   if (raw.by !== undefined && raw.by !== null && raw.by !== '') obj.by = raw.by;
   if (raw.nt !== undefined && raw.nt !== '') obj.nt = raw.nt.slice(0, MAX_NOTE_LEN);
-  if (raw.pt !== undefined && Array.isArray(raw.pt) && raw.pt.length === (raw.j ? raw.j.length : 0)) {
-    obj.pt = raw.pt.slice();
-  }
+  if (dedT !== null) obj.pt = dedT;
   obj.id = (raw.id && ROW_ID_PATTERN.test(raw.id)) ? raw.id : (existingRowId || generateRowId());
   return obj;
 }
@@ -168,7 +214,7 @@ function normalizeForAdminUpdate(payload, existing) {
   };
   if (payload.f !== undefined) stored.f = payload.f;
   if (payload.w !== undefined && payload.w !== '') stored.w = payload.w;
-  if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = payload.bj.slice();
+  if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
   return stored;
 }
 
@@ -290,7 +336,7 @@ export async function onRequestPost(context) {
     };
     if (payload.f !== undefined) stored.f = payload.f;
     if (payload.w !== undefined && payload.w !== '') stored.w = payload.w;
-    if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = payload.bj.slice();
+    if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
     response = {
       id, isAdmin: true, ownerId: userId, admins: [userId],
       recoverySecret // renvoyé UNE seule fois, sur la création

@@ -6,11 +6,11 @@ const ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
 
 const STRINGS = {
   fr: {
-    contentLabel: { dungeon: 'Donjon', raid8: 'Raid 8', raid24: 'Alliance 24' },
+    contentLabel: { dungeon: 'Donjon', raid8: 'Raid 8', raid24: 'Alliance 24', raid24chaotic: 'Chaotic 24' },
     desc: (n) => `${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'} · clique pour rejoindre le salon et ajouter ta ligne.`
   },
   en: {
-    contentLabel: { dungeon: 'Dungeon', raid8: 'Raid 8', raid24: 'Alliance 24' },
+    contentLabel: { dungeon: 'Dungeon', raid8: 'Raid 8', raid24: 'Alliance 24', raid24chaotic: 'Chaotic 24' },
     desc: (n) => `${n} player${n > 1 ? 's' : ''} · click to join the room and add your line.`
   }
 };
@@ -29,6 +29,16 @@ function escAttr(s) {
   }[c]));
 }
 
+// Hash court (8 hex chars) du JSON stocké en KV. Sert de cache-buster pour
+// Discord/Twitter : ils ré-utilisent leur cache tant que le hash ne change pas,
+// et re-fetch l'OG image quand le salon a été modifié. Bien plus économique
+// que `?t=Date.now()` qui forçait une re-rasterization à chaque scrape.
+async function shortHash(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  const arr = new Uint8Array(buf, 0, 4);
+  return [...arr].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
@@ -43,9 +53,9 @@ export async function onRequest(context) {
   }
 
   // Récupère le salon avant de modifier la réponse, pour éviter de relire le body si KV échoue
-  let data;
+  let data, raw;
   try {
-    const raw = await context.env.PARTY_KV.get(p);
+    raw = await context.env.PARTY_KV.get(p);
     if (!raw) return context.next();
     data = JSON.parse(raw);
   } catch {
@@ -69,9 +79,11 @@ export async function onRequest(context) {
     ? data.p.filter(x => x && x.n && x.s !== 'out').length
     : 0;
   const desc = dict.desc(playerCount);
-  // Cache-bust pour Discord/Twitter qui cachent les og:image par URL. Le
-  // timestamp change à chaque scrape → ils re-fetch l'image fraîche.
-  const ogImage = `${url.origin}/og/${p}?t=${Date.now()}`;
+  // Cache-bust stable : hash du contenu KV. Tant que le salon est identique,
+  // l'URL reste la même → Discord/Twitter ré-utilisent leur cache d'OG image
+  // → pas de re-rasterization workers-og (coûteuse en CPU). Quand quelqu'un
+  // édite la compo, le hash change et le scrape suivant invalide le cache.
+  const ogImage = `${url.origin}/og/${p}?v=${await shortHash(raw)}`;
 
   html = html
     .replace(/<meta property="og:title" content="[^"]*">/i,
