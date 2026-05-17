@@ -11,7 +11,7 @@
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, ROLE_COLOR } from '../lib/jobs.js';
 
-const HOME_OG_VERSION = 1;  // bump quand on change le visuel
+const HOME_OG_VERSION = 2;  // bump quand on change le visuel (v2 : fix esc() pour '&' qui cassait satori)
 const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
 const iconUrl = (jobId) => {
   const j = JOB_BY_ID[jobId];
@@ -62,6 +62,13 @@ function pickLang(headers) {
   return first.startsWith('en') ? 'en' : 'fr';
 }
 
+// Échappe les chars HTML/XML qui cassent la sérialisation SVG de satori.
+// Notamment '&' qui transforme un texte comme "branch & bound" en entité XML
+// invalide et fait avorter le rendu silencieusement (PNG 0 byte).
+function esc(s) {
+  return String(s).replace(/[<>&]/g, c => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[c]));
+}
+
 function renderDemoCard(player) {
   const job = JOB_BY_ID[player.jobId];
   if (!job) return '';
@@ -70,8 +77,8 @@ function renderDemoCard(player) {
     <div style="display:flex; align-items:center; height:50px; width:240px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; background:rgba(255,255,255,0.03);">
       <img src="${iconUrl(player.jobId)}" width="36" height="36" style="margin-right:10px; flex-shrink:0;" />
       <div style="display:flex; flex-direction:row; align-items:center; flex:1;">
-        <div style="display:flex; align-items:center; justify-content:center; height:18px; padding:0 5px; margin-right:6px; border:1px solid ${roleColor}99; color:${roleColor}; background:rgba(0,0,0,0.4); font-size:11px; font-weight:700; letter-spacing:1px; font-family:monospace; flex-shrink:0;">${player.stratRole}</div>
-        <span style="display:flex; font-size:18px; font-weight:600; color:${roleColor}; font-family:monospace;">${job.id}</span>
+        <div style="display:flex; align-items:center; justify-content:center; height:18px; padding:0 5px; margin-right:6px; border:1px solid ${roleColor}99; color:${roleColor}; background:rgba(0,0,0,0.4); font-size:11px; font-weight:700; letter-spacing:1px; font-family:monospace; flex-shrink:0;">${esc(player.stratRole)}</div>
+        <span style="display:flex; font-size:18px; font-weight:600; color:${roleColor}; font-family:monospace;">${esc(job.id)}</span>
       </div>
     </div>
   `;
@@ -86,7 +93,7 @@ export async function onRequestGet({ request }) {
   const featureLines = dict.features.map(f =>
     `<div style="display:flex; align-items:center; gap:10px; font-size:21px; color:#d7e6f2; margin-bottom:8px;">
        <span style="display:flex; color:#00e5ff; font-family:monospace; font-weight:700;">▸</span>
-       <span style="display:flex;">${f}</span>
+       <span style="display:flex;">${esc(f)}</span>
      </div>`
   ).join('');
 
@@ -98,8 +105,8 @@ export async function onRequestGet({ request }) {
   const html = `
     <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:46px 56px; font-family:sans-serif;">
       <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:14px;">◆ PARTY // BUILDER</div>
-      <div style="display:flex; font-size:62px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:8px;">${dict.title}</div>
-      <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:28px;">${dict.subtitle}</div>
+      <div style="display:flex; font-size:62px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:8px;">${esc(dict.title)}</div>
+      <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:28px;">${esc(dict.subtitle)}</div>
 
       <div style="display:flex; flex-direction:row; gap:36px; align-items:flex-start;">
         <div style="display:flex; flex-direction:column; flex:1;">
@@ -116,7 +123,7 @@ export async function onRequestGet({ request }) {
       </div>
 
       <div style="display:flex; margin-top:auto; justify-content:space-between; align-items:flex-end;">
-        <div style="display:flex; font-size:18px; color:#3a4a5c; letter-spacing:2px;">${dict.footerHint}</div>
+        <div style="display:flex; font-size:18px; color:#3a4a5c; letter-spacing:2px;">${esc(dict.footerHint)}</div>
         <div style="display:flex; font-size:22px; color:#00e5ff; font-weight:600;">party-builder.pages.dev</div>
       </div>
     </div>
