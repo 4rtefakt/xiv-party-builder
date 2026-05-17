@@ -1801,6 +1801,29 @@
     white-space: nowrap;
   }
 
+  /* Badge "rôle strat" : MT/OT/H1/H2/M1/M2/R1/R2 affiché à côté du nom
+     dans la compo finale. Aide à appliquer les stratégies écrites qui
+     utilisent ces conventions de nom. */
+  .strat-badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 0.1rem 0.32rem;
+    margin-right: 0.4rem;
+    border: 1px solid var(--line-bright);
+    color: var(--cyan);
+    background: rgba(0, 229, 255, 0.08);
+    vertical-align: middle;
+    text-transform: uppercase;
+  }
+  .assignment.tank   .strat-badge { color: var(--tank);   border-color: rgba(43, 158, 255, 0.5); background: rgba(43, 158, 255, 0.08); }
+  .assignment.heal   .strat-badge { color: var(--heal);   border-color: rgba(74, 222, 128, 0.5); background: rgba(74, 222, 128, 0.08); }
+  .assignment.melee  .strat-badge { color: var(--melee);  border-color: rgba(255, 79, 110, 0.5); background: rgba(255, 79, 110, 0.08); }
+  .assignment.ranged .strat-badge { color: var(--ranged); border-color: rgba(255, 181, 71, 0.5); background: rgba(255, 181, 71, 0.08); }
+  .assignment.caster .strat-badge { color: var(--caster); border-color: rgba(192, 132, 252, 0.5); background: rgba(192, 132, 252, 0.08); }
+
   .pref-rank {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.62rem;
@@ -2819,6 +2842,7 @@ import {
   analyzeAvailability, bestSlotWithTail,
   countAvailCells, AVAIL_PRESETS, applyAvailPreset
 } from './lib/availability.js';
+import { assignStratRoles } from './lib/strat-roles.js';
 import {
   MAX_PRESETS, MAX_PRESET_NAME_LEN,
   MAX_TEMPLATES, MAX_TEMPLATE_NAME_LEN,
@@ -3088,6 +3112,7 @@ const STRINGS = {
     res_avgSat: 'Satisfaction moy.',
     res_worstRank: 'Pire rang',
     res_forced: 'Forcé',
+    res_stratRoleTitle: ({ role }) => `Rôle strat : ${role} (référence dans les guides de stratégie)`,
     res_slots: 'Slots',
     res_bench: 'Banc',
     res_benchHeader: 'Banc',
@@ -3352,6 +3377,7 @@ const STRINGS = {
     res_avgSat: 'Avg satisfaction',
     res_worstRank: 'Worst rank',
     res_forced: 'Forced',
+    res_stratRoleTitle: ({ role }) => `Strat role: ${role} (used in raid guides)`,
     res_slots: 'Slots',
     res_bench: 'Bench',
     res_benchHeader: 'Bench',
@@ -4590,6 +4616,9 @@ function buildAssignmentCard(r, resultsCtx) {
     const posInRow = sameRow.findIndex(x => x.name === r.name);
     const canLeft = posInRow > 0;
     const canRight = posInRow < sameRow.length - 1;
+    const stratBadge = r.stratRole
+      ? `<span class="strat-badge" title="${escapeHtml(t('res_stratRoleTitle', { role: r.stratRole }))}">${escapeHtml(r.stratRole)}</span>`
+      : '';
     card.innerHTML = `
       <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
       <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
@@ -4598,7 +4627,7 @@ function buildAssignmentCard(r, resultsCtx) {
           <img src="${ICON_URL(JOB_BY_ID[r.jobId])}" alt="${r.jobName}" loading="lazy" draggable="false">
         </div>
         <div class="assignment-text-left">
-          <div class="assigned-name">${escapeHtml(r.name)}</div>
+          <div class="assigned-name">${stratBadge}${escapeHtml(r.name)}</div>
           ${rankBadge(r)}
         </div>
       </div>
@@ -4674,6 +4703,12 @@ function renderSolution(sol) {
   const grid = document.getElementById('assignmentGrid');
   const warningArea = document.getElementById('warningArea');
   const { results, stats } = sol;
+  // Étiquette les assignments avec leurs rôles strat (MT/OT/H1/H2/M1/M2/R1/R2)
+  // selon le type de contenu. Mute results en ajoutant `stratRole` à chaque
+  // entrée assignée. Appelé ici (renderSolution) plutôt que dans le solver
+  // pour rester indépendant — le solver lib/ reste pur, indifférent au sens
+  // "strat" des positions.
+  assignStratRoles(results, state.contentType);
 
   // Stat "frustration max" : le pire rang attribué
   let worstRankDisplay = '—';
@@ -4892,6 +4927,10 @@ function renderRaid24Result() {
       allianceGrid.appendChild(empty);
     } else {
       const sol = result.solutions[0];
+      // Étiquette par alliance : chaque alliance reçoit son propre set
+      // MT/OT/H1/H2/M1/M2/R1/R2 (raid24chaotic) ou T/H1/H2/M1..Mn/R1..Rn
+      // (raid24 standard 1T/2H/5DPS).
+      assignStratRoles(sol.results, state.contentType);
       const bench = build4ColLayout(allianceGrid, sol.results);
       bench.forEach(b => allBench.push(b));
     }

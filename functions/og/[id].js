@@ -8,6 +8,7 @@ import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, CONTENT_COMP, ROLE_COLOR } from '../../lib/jobs.js';
 import { buildSlotsFromComp, computeOptimalAssignment } from '../../lib/scoring.js';
 import { analyzeAvailability, bestSlotWithTail } from '../../lib/availability.js';
+import { assignStratRoles } from '../../lib/strat-roles.js';
 
 const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 
@@ -18,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 6;  // v6 : endHour = fin de plage jouable + seuil shortenName 14→12
+const OG_LAYOUT_VERSION = 7;  // v7 : badges rôles strat (MT/OT/H1/H2/M1/M2/R1/R2) sur dungeon/raid8
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -95,17 +96,17 @@ function computeForOg(data) {
   });
 
   if (out.error) {
-    return { players: rawPlayers, assignment: new Array(rawPlayers.length).fill(null) };
+    return { players: rawPlayers, assignment: new Array(rawPlayers.length).fill(null), results: [] };
   }
 
-  // Reconstitue { players, assignment } à partir des results
+  // Reconstitue { players, assignment } à partir des results, mais on
+  // expose aussi results en sortie pour pouvoir y attacher les stratRoles
+  // (MT/OT/H1/H2/M1/M2/R1/R2) avant le rendu.
   const assignment = out.results.map(r => {
     if (!r.assigned) return null;
-    // slotIdx pas exposé dans les results ; on retrouve via le rôle + l'ordre
-    // n'a pas d'importance pour le rendu (on regroupe par rôle ensuite).
     return { jobId: r.jobId };
   });
-  return { players: rawPlayers, assignment };
+  return { players: rawPlayers, assignment, results: out.results };
 }
 
 function esc(s) {
@@ -159,11 +160,20 @@ function renderCard(m, width) {
   const lockGlyph = m.locked
     ? `<div style="display:flex; align-items:center; justify-content:center; width:18px; height:18px; color:#ffb547; font-size:14px; font-weight:700; margin-left:auto; padding:0 2px;">◆</div>`
     : '';
+  // Badge rôle strat (MT/OT/H1/H2/M1/M2/R1/R2). Affiché seulement si fourni
+  // par le caller (donc dungeon/raid8 uniquement, pas raid24 où l'agrégat
+  // global serait trompeur sans split par alliance).
+  const stratBadge = m.stratRole
+    ? `<div style="display:flex; align-items:center; justify-content:center; height:20px; padding:0 6px; margin-right:8px; border:1px solid ${roleColor}99; color:${roleColor}; background:rgba(0,0,0,0.4); font-size:12px; font-weight:700; letter-spacing:1px; font-family:monospace; flex-shrink:0;">${esc(m.stratRole)}</div>`
+    : '';
   return `
     <div style="display:flex; align-items:center; height:54px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
       <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
       <div style="display:flex; flex-direction:column; overflow:hidden;">
-        <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1; white-space:nowrap;">${esc(shortenName(m.name))}</div>
+        <div style="display:flex; flex-direction:row; align-items:center; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1; white-space:nowrap;">
+          ${stratBadge}
+          <span style="display:flex;">${esc(shortenName(m.name))}</span>
+        </div>
         <div style="display:flex; font-size:16px; color:${roleColor}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
       </div>
       ${lockGlyph}
@@ -269,7 +279,7 @@ export async function onRequestGet({ params, env, request }) {
   try { data = JSON.parse(raw); }
   catch { return new Response('Bad data', { status: 500 }); }
 
-  const { players, assignment } = computeForOg(data);
+  const { players, assignment, results } = computeForOg(data);
 
   // Layout 3-col (TANKS | HEALERS | DPS 2×2) pour les contenus ≤ 8 joueurs,
   // miroir de la composition finale affichée en bas de la page web. Pour
@@ -277,6 +287,16 @@ export async function onRequestGet({ params, env, request }) {
   // `rows.ranged` mêlant ranged et caster) parce que 24 cartes ne tiennent
   // pas en 4 col × 2 row dans 1200×630.
   const useColumnLayout = data.c === 'dungeon' || data.c === 'raid8';
+
+  // Étiquetage strat (MT/OT/H1/H2/M1/M2/R1/R2) seulement sur dungeon/raid8.
+  // Pour raid24, le compute est global (24 joueur·euses ensemble, pas par
+  // alliance) → un label "M1" globalement n'a pas le même sens qu'un "M1"
+  // d'alliance, et le layout par lignes ne distingue pas les alliances :
+  // afficher les labels serait trompeur. On les omet ici, ils restent
+  // visibles sur la page (rendue par alliance, cf. renderRaid24Result).
+  if (useColumnLayout && Array.isArray(results) && results.length > 0) {
+    assignStratRoles(results, data.c);
+  }
 
   const rows = useColumnLayout
     ? { tank: [], heal: [], dps: [] }                       // 3 buckets
@@ -291,17 +311,18 @@ export async function onRequestGet({ params, env, request }) {
     if (!job) return;
     const locked = !!(p && p.lockedJob && p.lockedJob === a.jobId);
     if (locked) lockedCount++;
+    const stratRole = results && results[i] ? results[i].stratRole : undefined;
     if (useColumnLayout) {
       // Tank / Heal séparés, tout le reste (melee + ranged + caster) dans dps,
       // dans l'ordre des joueurs assignés (= ordre du résultat scoring).
       if (job.role === 'tank' || job.role === 'heal') {
-        rows[job.role].push({ name: playerName, job, locked });
+        rows[job.role].push({ name: playerName, job, locked, stratRole });
       } else {
-        rows.dps.push({ name: playerName, job, locked });
+        rows.dps.push({ name: playerName, job, locked, stratRole });
       }
     } else {
       const rowKey = job.role === 'caster' ? 'ranged' : job.role;
-      (rows[rowKey] || rows.ranged).push({ name: playerName, job, locked });
+      (rows[rowKey] || rows.ranged).push({ name: playerName, job, locked, stratRole });
     }
   });
 
