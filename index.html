@@ -2348,8 +2348,32 @@
 <div class="preset-menu" id="templateMenu" hidden></div>
 <div class="toast" id="toast"></div>
 
-<script>
+<script type="module">
 'use strict';
+
+// Imports depuis lib/ — source de vérité partagée avec functions/og/[id].js
+// et les tests unitaires (tests/*.test.js).
+import { JOBS, JOB_BY_ID, JOBS_BY_ROLE, CONTENT_COMP } from './lib/jobs.js';
+import {
+  SCORING, jobScoreForPlayer, benchScore, buildSlots,
+  computeOptimalAssignment as _computeOptimalAssignment,
+  buildResultFromAssignment, getPrefTier
+} from './lib/scoring.js';
+import {
+  getRoleRequirements as _getRoleRequirements,
+  analyzeCoverage as _analyzeCoverage
+} from './lib/coverage.js';
+import {
+  encodeState as _encodeState,
+  decodeState as _decodeStateRaw,
+  validateImportedPayload,
+  PRESENCE_VALUES
+} from './lib/codec.js';
+// makePlayer reste local : a besoin de side-effects (nextPlayerId, generateRowId).
+
+// ICON_URL utilise le CDN jsDelivr externe (xivapi/classjob-icons).
+const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
+const ICON_URL = (job) => ICON_BASE + job.icon + '.png';
 
 // ============================================================
 // IDENTITÉ — userId persistant en localStorage (auth "faible")
@@ -2460,6 +2484,7 @@ const STRINGS = {
     c_dungeon: 'Donjon',
     c_raid8: 'Raid 8',
     c_raid24: 'Raid 24',
+    c_raid24chaotic: 'Chaotic 24',
     al_title: ({ name }) => `Alliance ${name}`,
     al_collapseHint: 'Cliquer pour replier',
     al_expandHint: 'Cliquer pour déplier',
@@ -2672,6 +2697,7 @@ const STRINGS = {
     c_dungeon: 'Dungeon',
     c_raid8: 'Raid 8',
     c_raid24: 'Raid 24',
+    c_raid24chaotic: 'Chaotic 24',
     al_title: ({ name }) => `Alliance ${name}`,
     al_collapseHint: 'Click to collapse',
     al_expandHint: 'Click to expand',
@@ -2853,40 +2879,10 @@ function applyStaticI18n() {
 // ============================================================
 // JOBS — Dawntrail (BLU & BST exclus)
 // ============================================================
-
-const JOBS = [
-  { id: 'PLD', name: 'Paladin',     role: 'tank',   icon: 'paladin'     },
-  { id: 'WAR', name: 'Warrior',     role: 'tank',   icon: 'warrior'     },
-  { id: 'DRK', name: 'Dark Knight', role: 'tank',   icon: 'darkknight'  },
-  { id: 'GNB', name: 'Gunbreaker',  role: 'tank',   icon: 'gunbreaker'  },
-  { id: 'WHM', name: 'White Mage',  role: 'heal',   icon: 'whitemage'   },
-  { id: 'AST', name: 'Astrologian', role: 'heal',   icon: 'astrologian' },
-  { id: 'SCH', name: 'Scholar',     role: 'heal',   icon: 'scholar'     },
-  { id: 'SGE', name: 'Sage',        role: 'heal',   icon: 'sage'        },
-  { id: 'MNK', name: 'Monk',        role: 'melee',  icon: 'monk'        },
-  { id: 'DRG', name: 'Dragoon',     role: 'melee',  icon: 'dragoon'     },
-  { id: 'NIN', name: 'Ninja',       role: 'melee',  icon: 'ninja'       },
-  { id: 'SAM', name: 'Samurai',     role: 'melee',  icon: 'samurai'     },
-  { id: 'RPR', name: 'Reaper',      role: 'melee',  icon: 'reaper'      },
-  { id: 'VPR', name: 'Viper',       role: 'melee',  icon: 'viper'       },
-  { id: 'BRD', name: 'Bard',        role: 'ranged', icon: 'bard'        },
-  { id: 'MCH', name: 'Machinist',   role: 'ranged', icon: 'machinist'   },
-  { id: 'DNC', name: 'Dancer',      role: 'ranged', icon: 'dancer'      },
-  { id: 'BLM', name: 'Black Mage',  role: 'caster', icon: 'blackmage'   },
-  { id: 'SMN', name: 'Summoner',    role: 'caster', icon: 'summoner'    },
-  { id: 'RDM', name: 'Red Mage',    role: 'caster', icon: 'redmage'     },
-  { id: 'PCT', name: 'Pictomancer', role: 'caster', icon: 'pictomancer' }
-];
-
-// CDN externe — repo xivapi/classjob-icons (icônes officielles SE)
-const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
-const ICON_URL = (job) => ICON_BASE + job.icon + '.png';
-
-const JOB_BY_ID = Object.fromEntries(JOBS.map(j => [j.id, j]));
-const JOBS_BY_ROLE = JOBS.reduce((acc, j) => {
-  (acc[j.role] ||= []).push(j);
-  return acc;
-}, {});
+//
+// JOBS, JOB_BY_ID, JOBS_BY_ROLE, ICON_BASE, ICON_URL : importés depuis lib/
+// (cf. en-tête du script). Ne PAS redéclarer ici sous peine de SyntaxError
+// dans un module ES.
 
 // Ordre d'affichage dans la grille 2 lignes par rôle (PC uniquement).
 // Lecture en row-flow : item 1 = haut-gauche, item 2 = haut-droite, item 3 = bas-gauche, etc.
@@ -2901,42 +2897,35 @@ const ROLE_GRID_ORDER = {
 };
 const ROLE_GRID_COLS = { tank: 2, heal: 2, melee: 3, ranged: 2, caster: 2 };
 
-const CONTENT_BASE = {
-  dungeon: { get label() { return t('c_dungeon'); }, size: 4,  comp: { tank: 1, heal: 1, dps: 2  } },
-  raid8:   { get label() { return t('c_raid8'); },   size: 8,  comp: { tank: 2, heal: 2, dps: 4  } },
-  // raid24 = 3 alliances de 1T / 2H / 5DPS chacune (24 au total)
-  raid24:  { get label() { return t('c_raid24'); },  size: 24, comp: { tank: 3, heal: 6, dps: 15 },
-             alliances: 3, allianceComp: { tank: 1, heal: 2, dps: 5 } }
+// CONTENT_BASE = vue UI sur CONTENT_COMP de lib/jobs.js : on enrichit chaque
+// content type avec un label i18n (getter) sans dupliquer les chiffres de
+// composition (qui restent la propriété de lib/). Toute modif de compo se
+// fait dans lib/jobs.js → propage ici, dans og/[id].js, et dans les tests.
+const I18N_LABELS = {
+  dungeon: 'c_dungeon',
+  raid8: 'c_raid8',
+  raid24: 'c_raid24',
+  raid24chaotic: 'c_raid24chaotic'
 };
+const CONTENT_BASE = Object.fromEntries(
+  Object.entries(CONTENT_COMP).map(([key, def]) => [
+    key,
+    Object.defineProperty({ ...def }, 'label', {
+      get() { return t(I18N_LABELS[key] || key); },
+      enumerable: true
+    })
+  ])
+);
 const ALLIANCE_NAMES = ['A', 'B', 'C'];
 const ALLIANCE_SIZE = 8;
-function isRaid24() { return state.contentType === 'raid24'; }
-
-function buildSlots(contentKey, dpsMode) {
-  const base = CONTENT_BASE[contentKey];
-  // Pour raid24 on retourne les slots d'UNE alliance ; l'optimiseur en lance
-  // une optimisation par alliance.
-  const comp = base.allianceComp || base.comp;
-  const slots = [];
-
-  for (let i = 0; i < comp.tank; i++) slots.push({ roles: ['tank'] });
-  for (let i = 0; i < comp.heal; i++) slots.push({ roles: ['heal'] });
-
-  const dpsCount = comp.dps;
-
-  if (dpsMode === 'unified') {
-    for (let i = 0; i < dpsCount; i++) {
-      slots.push({ roles: ['melee', 'ranged', 'caster'] });
-    }
-  } else {
-    const melee = Math.ceil(dpsCount / 2);
-    const distance = dpsCount - melee;
-    for (let i = 0; i < melee; i++)    slots.push({ roles: ['melee'] });
-    for (let i = 0; i < distance; i++) slots.push({ roles: ['ranged', 'caster'] });
-  }
-
-  return slots;
+function isRaid24() {
+  // Tous les contenus structurés en 3 alliances de 8 (raid24 normal + chaotic).
+  // Renommer la fonction serait moins chirurgical : ses callers veulent
+  // exactement "ce contenu fonctionne en 3 alliances".
+  return state.contentType === 'raid24' || state.contentType === 'raid24chaotic';
 }
+
+// buildSlots : importé depuis lib/scoring.js (cf. en-tête).
 
 // ============================================================
 // STATE
@@ -2967,7 +2956,8 @@ function canClaimPlayer(p) {
 }
 
 let nextPlayerId = 1;
-const PRESENCE_VALUES = ['in', 'maybe', 'out'];
+// PRESENCE_VALUES, getPrefTier : importés depuis lib/codec.js et lib/scoring.js.
+// makePlayer reste local (side-effects nextPlayerId / generateRowId).
 const makePlayer = (name = '') => ({
   id: nextPlayerId++,
   rowId: generateRowId(),
@@ -2983,18 +2973,9 @@ const makePlayer = (name = '') => ({
   note: ''
 });
 
-// Tier effectif d'un job dans les prefs d'un·e joueur·euse (fallback strict order)
-function getPrefTier(player, idx) {
-  if (idx < 0 || idx >= player.preferences.length) return -1;
-  if (player.prefTiers && player.prefTiers.length === player.preferences.length &&
-      typeof player.prefTiers[idx] === 'number') {
-    return player.prefTiers[idx];
-  }
-  return idx;
-}
-
 // Normalise les tiers pour qu'ils soient consécutifs à partir de 0
-// (utile après une suppression qui laisse un trou)
+// (utile après une suppression qui laisse un trou). Mutate-in-place,
+// reste local (pas de version pure utile côté lib/).
 function normalizePrefTiers(player) {
   if (!player.prefTiers || player.prefTiers.length === 0) return;
   if (player.prefTiers.length !== player.preferences.length) return;
@@ -3740,251 +3721,30 @@ function renderAll() {
 // des alternatives à l'utilisateur.
 // ============================================================
 
-const SCORING = {
-  FIRST_CHOICE: 100,
-  PREF_STEP: 10,
-  FORCED_BASE: -50,
-  BENCH: -30,
-  // Pénalités de frustration (multipliées par fairnessWeight/100)
-  FRUST_PER_RANK: 30,    // chaque rang en dessous du 1er coûte ça
-  FRUST_FORCED: 400,     // bonus de pénalité si vraiment forcé
-  FRUST_BENCH: 150       // bonus si benché
-};
-
-function jobScoreForPlayer(player, jobId, fairnessWeight) {
-  const idx = player.preferences.indexOf(jobId);
-  const w = fairnessWeight / 100;
-  if (idx === -1) {
-    // Forcé
-    const baseScore = SCORING.FORCED_BASE;
-    const frustration = SCORING.FRUST_FORCED * w;
-    return { score: baseScore - frustration, forced: true, rank: -1 };
-  }
-  // Le tier remplace la position : plusieurs jobs peuvent partager le même rang
-  const tier = getPrefTier(player, idx);
-  const baseScore = SCORING.FIRST_CHOICE - tier * SCORING.PREF_STEP;
-  const frustration = tier * SCORING.FRUST_PER_RANK * w;
-  return { score: baseScore - frustration, forced: false, rank: tier };
-}
-
-function benchScore(fairnessWeight) {
-  const w = fairnessWeight / 100;
-  return SCORING.BENCH - SCORING.FRUST_BENCH * w;
-}
-
+// SCORING, jobScoreForPlayer, benchScore, computeOptimalAssignment (raw),
+// buildResultFromAssignment : importés depuis lib/scoring.js (en-tête).
+// On garde ici un wrapper `computeOptimalAssignment` local qui injecte
+// les valeurs depuis `state`, car les callers du fichier (renderRaid24Result,
+// renderResult, scheduleLiveCompute…) y comptent.
 function computeOptimalAssignment(opts = {}) {
-  const fairnessWeight = opts.fairnessWeight ?? state.fairnessWeight;
-  const topK = opts.topK ?? 1;  // nb de solutions distinctes à retourner
-
   const slots = opts.slotsOverride || buildSlots(state.contentType, state.dpsMode);
-  const banned = new Set(state.bannedJobs);
-  // Vue effective : on retire les joueurs absents, et on filtre les jobs bannis
-  // dans les prefs (sans muter l'état). playersSource permet de scoper à
-  // une alliance (raid24) ou autre.
-  const playersSource = opts.playersOverride || state.players;
-  const players = playersSource
-    .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
-    .map(p => ({
-      ...p,
-      preferences: p.preferences.filter(id => !banned.has(id))
-    }));
-
-  if (players.length === 0) return { error: t('e_noPlayers') };
-
-  const n = players.length;
-  const m = slots.length;
-
-  const benchSc = benchScore(fairnessWeight);
-  const bestPerPlayer = players.map(p => {
-    if (p.lockedJob) {
-      // Joueur verrouillé : son score est fixé par son lock
-      const { score } = jobScoreForPlayer(p, p.lockedJob, fairnessWeight);
-      return Math.max(score, benchSc);
-    }
-    if (p.preferences.length === 0) {
-      // Que ce soit forcé ou bench, c'est pas terrible. On prend le moins pire.
-      const forcedScore = jobScoreForPlayer(p, '__none__', fairnessWeight).score;
-      return Math.max(forcedScore, benchSc);
-    }
-    return SCORING.FIRST_CHOICE;  // optimiste : son 1er choix
+  const players = opts.playersOverride || state.players;
+  return _computeOptimalAssignment({
+    players,
+    slots,
+    bannedJobs: state.bannedJobs,
+    fairnessWeight: opts.fairnessWeight ?? state.fairnessWeight,
+    topK: opts.topK ?? 1
   });
-
-  const upperBoundFrom = i => {
-    let s = 0;
-    for (let k = i; k < n; k++) s += bestPerPlayer[k];
-    return s;
-  };
-
-  // On garde top-K solutions distinctes via une liste triée
-  // Une solution = { score, assignment, signature }
-  // Signature = clé canonique pour détecter les doublons (joueur → jobId)
-  const topSolutions = [];
-
-  function signature(assignment) {
-    return players.map((p, i) => {
-      const a = assignment[i];
-      return p.name + '=' + (a ? a.jobId : '_bench');
-    }).join('|');
-  }
-
-  function tryAddSolution(score, forcedCount, assignment) {
-    const sig = signature(assignment);
-    // Éviter doublons (même signature)
-    if (topSolutions.some(s => s.signature === sig)) return;
-
-    const solution = {
-      score,
-      forcedCount,
-      assignment: assignment.map(a => a ? { ...a } : null),
-      signature: sig
-    };
-    topSolutions.push(solution);
-    // Tri descendant par score, on garde topK
-    topSolutions.sort((a, b) => b.score - a.score);
-    if (topSolutions.length > topK) topSolutions.length = topK;
-  }
-
-  const current = new Array(n).fill(null);
-  const slotTaken = new Array(m).fill(false);
-
-  // Le seuil de coupure est le score de la K-ième meilleure solution actuelle
-  function pruneThreshold() {
-    if (topSolutions.length < topK) return -Infinity;
-    return topSolutions[topSolutions.length - 1].score;
-  }
-
-  function recurse(playerIdx, currentScore, forcedCount) {
-    const optimisticBest = currentScore + upperBoundFrom(playerIdx);
-    if (optimisticBest <= pruneThreshold()) return;
-
-    if (playerIdx === n) {
-      tryAddSolution(currentScore, forcedCount, current);
-      return;
-    }
-
-    const player = players[playerIdx];
-    const options = [];
-    const seen = new Set();
-
-    for (let slotIdx = 0; slotIdx < m; slotIdx++) {
-      if (slotTaken[slotIdx]) continue;
-      const slot = slots[slotIdx];
-
-      const candidates = new Set();
-      const lockedJobId = player.lockedJob;
-      const lockedJob = lockedJobId ? JOB_BY_ID[lockedJobId] : null;
-
-      if (lockedJob) {
-        // Joueur verrouillé : on ne considère que son job verrouillé,
-        // dans les slots qui acceptent son rôle. Le ban est ignoré par le lock.
-        if (slot.roles.includes(lockedJob.role)) candidates.add(lockedJob.id);
-      } else {
-        for (const role of slot.roles) {
-          for (const job of JOBS_BY_ROLE[role]) {
-            if (banned.has(job.id)) continue;
-            if (player.preferences.includes(job.id)) candidates.add(job.id);
-          }
-          const hasPref = JOBS_BY_ROLE[role].some(j => !banned.has(j.id) && player.preferences.includes(j.id));
-          if (!hasPref) {
-            const fallback = JOBS_BY_ROLE[role].find(j => !banned.has(j.id));
-            if (fallback) candidates.add(fallback.id);
-          }
-        }
-      }
-
-      for (const jobId of candidates) {
-        const key = slotIdx + ':' + jobId;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const { score, forced } = jobScoreForPlayer(player, jobId, fairnessWeight);
-        options.push({ slotIdx, jobId, score, forced });
-      }
-    }
-
-    options.push({ slotIdx: null, jobId: null, score: benchSc, forced: false });
-    options.sort((a, b) => b.score - a.score);
-
-    for (const opt of options) {
-      if (opt.slotIdx !== null) {
-        slotTaken[opt.slotIdx] = true;
-        current[playerIdx] = { slotIdx: opt.slotIdx, jobId: opt.jobId };
-        recurse(playerIdx + 1, currentScore + opt.score, forcedCount + (opt.forced ? 1 : 0));
-        slotTaken[opt.slotIdx] = false;
-        current[playerIdx] = null;
-      } else {
-        current[playerIdx] = null;
-        recurse(playerIdx + 1, currentScore + opt.score, forcedCount);
-      }
-    }
-  }
-
-  recurse(0, 0, 0);
-
-  if (topSolutions.length === 0) return { error: t('e_noComp') };
-
-  // Transformer chaque solution en résultat lisible
-  const solutions = topSolutions.map(sol => buildResultFromAssignment(players, slots, sol.assignment));
-
-  return {
-    solutions,
-    fairnessWeight,
-    // Pour rétrocompat : `results` et `stats` du best
-    results: solutions[0].results,
-    stats: solutions[0].stats
-  };
 }
 
-function buildResultFromAssignment(players, slots, assignment) {
-  const results = players.map((p, i) => {
-    const a = assignment[i];
-    if (a === null) {
-      return { name: p.name, assigned: false, preferences: p.preferences, locked: false, lockedJob: p.lockedJob || null };
-    }
-    const job = JOB_BY_ID[a.jobId];
-    const prefRank = p.preferences.indexOf(a.jobId);
-    const locked = !!p.lockedJob && p.lockedJob === a.jobId;
-    return {
-      name: p.name,
-      assigned: true,
-      jobName: job.name,
-      jobId: job.id,
-      iconUrl: ICON_URL(job),
-      role: job.role,
-      slotRoles: slots[a.slotIdx].roles,
-      prefRank,
-      forced: prefRank === -1,
-      preferences: p.preferences,
-      totalPrefs: p.preferences.length,
-      locked,
-      lockedJob: p.lockedJob || null
-    };
-  });
-
-  const assigned = results.filter(r => r.assigned);
-  const firstChoices = assigned.filter(r => r.prefRank === 0).length;
-  const forced = assigned.filter(r => r.forced).length;
-  const benched = results.filter(r => !r.assigned).length;
-  // Pire rang attribué (frustration max)
-  const worstRank = assigned.length === 0 ? null : Math.max(...assigned.map(r => r.forced ? 999 : r.prefRank));
-  // Satisfaction : on plafonne le rang à 4 (= 5e choix) pour que les jobs
-  // au-delà du 5e n'enfoncent plus le score. Le total reste celui des prefs
-  // pour que la formule "rang/total" garde son sens.
-  const SAT_RANK_CAP = 4;
-  const satisfaction = assigned.length === 0 ? 0 :
-    Math.round(assigned.reduce((sum, r) => {
-      if (r.forced) return sum;
-      const cappedRank = Math.min(r.prefRank, SAT_RANK_CAP);
-      return sum + (1 - cappedRank / Math.max(r.preferences.length, 1)) * 100;
-    }, 0) / assigned.length);
-
-  return {
-    results,
-    stats: {
-      total: results.length, assigned: assigned.length, benched,
-      firstChoices, forced, satisfaction, slotsTotal: slots.length,
-      worstRank
-    }
-  };
+// ----- Algo SCORING déplacé vers lib/scoring.js (testé : tests/scoring.test.js).
+// Le lib/ renvoie des codes courts ('noPlayers' | 'noSlots' | 'noComp').
+// Les renderers en aval qui affichent le message le passent par scoringErrorMsg.
+function scoringErrorMsg(code) {
+  if (code === 'noPlayers') return t('e_noPlayers');
+  if (code === 'noComp') return t('e_noComp');
+  return code || '';
 }
 
 function slotShortLabel(slotRoles) {
@@ -4091,7 +3851,7 @@ function buildAssignmentCard(r, resultsCtx) {
       <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
       <div class="assignment-left">
         <div class="assignment-job-icon">
-          <img src="${r.iconUrl}" alt="${r.jobName}" loading="lazy" draggable="false">
+          <img src="${ICON_URL(JOB_BY_ID[r.jobId])}" alt="${r.jobName}" loading="lazy" draggable="false">
         </div>
         <div class="assignment-text-left">
           <div class="assigned-name">${escapeHtml(r.name)}</div>
@@ -4385,7 +4145,7 @@ function renderRaid24Result() {
     if (result.error) {
       const empty = document.createElement('div');
       empty.className = 'alliance-result-empty';
-      empty.textContent = result.error;
+      empty.textContent = scoringErrorMsg(result.error);
       allianceGrid.appendChild(empty);
     } else {
       const sol = result.solutions[0];
@@ -4453,7 +4213,7 @@ function renderResult() {
   const result = computeOptimalAssignment({ topK: 3 });
 
   if (result.error) {
-    summary.innerHTML = `<div style="color:var(--danger);font-family:'Chakra Petch';font-size:0.95rem">${result.error}</div>`;
+    summary.innerHTML = `<div style="color:var(--danger);font-family:'Chakra Petch';font-size:0.95rem">${scoringErrorMsg(result.error)}</div>`;
     grid.innerHTML = '';
     warningArea.innerHTML = '';
     tabs.innerHTML = '';
@@ -4502,70 +4262,15 @@ function escapeHtml(s) {
 // On compare la couverture (joueurs prêts à jouer le rôle) au besoin.
 // ============================================================
 
-const PRIMARY_DEPTH = 2;  // un job dans top-2 = "prêt à jouer ce rôle"
-
+// getRoleRequirements et analyzeCoverage : implémentations pures dans
+// lib/coverage.js (testées). Ici on appelle les imports en injectant le
+// state global. Cf. tests/coverage.test.js pour les invariants.
 function getRoleRequirements() {
-  const slots = buildSlots(state.contentType, state.dpsMode);
-  const reqs = { tank: 0, heal: 0, melee: 0, ranged: 0, caster: 0, flex_dps: 0, distance: 0 };
-  // Pour raid24, buildSlots renvoie 1 alliance ; on multiplie par le nb d'alliances
-  const factor = isRaid24() ? (CONTENT_BASE.raid24.alliances || 1) : 1;
-  slots.forEach(slot => {
-    if (slot.roles.length === 1) {
-      reqs[slot.roles[0]] += factor;
-    } else if (slot.roles.includes('melee') && slot.roles.includes('ranged') && slot.roles.includes('caster')) {
-      reqs.flex_dps += factor;
-    } else if (slot.roles.includes('ranged') && slot.roles.includes('caster')) {
-      reqs.distance += factor;
-    }
-  });
-  return reqs;
+  return _getRoleRequirements(state.contentType, state.dpsMode);
 }
 
 function analyzeCoverage() {
-  // Prefs effectives : on exclut les absents et on retire les jobs bannis
-  const banned = new Set(state.bannedJobs);
-  const playersWithName = state.players
-    .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
-    .map(p => ({ ...p, preferences: p.preferences.filter(id => !banned.has(id)) }));
-  const playersWithPrefs = playersWithName.filter(p => p.preferences.length > 0);
-  const reqs = getRoleRequirements();
-
-  // Compteur de joueurs couvrant chaque rôle (avec un job dans top-N)
-  const coverage = { tank: 0, heal: 0, melee: 0, ranged: 0, caster: 0 };
-  playersWithPrefs.forEach(p => {
-    const seenRoles = new Set();
-    const top = p.preferences.slice(0, PRIMARY_DEPTH);
-    top.forEach(jobId => {
-      const job = JOB_BY_ID[jobId];
-      if (job && !seenRoles.has(job.role)) {
-        seenRoles.add(job.role);
-        coverage[job.role]++;
-      }
-    });
-  });
-
-  // Calcul des "manques" : besoin - couverture
-  // Pour les slots flex (distance/flex_dps), on additionne la couverture des rôles compatibles
-  const gaps = [];
-  if (coverage.tank < reqs.tank) gaps.push({ role: 'tank', missing: reqs.tank - coverage.tank });
-  if (coverage.heal < reqs.heal) gaps.push({ role: 'heal', missing: reqs.heal - coverage.heal });
-  if (coverage.melee < reqs.melee) gaps.push({ role: 'melee', missing: reqs.melee - coverage.melee });
-
-  // Pour les slots distance (ranged ou caster), on combine
-  const distanceCoverage = coverage.ranged + coverage.caster;
-  if (distanceCoverage < reqs.distance) {
-    gaps.push({ role: 'distance', missing: reqs.distance - distanceCoverage });
-  }
-
-  // Pour flex_dps (donjon), on combine les 3 catégories DPS
-  const flexCoverage = coverage.melee + coverage.ranged + coverage.caster;
-  // Pour ce mode, on ignore aussi les melee déjà comptés dans reqs.melee (mode split)
-  // simplification : si on est en mode unifié, seuls flex_dps comptent
-  if (reqs.flex_dps > 0 && flexCoverage < reqs.flex_dps) {
-    gaps.push({ role: 'flex_dps', missing: reqs.flex_dps - flexCoverage });
-  }
-
-  return { coverage, reqs, gaps, playersWithName, playersWithPrefs };
+  return _analyzeCoverage(state.players, state.contentType, state.dpsMode, state.bannedJobs);
 }
 
 const ROLE_LABELS_FR = {
@@ -4684,93 +4389,45 @@ function buildPayload() {
   return payload;
 }
 
+// Encodage / décodage : implémentations pures dans lib/codec.js (testées).
+// Ici on garde des wrappers locaux qui :
+//   - injectent buildPayload() pour encodeState()
+//   - mappent les codes d'erreur du lib/ vers les messages i18n
+//   - enrichissent les players importés avec un id local (incrément nextPlayerId)
+//     et un rowId si manquant — ces deux champs sont des conventions front
+//     uniquement, pas dans codec.js.
 function encodeState() {
-  const json = JSON.stringify(buildPayload());
-  // base64url encoding (sans padding ni / + qui posent problème dans URL)
-  return btoa(unescape(encodeURIComponent(json)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return _encodeState(buildPayload());
 }
 
+const _CODEC_ERROR_KEYS = {
+  INVALID_FORMAT: 'e_invalidFormat',
+  UNKNOWN_CONTENT: 'e_unknownContent',
+  INVALID_DPS: 'e_invalidDps',
+  INVALID_PLAYERS: 'e_invalidPlayers'
+};
+
 function validateAndNormalizePayload(payload) {
-  if (!payload || typeof payload !== 'object') throw new Error(t('e_invalidFormat'));
-  if (!CONTENT_BASE[payload.c]) throw new Error(t('e_unknownContent'));
-  if (!['unified', 'split'].includes(payload.d)) throw new Error(t('e_invalidDps'));
-  if (!Array.isArray(payload.p)) throw new Error(t('e_invalidPlayers'));
-
-  // Valider les jobs : filtrer les IDs inconnus silencieusement
-  const validJobIds = new Set(JOBS.map(j => j.id));
-  const players = payload.p.map(raw => {
-    const player = makePlayer(typeof raw.n === 'string' ? raw.n : '');
-    if (typeof raw.id === 'string' && raw.id.length <= 16) {
-      player.rowId = raw.id;
-    }
-    if (Array.isArray(raw.j)) {
-      player.preferences = raw.j.filter(id => validJobIds.has(id));
-    }
-    if (typeof raw.s === 'string' && PRESENCE_VALUES.includes(raw.s)) {
-      player.presence = raw.s;
-    }
-    if (typeof raw.l === 'string' && validJobIds.has(raw.l)) {
-      player.lockedJob = raw.l;
-    }
-    if (typeof raw.by === 'string' && raw.by.length >= 4 && raw.by.length <= 64) {
-      player.claimedBy = raw.by;
-    }
-    if (typeof raw.nt === 'string') {
-      player.note = raw.nt.slice(0, 200);
-    }
-    // Tiers : valider que tableau de nombres positifs de la bonne taille
-    if (Array.isArray(raw.pt) && raw.pt.length === player.preferences.length) {
-      const validTiers = raw.pt.every(t => typeof t === 'number' && Number.isFinite(t) && t >= 0 && t < 50);
-      if (validTiers) player.prefTiers = raw.pt.slice();
-    }
-    return player;
-  });
-
-  // fairnessWeight optionnel (rétrocompat avec anciens liens)
-  let fairnessWeight = 50;
-  if (typeof payload.f === 'number' && payload.f >= 0 && payload.f <= 100) {
-    fairnessWeight = payload.f;
+  let imported;
+  try { imported = validateImportedPayload(payload); }
+  catch (e) {
+    throw new Error(t(_CODEC_ERROR_KEYS[e.message] || 'e_invalidFormat'));
   }
-
-  // Quand ? optionnel
-  const raidWhen = (typeof payload.w === 'string' ? payload.w : '').slice(0, 80);
-
-  // Jobs bannis optionnels (filtrés au passage)
-  let bannedJobs = [];
-  if (Array.isArray(payload.bj)) {
-    bannedJobs = payload.bj.filter(id => typeof id === 'string' && validJobIds.has(id));
-  }
-
-  return {
-    contentType: payload.c,
-    dpsMode: payload.d,
-    fairnessWeight,
-    raidWhen,
-    bannedJobs,
-    players,
-    ownerId: typeof payload.ownerId === 'string' ? payload.ownerId : null,
-    admins: Array.isArray(payload.admins) ? payload.admins.slice() : [],
-    isAdmin: !!payload.isAdmin
-  };
+  // Enrichir les players importés avec les champs UI locaux (id, rowId)
+  // que lib/codec.js ne touche pas (purs).
+  imported.players = imported.players.map(p => ({
+    ...p,
+    id: nextPlayerId++,
+    rowId: p.rowId || generateRowId()
+  }));
+  // dpsMode est figé à 'unified' depuis le retrait du switch côté UI
+  return imported;
 }
 
 function decodeState(code) {
-  // Restaurer les caractères base64 standard
-  let b64 = code.replace(/-/g, '+').replace(/_/g, '/');
-  // Re-padding
-  while (b64.length % 4) b64 += '=';
-
   let payload;
-  try {
-    const json = decodeURIComponent(escape(atob(b64)));
-    payload = JSON.parse(json);
-  } catch (e) {
-    throw new Error(t('e_invalidCode'));
-  }
-
+  try { payload = _decodeStateRaw(code); }
+  catch { throw new Error(t('e_invalidCode')); }
   return validateAndNormalizePayload(payload);
 }
 
