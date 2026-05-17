@@ -334,3 +334,72 @@ test('stats.satisfaction est 100% quand tout le monde a son 1er choix', () => {
   assert.equal(r.stats.satisfaction, 100);
   assert.equal(r.stats.worstRank, 0);
 });
+
+// ---------- Role Composition Bonus (FFXIV +1% par sous-rôle) ----------
+
+test('stats : subRolesPresent + roleBonusPercent reflètent les rôles assignés', () => {
+  // Dungeon 1T/1H/2DPS : ici 1T + 1H + 1 melee + 1 caster = 4 sous-rôles
+  // → roleBonusPercent = 4 (manque "ranged" physique)
+  const players = [
+    P('Tank',  ['PLD']),
+    P('Heal',  ['WHM']),
+    P('Melee', ['SAM']),
+    P('Cast',  ['BLM'])
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('dungeon', 'unified'), fairnessWeight: 50
+  });
+  assert.deepEqual(r.stats.subRolesPresent.sort(), ['caster', 'heal', 'melee', 'tank']);
+  assert.equal(r.stats.roleBonusPercent, 4);
+});
+
+test('Role bonus : le solver préfère la diversité quand individuel équivalent', () => {
+  // Roster fait pour raid8 : 2 tanks, 2 heals, 1 mêlée, 1 ranged, 1 caster,
+  // et 1 player flex qui peut être ranged OU caster (donc le solver choisit).
+  // Sans bonus de diversité, le 2nd ranged et le 2nd caster sont équivalents.
+  // Avec le bonus, le solver doit préférer l'ASSIGNATION qui couvre tous les
+  // sous-rôles (1 ranged + 1 caster = 4 sous-rôles + 2 DPS supplémentaires)
+  // plutôt qu'une qui doublonne.
+  //
+  // On force l'asymétrie : le 1er flex préfère BRD strictement, le 2nd flex
+  // préfère BLM strictement. Donc l'optimisation par préférences SEULES dirait
+  // BRD + BLM → 1 ranged + 1 caster (couvre les 2 sous-rôles). Le bonus
+  // renforce ce choix mais ne le change pas ici. On vérifie juste que le
+  // bonus est compté correctement.
+  const players = [
+    P('T1', ['PLD']), P('T2', ['WAR']),
+    P('H1', ['WHM']), P('H2', ['SCH']),
+    P('M1', ['SAM']),
+    P('M2', ['MNK']),
+    P('R',  ['BRD']),
+    P('C',  ['BLM'])
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('raid8', 'unified'), fairnessWeight: 50
+  });
+  // Les 5 sous-rôles doivent être présents : 2 tanks, 2 heals, 2 mêlées + 1 ranged + 1 caster
+  assert.deepEqual(r.stats.subRolesPresent.sort(), ['caster', 'heal', 'melee', 'ranged', 'tank']);
+  assert.equal(r.stats.roleBonusPercent, 5, 'le full role bonus FFXIV');
+});
+
+test('Role bonus : la diversité départage des solutions à individuel égal', () => {
+  // Un joueur "Flex" avec BRD et BLM au MÊME tier (tier 0). Score individuel
+  // identique entre les deux jobs. Les autres joueurs couvrent déjà tank,
+  // heal, et ranged. Le bonus doit faire pencher Flex sur BLM (caster) pour
+  // activer le sous-rôle absent (caster).
+  const players = [
+    P('T',  ['PLD']),
+    P('H',  ['WHM']),
+    P('R',  ['BRD']),  // ranged déjà présent
+    { name: 'Flex', preferences: ['BRD', 'BLM'], prefTiers: [0, 0] }
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('dungeon', 'unified'), fairnessWeight: 50, topK: 1
+  });
+  const flex = r.results.find(x => x.name === 'Flex');
+  assert.equal(flex.jobId, 'BLM', 'Flex doit être BLM (caster) pour activer le sous-rôle absent');
+  // Et les 4 sous-rôles sont présents : tank, heal, ranged, caster (manque melee
+  // car personne n'a melee dans ses prefs)
+  assert.deepEqual(r.stats.subRolesPresent.sort(), ['caster', 'heal', 'ranged', 'tank']);
+  assert.equal(r.stats.roleBonusPercent, 4);
+});

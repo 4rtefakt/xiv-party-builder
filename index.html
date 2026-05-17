@@ -3132,6 +3132,15 @@ const STRINGS = {
     res_idle: 'En attente',
     res_firstChoice: '1er choix',
     res_avgSat: 'Satisfaction moy.',
+    res_roleBonus: 'Bonus rôles',
+    res_roleBonusFullTitle: 'Bonus de Role Composition FFXIV : tous les sous-rôles présents (tank, heal, melee, ranged physique, caster) → +5% dégâts.',
+    res_roleBonusMissingTitle: ({ missing }) => `Bonus Role Composition FFXIV : +1% par sous-rôle présent (max 5%). Manque : ${missing}.`,
+    res_roleBonusRaid24Title: 'Moyenne du bonus Role Composition sur les 3 alliances (chacune applique son propre buff côté jeu).',
+    role_tank: 'tank',
+    role_heal: 'heal',
+    role_melee: 'mêlée',
+    role_ranged: 'ranged physique',
+    role_caster: 'caster',
     res_worstRank: 'Pire rang',
     res_forced: 'Forcé',
     res_stratRoleTitle: ({ role }) => `Rôle strat : ${role} (référence dans les guides de stratégie)`,
@@ -3419,6 +3428,15 @@ const STRINGS = {
     res_idle: 'Idle',
     res_firstChoice: '1st choice',
     res_avgSat: 'Avg satisfaction',
+    res_roleBonus: 'Role bonus',
+    res_roleBonusFullTitle: 'FFXIV Role Composition bonus: all sub-roles present (tank, healer, melee, physical ranged, caster) → +5% damage.',
+    res_roleBonusMissingTitle: ({ missing }) => `FFXIV Role Composition bonus: +1% per present sub-role (max 5%). Missing: ${missing}.`,
+    res_roleBonusRaid24Title: 'Average Role Composition bonus across the 3 alliances (each applies its own buff in-game).',
+    role_tank: 'tank',
+    role_heal: 'healer',
+    role_melee: 'melee',
+    role_ranged: 'physical ranged',
+    role_caster: 'caster',
     res_worstRank: 'Worst rank',
     res_forced: 'Forced',
     res_stratRoleTitle: ({ role }) => `Strat role: ${role} (used in raid guides)`,
@@ -4761,6 +4779,16 @@ function renderSolution(sol) {
     else worstRankDisplay = t('res_nth', { n: stats.worstRank + 1 });
   }
 
+  // Bonus Role Composition FFXIV : +1% dégâts par sous-rôle distinct présent
+  // (tank, heal, melee, ranged physique, caster). Max = 5%.
+  const bonusPct = stats.roleBonusPercent || 0;
+  const bonusColor = bonusPct === 5 ? 'var(--heal)' : bonusPct >= 4 ? 'var(--cyan)' : 'var(--ink-dim)';
+  const missingSubRoles = ['tank', 'heal', 'melee', 'ranged', 'caster']
+    .filter(r => !(stats.subRolesPresent || []).includes(r));
+  const bonusTitle = missingSubRoles.length === 0
+    ? t('res_roleBonusFullTitle')
+    : t('res_roleBonusMissingTitle', { missing: missingSubRoles.map(r => t('role_' + r)).join(', ') });
+
   summary.innerHTML = `
     <div class="stat">
       <span class="stat-value">${stats.firstChoices}/${stats.assigned}</span>
@@ -4769,6 +4797,10 @@ function renderSolution(sol) {
     <div class="stat">
       <span class="stat-value">${stats.satisfaction}<span style="font-size:0.7em">%</span></span>
       <span class="stat-label">${t('res_avgSat')}</span>
+    </div>
+    <div class="stat" title="${escapeHtml(bonusTitle)}">
+      <span class="stat-value" style="color:${bonusColor}">+${bonusPct}<span style="font-size:0.7em">%</span></span>
+      <span class="stat-label">${t('res_roleBonus')}</span>
     </div>
     <div class="stat">
       <span class="stat-value" style="color:${stats.forced > 0 ? 'var(--danger)' : 'var(--cyan)'}">${worstRankDisplay}</span>
@@ -4870,6 +4902,8 @@ function renderRaid24Result() {
   let worstRank = null;
   let hasError = false;
 
+  // Bonus Role Composition par alliance (chacune a son propre buff côté jeu)
+  const allianceBonuses = [];
   for (let a = 0; a < 3; a++) {
     const start = a * ALLIANCE_SIZE;
     const allPlayers = state.players.slice(start, start + ALLIANCE_SIZE);
@@ -4886,15 +4920,24 @@ function renderRaid24Result() {
     if (sol.stats.worstRank !== null && sol.stats.worstRank !== undefined) {
       if (worstRank === null || sol.stats.worstRank > worstRank) worstRank = sol.stats.worstRank;
     }
+    allianceBonuses.push(sol.stats.roleBonusPercent || 0);
   }
 
   const validAlliances = allianceResults.filter(r => !r.error).length;
   const avgSat = validAlliances > 0 ? Math.round(totalSatSum / validAlliances) : 0;
+  // Bonus rôles = moyenne arrondie sur les alliances valides (chaque alliance
+  // applique son propre buff dans le jeu, donc l'agrégat moyenne donne le
+  // "rendement" global de la compo de raid24).
+  const avgBonus = allianceBonuses.length > 0
+    ? Math.round(allianceBonuses.reduce((a, b) => a + b, 0) / allianceBonuses.length)
+    : 0;
   let worstRankDisplay = '—';
   if (worstRank !== null) {
     if (worstRank === 999) worstRankDisplay = t('res_forced');
     else worstRankDisplay = t('res_nth', { n: worstRank + 1 });
   }
+
+  const bonusColor24 = avgBonus === 5 ? 'var(--heal)' : avgBonus >= 4 ? 'var(--cyan)' : 'var(--ink-dim)';
 
   summary.innerHTML = `
     <div class="stat">
@@ -4904,6 +4947,10 @@ function renderRaid24Result() {
     <div class="stat">
       <span class="stat-value">${avgSat}<span style="font-size:0.7em">%</span></span>
       <span class="stat-label">${t('res_avgSat')}</span>
+    </div>
+    <div class="stat" title="${escapeHtml(t('res_roleBonusRaid24Title'))}">
+      <span class="stat-value" style="color:${bonusColor24}">+${avgBonus}<span style="font-size:0.7em">%</span></span>
+      <span class="stat-label">${t('res_roleBonus')}</span>
     </div>
     <div class="stat">
       <span class="stat-value" style="color:${totalForced > 0 ? 'var(--danger)' : 'var(--cyan)'}">${worstRankDisplay}</span>
@@ -5159,18 +5206,38 @@ function recommendJobsForGap(roleNeeded, assignedResults, bannedJobs) {
     const rangeds = JOBS_BY_ROLE.ranged.filter(j => !banned.has(j.id)).map(j => j.id);
     const casters = JOBS_BY_ROLE.caster.filter(j => !banned.has(j.id)).map(j => j.id);
 
+    // 1ère priorité : les sous-rôles COMPLÈTEMENT ABSENTS débloquent +1%
+    // de bonus Role Composition. Si plusieurs sont absents, on les liste
+    // tous en priorité ; les présents tombent en fallback.
+    const absentSlots = [];
+    if (meleeCount === 0  && melees.length  > 0) absentSlots.push({ key: 'melee',  jobs: melees });
+    if (rangedCount === 0 && rangeds.length > 0) absentSlots.push({ key: 'ranged', jobs: rangeds });
+    if (casterCount === 0 && casters.length > 0) absentSlots.push({ key: 'caster', jobs: casters });
+    if (absentSlots.length > 0 && absentSlots.length < 3) {
+      // Si SEULS certains sous-rôles sont absents (pas tous), on priorise
+      // ceux-là. Si TOUS sont absents (cas dps vide), on tombe sur la
+      // logique de balance ci-dessous (où tout est listé naturellement).
+      const priority = absentSlots.flatMap(a => a.jobs);
+      const presentKeys = new Set(['melee', 'ranged', 'caster'].filter(k => !absentSlots.find(a => a.key === k)));
+      const fallback = [
+        ...(presentKeys.has('melee') ? melees : []),
+        ...(presentKeys.has('ranged') ? rangeds : []),
+        ...(presentKeys.has('caster') ? casters : [])
+      ];
+      return { priority, fallback };
+    }
+
+    // 2ème priorité : balance "moitié-mêlée moitié-non-mêlée" (cible raid 8)
     if (meleeCount > nonMeleeCount) {
-      // Trop de melees → on suggère ranged + caster en priorité, avec une
-      // sub-priorité au sous-type le moins représenté pour finir d'équilibrer.
       const nonMelee = rangedCount > casterCount
-        ? [...casters, ...rangeds]   // déjà plus de ranged → caster en tête
+        ? [...casters, ...rangeds]
         : [...rangeds, ...casters];
       return { priority: nonMelee, fallback: melees };
     }
     if (nonMeleeCount > meleeCount) {
       return { priority: melees, fallback: [...rangeds, ...casters] };
     }
-    // Égalité → pas de priorité forte
+    // Égalité OU dps vide → pas de priorité forte, tout listé
     return { priority: [...melees, ...rangeds, ...casters], fallback: [] };
   }
 
