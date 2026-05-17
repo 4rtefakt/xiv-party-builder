@@ -1814,10 +1814,36 @@
   }
 
   /* Modale "Mon identité" (QR transfer) */
+  .identity-method-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    margin: 0.4rem 0 0.5rem;
+  }
+  .identity-method-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 1rem 0 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .identity-method-divider::before,
+  .identity-method-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
   .identity-qr-wrap {
     display: flex;
     justify-content: center;
-    margin: 0.5rem 0 1rem;
+    margin: 0.2rem 0 0;
   }
   .identity-qr {
     /* Cadre blanc autour du QR pour garantir le contraste de scan, même
@@ -2452,15 +2478,22 @@
   <div class="modal">
     <button class="modal-close" data-modal-close>×</button>
     <div class="modal-title" data-i18n="id_title">Mon identité</div>
-    <div class="modal-subtitle" data-i18n="id_intro">Scanne ce QR code sur un autre appareil...</div>
+    <div class="modal-subtitle" data-i18n="id_intro">Retrouve tes presets et salons récents sur un autre appareil — sans recréer de compte.</div>
+
+    <div class="identity-method-label" data-i18n="id_methodQr">Option 1 · Scanner avec ton téléphone</div>
     <div class="identity-qr-wrap">
       <div id="identityQr" class="identity-qr" data-i18n="id_loadingQr">Génération du QR…</div>
     </div>
-    <div class="modal-warning" data-i18n="id_warning">⚠ Ce QR est ton identité personnelle...</div>
+
+    <div class="identity-method-divider"><span data-i18n="id_or">ou</span></div>
+
+    <div class="identity-method-label" data-i18n="id_methodLink">Option 2 · Copier le lien et l'ouvrir ailleurs</div>
     <textarea id="identityUrl" readonly></textarea>
     <div class="modal-actions">
-      <button class="btn-tool" id="copyIdentityUrlBtn"><span class="arrow">▸</span> <span data-i18n="id_copyUrl">Copier l'URL</span></button>
+      <button class="btn-tool" id="copyIdentityUrlBtn"><span class="arrow">▸</span> <span data-i18n="id_copyUrl">Copier le lien</span></button>
     </div>
+
+    <div class="modal-warning" data-i18n="id_warning">⚠ Ce lien est ton identité personnelle...</div>
   </div>
 </div>
 
@@ -2653,12 +2686,15 @@ const STRINGS = {
     t_identity: 'Mon identité',
     t_identityTitle: 'Transférer mon identité (presets, templates, salons récents) vers un autre appareil',
     id_title: 'Mon identité',
-    id_intro: 'Scanne ce QR code sur un autre appareil pour y retrouver tes presets, templates et salons récents — sans recréer de compte.',
-    id_warning: '⚠ Ce QR est ton identité personnelle : ne le partage qu\'avec toi-même. Toute personne qui le scanne aura accès à tes salons admin.',
-    id_copyUrl: 'Copier l\'URL',
-    id_copied: 'URL copiée',
+    id_intro: 'Retrouve tes presets, templates et salons récents sur un autre appareil — sans recréer de compte.',
+    id_methodQr: 'Option 1 · Scanner avec ton téléphone',
+    id_methodLink: 'Option 2 · Copier le lien et l\'ouvrir ailleurs (autre PC, onglet privé, etc.)',
+    id_or: 'ou',
+    id_warning: '⚠ Ce lien est ton identité personnelle : ne le partage qu\'avec toi-même. Toute personne qui le scanne ou l\'ouvre aura accès à tes salons admin.',
+    id_copyUrl: 'Copier le lien',
+    id_copied: 'Lien copié',
     id_loadingQr: 'Génération du QR…',
-    id_qrError: 'Impossible de générer le QR — utilise le bouton "Copier l\'URL" à la place.',
+    id_qrError: 'Impossible de générer le QR — utilise le bouton "Copier le lien" à la place.',
     id_close: 'Fermer',
     t_syncNow: '↻ Synchroniser',
     // — Roster row
@@ -2881,12 +2917,15 @@ const STRINGS = {
     t_identity: 'My identity',
     t_identityTitle: 'Transfer my identity (presets, templates, recent rooms) to another device',
     id_title: 'My identity',
-    id_intro: 'Scan this QR code on another device to retrieve your presets, templates and recent rooms — no account needed.',
-    id_warning: '⚠ This QR is your personal identity: only share it with yourself. Anyone who scans it gains admin access to your rooms.',
-    id_copyUrl: 'Copy URL',
-    id_copied: 'URL copied',
+    id_intro: 'Retrieve your presets, templates and recent rooms on another device — no account needed.',
+    id_methodQr: 'Option 1 · Scan with your phone',
+    id_methodLink: 'Option 2 · Copy the link and open it elsewhere (another PC, private tab, etc.)',
+    id_or: 'or',
+    id_warning: '⚠ This link is your personal identity: only share it with yourself. Anyone who scans or opens it gains admin access to your rooms.',
+    id_copyUrl: 'Copy link',
+    id_copied: 'Link copied',
     id_loadingQr: 'Generating QR…',
-    id_qrError: 'Could not generate QR — use the "Copy URL" button instead.',
+    id_qrError: 'Could not generate QR — use the "Copy link" button instead.',
     id_close: 'Close',
     t_syncNow: '↻ Sync now',
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
