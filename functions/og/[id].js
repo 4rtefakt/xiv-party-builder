@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 14; // v14 : badge strat role sous le nom + fix card width (DPS plus étroites avant)
+const OG_LAYOUT_VERSION = 15; // v15 : largeur explicite sur sous-rows DPS (satori les serrait dans les flex nested)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -237,8 +237,12 @@ function renderColumnLayout(rows, dict, dpsLayout) {
   const dpsSource = Array.isArray(dpsLayout) && dpsLayout.length > 0 ? dpsLayout : rows.dps;
   const dpsRows = [];
   for (let i = 0; i < dpsSource.length; i += 2) dpsRows.push(dpsSource.slice(i, i + 2));
+  // Satori a tendance à mal allouer l'espace dans les flex containers nested
+  // quand la largeur n'est pas explicitement déclarée → sous-cards DPS qui
+  // apparaissent plus étroites que les tanks/heals. On force la largeur sur
+  // chaque sous-row du bloc DPS pour éviter ça.
   const dpsGrid = dpsRows.map(rowItems => `
-    <div style="display:flex; flex-direction:row; gap:${COL_GAP}px;">
+    <div style="display:flex; flex-direction:row; width:${dpsWidth}px; gap:${COL_GAP}px;">
       ${rowItems.map(m => m ? renderCard(m, COL_W) : renderEmptyDpsCard(COL_W)).join('')}
     </div>
   `).join('');
@@ -249,7 +253,7 @@ function renderColumnLayout(rows, dict, dpsLayout) {
       ${column(dict.colHeals, HDR_COLORS.heal, COL_W, rows.heal.map(m => renderCard(m, COL_W)))}
       <div style="display:flex; flex-direction:column; width:${dpsWidth}px;">
         ${header(dict.colDps, HDR_COLORS.dps, dpsWidth)}
-        <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; flex-direction:column; width:${dpsWidth}px; gap:8px;">
           ${dpsGrid}
         </div>
       </div>
