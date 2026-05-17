@@ -2519,6 +2519,7 @@ import {
 import {
   encodeState as _encodeState,
   decodeState as _decodeStateRaw,
+  encodePayload as _encodePayload,
   validateImportedPayload,
   PRESENCE_VALUES,
   DEFAULT_CLAIM_LIMIT, CLAIM_LIMIT_UNLIMITED, VALID_CLAIM_LIMITS
@@ -4663,41 +4664,22 @@ function renderSuggestions() {
 //   }
 // ============================================================
 
+// Wrapper local : `_encodePayload` (lib/codec.js) est pur ; ici on injecte
+// `state` global et on applique les gates "admin only" sur claimLimit/admins
+// (le lib n'a pas la notion de permission, c'est au caller de filtrer).
 function buildPayload() {
-  const payload = {
-    c: state.contentType,
-    d: state.dpsMode,
-    f: state.fairnessWeight,
-    // On envoie aussi les lignes vides claimées et non claimées (utile pour le
-    // merge non-admin côté serveur — l'ordre/le nombre comptent)
-    p: state.players.map(p => {
-      const obj = { n: p.name.trim(), j: p.preferences.slice(), id: p.rowId };
-      if (p.presence && p.presence !== 'in') obj.s = p.presence;
-      if (p.lockedJob) obj.l = p.lockedJob;
-      if (p.claimedBy) obj.by = p.claimedBy;
-      if (p.note && p.note.trim()) obj.nt = p.note.trim().slice(0, 200);
-      // pt : envoyé uniquement si tiers non-triviaux (différent de 0..n-1)
-      if (p.prefTiers && p.prefTiers.length === p.preferences.length) {
-        const isStrict = p.prefTiers.every((t, i) => t === i);
-        if (!isStrict) obj.pt = p.prefTiers.slice();
-      }
-      return obj;
-    })
-  };
-  const w = state.raidWhen.trim();
-  if (w) payload.w = w;
-  if (state.bannedJobs.length > 0) payload.bj = state.bannedJobs.slice();
-  // Claim limit : on envoie seulement si on est admin (le serveur ignorerait
-  // ce champ pour un non-admin de toute façon ; mais ça évite le bruit
-  // réseau et le diff KV non-pertinent).
-  if (state.isAdmin && typeof state.claimLimit === 'number' && VALID_CLAIM_LIMITS.has(state.claimLimit)) {
-    payload.cl = state.claimLimit;
-  }
-  // Admins : on n'envoie cette liste que si on est admin (le serveur l'ignorerait sinon)
-  if (state.isAdmin && state.admins && state.admins.length > 0) {
-    payload.admins = state.admins.slice();
-  }
-  return payload;
+  return _encodePayload({
+    contentType: state.contentType,
+    dpsMode: state.dpsMode,
+    fairnessWeight: state.fairnessWeight,
+    raidWhen: state.raidWhen,
+    bannedJobs: state.bannedJobs,
+    players: state.players,
+    // Admin-only fields : le serveur les ignorerait pour un non-admin, mais
+    // on évite le bruit réseau et le diff KV non-pertinent en n'envoyant rien.
+    claimLimit: state.isAdmin ? state.claimLimit : undefined,
+    admins: state.isAdmin ? state.admins : undefined
+  });
 }
 
 // Encodage / décodage : implémentations pures dans lib/codec.js (testées).

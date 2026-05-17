@@ -3,8 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  encodeState, decodeState, validateImportedPayload, makePlayer,
-  PRESENCE_VALUES, VALID_DPS_MODES
+  encodeState, decodeState, validateImportedPayload, makePlayer, encodePayload,
+  PRESENCE_VALUES, VALID_DPS_MODES, DEFAULT_CLAIM_LIMIT
 } from '../lib/codec.js';
 
 // ---------- Roundtrip encode/decode ----------
@@ -216,4 +216,176 @@ test('makePlayer retourne un player initialisé', () => {
 test('constantes exportées', () => {
   assert.deepEqual(PRESENCE_VALUES.slice().sort(), ['in', 'maybe', 'out'].sort());
   assert.deepEqual(VALID_DPS_MODES.slice().sort(), ['split', 'unified'].sort());
+});
+
+// ---------- encodePayload (state-like → API payload "court") ----------
+
+test('encodePayload : payload minimum (state vide)', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: []
+  });
+  assert.deepEqual(out, { c: 'raid8', d: 'unified', f: 50, p: [] });
+});
+
+test('encodePayload : omet les champs optionnels avec valeur par défaut', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50,
+    players: [{
+      name: 'Alice', preferences: ['PLD'], rowId: 'r123',
+      presence: 'in', lockedJob: null, claimedBy: null, note: ''
+    }]
+  });
+  // presence='in' → omis ; lockedJob/claimedBy/note vides → omis ; pas de pt
+  assert.deepEqual(out.p[0], { n: 'Alice', j: ['PLD'], id: 'r123' });
+});
+
+test('encodePayload : émet tous les champs player quand non-défaut', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50,
+    players: [{
+      name: '  Alice  ',  // trim
+      preferences: ['PLD', 'WAR'],
+      rowId: 'r123',
+      presence: 'maybe',
+      lockedJob: 'PLD',
+      claimedBy: 'u_alice',
+      note: 'Premier essai',
+      prefTiers: [0, 0]  // non-strict → émis
+    }]
+  });
+  assert.deepEqual(out.p[0], {
+    n: 'Alice',
+    j: ['PLD', 'WAR'],
+    id: 'r123',
+    s: 'maybe',
+    l: 'PLD',
+    by: 'u_alice',
+    nt: 'Premier essai',
+    pt: [0, 0]
+  });
+});
+
+test('encodePayload : prefTiers strict (0..n-1) est omis', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50,
+    players: [{
+      name: 'Alice', preferences: ['PLD', 'WAR', 'DRK'], prefTiers: [0, 1, 2]
+    }]
+  });
+  assert.equal(out.p[0].pt, undefined);
+});
+
+test('encodePayload : note tronquée à 200 chars', () => {
+  const longNote = 'x'.repeat(500);
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50,
+    players: [{ name: 'A', preferences: [], note: longNote }]
+  });
+  assert.equal(out.p[0].nt.length, 200);
+});
+
+test('encodePayload : raidWhen trimmé et tronqué à 80 chars', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    raidWhen: '  ' + 'x'.repeat(100) + '  '
+  });
+  assert.equal(out.w.length, 80);
+});
+
+test('encodePayload : raidWhen vide (whitespace only) omis', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    raidWhen: '   '
+  });
+  assert.equal(out.w, undefined);
+});
+
+test('encodePayload : bannedJobs vide omis, non-vide émis', () => {
+  const empty = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    bannedJobs: []
+  });
+  assert.equal(empty.bj, undefined);
+  const filled = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    bannedJobs: ['BLM', 'PCT']
+  });
+  assert.deepEqual(filled.bj, ['BLM', 'PCT']);
+});
+
+test('encodePayload : claimLimit invalide ignoré', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    claimLimit: 99
+  });
+  assert.equal(out.cl, undefined);
+});
+
+test('encodePayload : claimLimit valide (0/2/3/4) émis', () => {
+  for (const cl of [0, 2, 3, 4]) {
+    const out = encodePayload({
+      contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+      claimLimit: cl
+    });
+    assert.equal(out.cl, cl, `claimLimit ${cl} doit être émis`);
+  }
+});
+
+test('encodePayload : admins vide omis, non-vide émis', () => {
+  const empty = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    admins: []
+  });
+  assert.equal(empty.admins, undefined);
+  const filled = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    admins: ['u_owner']
+  });
+  assert.deepEqual(filled.admins, ['u_owner']);
+});
+
+test('encodePayload → validateImportedPayload : roundtrip stable', () => {
+  const s = {
+    contentType: 'raid24chaotic',
+    dpsMode: 'unified',
+    fairnessWeight: 75,
+    raidWhen: 'Cloud of Darkness · Samedi 21h',
+    bannedJobs: ['BLM'],
+    claimLimit: 3,
+    players: [
+      {
+        name: 'Alice', preferences: ['PLD', 'WAR'], rowId: 'rABC1234',
+        presence: 'in', lockedJob: 'PLD', claimedBy: 'u_alice',
+        note: 'Premier essai', prefTiers: [0, 0]
+      },
+      {
+        name: 'Bob', preferences: ['WHM'], rowId: 'rXYZ5678',
+        presence: 'maybe', lockedJob: null, claimedBy: null, note: ''
+      }
+    ]
+  };
+  const validated = validateImportedPayload(encodePayload(s));
+  assert.equal(validated.contentType, s.contentType);
+  assert.equal(validated.dpsMode, s.dpsMode);
+  assert.equal(validated.fairnessWeight, s.fairnessWeight);
+  assert.equal(validated.raidWhen, s.raidWhen);
+  assert.deepEqual(validated.bannedJobs, s.bannedJobs);
+  assert.equal(validated.claimLimit, s.claimLimit);
+  assert.equal(validated.players.length, 2);
+  assert.equal(validated.players[0].name, 'Alice');
+  assert.equal(validated.players[0].lockedJob, 'PLD');
+  assert.equal(validated.players[0].claimedBy, 'u_alice');
+  assert.deepEqual(validated.players[0].prefTiers, [0, 0]);
+  assert.equal(validated.players[1].presence, 'maybe');
+});
+
+test('encodePayload : claimLimit pas dans payload → roundtrip donne défaut', () => {
+  // Quand l'admin ne fournit pas cl, l'importer applique DEFAULT_CLAIM_LIMIT
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: []
+    // pas de claimLimit
+  });
+  assert.equal(out.cl, undefined);
+  const validated = validateImportedPayload(out);
+  assert.equal(validated.claimLimit, DEFAULT_CLAIM_LIMIT);
 });
