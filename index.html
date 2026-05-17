@@ -305,9 +305,10 @@
     letter-spacing: 0.05em;
   }
 
-  /* Non-admins : on cache add-player / reset / import pour ne pas suggérer
-     des actions qui seront refusées côté serveur. */
-  body.non-admin #addPlayerBtn,
+  /* Non-admins : on cache reset / import / templates qui sont des actions
+     globales réservées admin. #addPlayerBtn n'est pas dans la liste : il est
+     visible aux non-admins SI iels ont encore des claim slots libres (cf.
+     updateAddPlayerVisibility côté JS). */
   body.non-admin #resetBtn,
   body.non-admin #importBtn,
   body.non-admin .btn-templates {
@@ -3682,6 +3683,19 @@ function renderClaimLimitSeg() {
   });
 }
 
+// Pilote la visibilité de `+ Ajouter` : toujours visible pour admin et en
+// mode local. Pour un·e non-admin dans un salon, visible uniquement si
+// iel a encore des claim slots (cf. userAtClaimLimit).
+function updateAddPlayerVisibility() {
+  const btn = document.getElementById('addPlayerBtn');
+  if (!btn) return;
+  if (state.isAdmin || !currentRoomId) {
+    btn.hidden = false;
+    return;
+  }
+  btn.hidden = userAtClaimLimit();
+}
+
 function renderRosterInfo() {
   const info = document.getElementById('rosterInfo');
   const targetSize = CONTENT_BASE[state.contentType].size;
@@ -3703,6 +3717,7 @@ function renderRosterInfo() {
   }
 
   info.innerHTML = `<span class="count ${cls}">${current}</span> / ${targetSize}${claimsInfo}`;
+  updateAddPlayerVisibility();
 }
 
 function buildPlayerRow(player, idx) {
@@ -6332,10 +6347,22 @@ async function copyToClipboard(text) {
 // ============================================================
 
 document.getElementById('addPlayerBtn').addEventListener('click', () => {
-  state.players.push(makePlayer());
+  // Garde-fou : pour un·e non-admin déjà au max de claims, on n'ajoute pas
+  // (le bouton est censé être hidden mais double-check).
+  if (!state.isAdmin && currentRoomId && userAtClaimLimit()) return;
+  const p = makePlayer();
+  // Auto-claim pour les non-admins : la nouvelle ligne leur appartient
+  // direct, sinon elle ne sera pas acceptée côté serveur (le merge
+  // non-admin n'ajoute une ligne que si elle est claim par le userId).
+  if (!state.isAdmin && currentRoomId) p.claimedBy = USER_ID;
+  state.players.push(p);
   renderPlayers();
   renderRosterInfo();
   renderSuggestions();
+  // Save immédiat pour matérialiser le claim côté serveur, puis live
+  // compute (la nouvelle ligne n'a pas de prefs donc ça ne change pas
+  // la compo, mais on garde la cohérence avec les autres actions).
+  if (!state.isAdmin) scheduleAutoSave(150);
   scheduleLiveCompute();
 });
 

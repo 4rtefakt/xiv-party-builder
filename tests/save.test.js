@@ -264,6 +264,78 @@ test('merge non-admin : libérer 1 puis claim 1 nouvelle reste sous la limite', 
   assert.equal(stored.p[2].by, 'me', 'nouveau claim accepté (place libérée)');
 });
 
+test('merge non-admin : peut ajouter une nouvelle ligne self-claim sous la limite', () => {
+  const existing = makeExisting({
+    cl: 2,
+    p: [
+      makeRow('r0000001', 'A', 'someone-else'),
+      makeRow('r0000002', 'B')
+    ]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A', 'someone-else'),
+      makeRow('r0000002', 'B'),
+      makeRow('rNEW1234', 'Newcomer', 'me')  // nouvelle ligne
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p.length, 3, 'la nouvelle ligne doit être ajoutée');
+  assert.equal(stored.p[2].n, 'Newcomer');
+  assert.equal(stored.p[2].by, 'me');
+});
+
+test('merge non-admin : nouvelle ligne non-claim par moi est ignorée', () => {
+  const existing = makeExisting({
+    cl: 2,
+    p: [makeRow('r0000001', 'A')]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A'),
+      makeRow('rNEW1234', 'Newcomer')         // pas de `by`
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p.length, 1, 'pas de claim → pas d\'ajout');
+});
+
+test('merge non-admin : nouvelle ligne claim par autrui est ignorée', () => {
+  const existing = makeExisting({
+    cl: 2,
+    p: [makeRow('r0000001', 'A')]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A'),
+      makeRow('rNEW1234', 'Newcomer', 'attacker') // claim par autre user
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p.length, 1, 'tentative de claim par autre user → ignorée');
+});
+
+test('merge non-admin : nouvelle ligne refusée si on est déjà au max', () => {
+  const existing = makeExisting({
+    cl: 1, // mode strict
+    p: [
+      makeRow('r0000001', 'A', 'me'),  // déjà à la limite
+    ]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A', 'me'),
+      makeRow('rNEW1234', 'Newcomer', 'me')  // tentative au delà du max
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p.length, 1, 'au max de claims → pas d\'ajout');
+});
+
 test('merge non-admin : cl=0 (illimité) → tous les claims passent', () => {
   const existing = makeExisting({
     cl: 0,

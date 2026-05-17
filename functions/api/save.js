@@ -321,6 +321,22 @@ export function normalizeForNonAdminMerge(payload, existing, userId) {
     // Ligne claimée par quelqu'un d'autre : on garde
     return ep;
   });
+
+  // Ajout de nouvelles lignes par un non-admin : autorisé si claim par
+  // ce userId ET sous la limite ET on reste sous MAX_PLAYERS global.
+  // Permet aux participant·es de s'ajouter dans un salon en cours (utile
+  // pour les statics qui notent +/- de monde que la taille du contenu).
+  const existingIds = new Set(existingPlayers.map(ep => ep.id));
+  for (const ip of (Array.isArray(payload.p) ? payload.p : [])) {
+    if (typeof ip.id !== 'string') continue;
+    if (existingIds.has(ip.id)) continue;       // déjà traitée dans le map
+    if (typeof ip.by !== 'string' || ip.by !== userId) continue; // doit être self-claim
+    if (limitReached()) continue;
+    if (stored.p.length >= MAX_PLAYERS) break;  // garde-fou global
+    stored.p.push(normalizePlayer({ ...ip, by: userId }, ip.id));
+    userClaims++;
+  }
+
   return stored;
 }
 
