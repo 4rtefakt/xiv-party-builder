@@ -2708,6 +2708,7 @@
       <button class="btn-tool" id="duplicateRoomBtn" hidden data-i18n-title="dupe_title"><span data-i18n="dupe_btn">↻ Dupliquer ce salon</span></button>
       <button class="btn-tool" id="modalSyncBtn" hidden><span data-i18n="t_syncNow">↻ Synchroniser</span></button>
       <button class="btn-tool" id="refreshDiscordBtn" hidden data-i18n-title="dc_refreshTitle" style="font-size:0.6rem;opacity:0.85"><span data-i18n="dc_refresh">↻ Forcer le refresh Discord</span></button>
+      <button class="btn-tool" id="leaveAdminBtn" hidden data-i18n-title="perm_leaveAdminTitle" style="border-color:var(--danger);color:var(--danger);font-size:0.6rem;opacity:0.85"><span data-i18n="perm_leaveAdmin">⊘ Quitter le rôle admin</span></button>
     </div>
   </div>
 </div>
@@ -2957,6 +2958,12 @@ const STRINGS = {
     perm_uncrown: '⌫',
     perm_copyAdminLink: '◆ Copier le lien admin',
     perm_copyAdminLinkTitle: 'Lien de récupération admin — ne partager qu\'avec des personnes de confiance',
+    perm_leaveAdmin: '⊘ Quitter le rôle admin',
+    perm_leaveAdminTitle: "Te retirer des admins de ce salon (irréversible sans le secret de récupération)",
+    perm_leaveAdminConfirm: 'Quitter le rôle admin de ce salon ?\n\nTu deviendras un·e simple membre. Pour revenir admin il faudra que quelqu\'un te re-promeut, ou utiliser un lien de récupération.',
+    perm_leaveAdminDone: 'Tu n\'es plus admin de ce salon',
+    perm_leaveAdminOwner: 'L\'owner ne peut pas quitter son propre salon — promeut quelqu\'un puis fais-le côté serveur',
+    perm_leaveAdminFail: 'Échec de la démotion',
     perm_adminLinkCopied: 'Lien admin copié — garde-le précieusement',
     perm_noRecoveryAvailable: 'Lien de récupération non disponible (déjà partagé via un autre canal ?)',
     perm_promoted: ({ name }) => `${name} est maintenant admin`,
@@ -3219,6 +3226,12 @@ const STRINGS = {
     perm_uncrown: '⌫',
     perm_copyAdminLink: '◆ Copy admin link',
     perm_copyAdminLinkTitle: 'Admin recovery link — only share with trusted people',
+    perm_leaveAdmin: '⊘ Leave admin role',
+    perm_leaveAdminTitle: 'Remove yourself from this room admins (irreversible without the recovery secret)',
+    perm_leaveAdminConfirm: 'Leave the admin role for this room?\n\nYou will become a regular member. To regain admin you\'ll need someone to re-promote you, or a recovery link.',
+    perm_leaveAdminDone: 'You are no longer admin of this room',
+    perm_leaveAdminOwner: 'The owner cannot leave their own room — promote someone first then handle it server-side',
+    perm_leaveAdminFail: 'Demotion failed',
     perm_adminLinkCopied: 'Admin link copied — keep it safe',
     perm_noRecoveryAvailable: 'Recovery link not available (already shared via another channel?)',
     perm_promoted: ({ name }) => `${name} is now admin`,
@@ -6537,12 +6550,17 @@ function refreshDiscordButtons() {
   const reconfBtn = document.getElementById('reconfigureWebhookBtn');
   const dupeBtn = document.getElementById('duplicateRoomBtn');
   const refreshBtn = document.getElementById('refreshDiscordBtn');
+  const leaveBtn = document.getElementById('leaveAdminBtn');
   const isAdminInRoom = isReallyAdminInRoom();
   if (publishBtn) publishBtn.hidden = !isAdminInRoom;
   if (reconfBtn) reconfBtn.hidden = !(isAdminInRoom && getDiscordWebhook());
   if (dupeBtn) dupeBtn.hidden = !isAdminInRoom;
   // Refresh : utile à n'importe qui dans un salon (pas que admin)
   if (refreshBtn) refreshBtn.hidden = !currentRoomId;
+  // Leave admin : visible aux admins non-owners (l'owner ne peut pas se
+  // retirer côté serveur, et de toute façon le scénario "promu par erreur"
+  // ne touche jamais l'owner)
+  if (leaveBtn) leaveBtn.hidden = !(isAdminInRoom && state.ownerId !== USER_ID);
 }
 
 document.getElementById('publishDiscordBtn').addEventListener('click', () => publishToDiscord());
@@ -6562,6 +6580,53 @@ document.getElementById('refreshDiscordBtn').addEventListener('click', async () 
   const fresh = buildShareUrl(currentRoomId) + '&dr=' + Date.now().toString(36);
   if (await copyToClipboard(fresh)) showToast(t('dc_refreshCopied'), { duration: 4500 });
   else showToast(t('ts_copyFail'));
+});
+
+// Quitter le rôle admin : utile pour une personne promue par erreur
+// (cas historique du legacy salon hijack), et pour le testing "vue
+// non-admin" sans avoir à mettre les mains dans le LS / changer de
+// navigateur. Owner non-supporté (le serveur force ownerId à rester
+// dans admins[]) → on l'avertit côté UI.
+document.getElementById('leaveAdminBtn').addEventListener('click', async () => {
+  if (!currentRoomId) return;
+  if (state.ownerId === USER_ID) {
+    showToast(t('perm_leaveAdminOwner'), { duration: 4500 });
+    return;
+  }
+  if (!confirm(t('perm_leaveAdminConfirm'))) return;
+
+  // Construit un payload save avec admins[] sans nous, en gardant tout
+  // le reste de l'état tel quel. Le serveur applique normalizeForAdminUpdate
+  // (puisqu'on est encore admin au moment du save) qui prendra notre
+  // nouvelle liste admins en compte.
+  const payload = buildPayload();
+  payload.id = currentRoomId;
+  payload.admins = (state.admins || []).filter(a => a !== USER_ID);
+
+  try {
+    const r = await fetch('/api/save', {
+      method: 'POST',
+      headers: apiHeaders(currentRoomId),
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) {
+      showToast(t('perm_leaveAdminFail'));
+      return;
+    }
+    const data = await r.json();
+    // Nettoie le secret en LS (on n'est plus admin légitime)
+    try { localStorage.removeItem('xiv-admin-secret-' + currentRoomId); } catch {}
+    // Met à jour le state local depuis la réponse
+    if (typeof data.isAdmin === 'boolean') state.isAdmin = data.isAdmin;
+    if (Array.isArray(data.admins)) state.admins = data.admins.slice();
+    showToast(t('perm_leaveAdminDone'), { duration: 3500 });
+    closeModal('shareModal');
+    suppressAutoSave = true;
+    renderAll();
+    suppressAutoSave = false;
+  } catch {
+    showToast(t('perm_leaveAdminFail'));
+  }
 });
 
 // Dupliquer le salon : crée un nouveau salon avec mêmes params + roster
