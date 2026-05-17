@@ -122,5 +122,7 @@ Pour un groupe communautaire d'une vingtaine de personnes, on est très loin des
 - **`wrangler.toml` + `[build]` section** : CF Pages refuse → "Configuration file for Pages projects does not support 'build'". La build command DOIT être dans le dashboard.
 - **KV binding non détecté** : vérifier que le binding s'appelle exactement `PARTY_KV` (sensible à la casse) et que l'ID dans `wrangler.toml` est valide (32 hex chars).
 - **`workers-og` introuvable au runtime** : le `nodejs_compat` flag manque dans `wrangler.toml` (la lib importe `node:buffer`). Présent par défaut dans le repo.
-- **Build cassé après ajout de dep** : penser à pusher `package.json` après modification.
-- **Discord cache l'OG image** : les nouvelles versions de l'image sont prises en compte uniquement si l'URL change. Le code ajoute déjà un `?t=Date.now()` au moment du publish webhook, et le middleware réécrit le `og:image` avec un timestamp.
+- **Build cassé après ajout de dep** : penser à pusher `package.json` ET `package-lock.json` après modification (la CI utilise `npm ci` qui exige le lockfile).
+- **Discord cache l'OG image** : Discord cache les embeds par URL exacte avec un TTL ~24h+. Le middleware réécrit l'`og:image` en `?v=<OG_LAYOUT_VERSION>_<hash(KV)>` → le hash change à chaque modif de salon (cache image refetch) et la version change quand on bump le layout (cache invalidate global). Pour forcer un re-scrape Discord *immédiat*, utiliser le bouton **"↻ Forcer le refresh Discord"** dans la modale Partager (ajoute `&dr=<timestamp>` à l'URL collée).
+- **Cache KV des OG PNG** : clé `og:v<N>:<id>:<lang>:<hash(KV)>`, TTL 7j. Bumper `OG_LAYOUT_VERSION` dans `functions/og/[id].js` ET `functions/_middleware.js` invalide les caches précédents en une fois.
+- **CI bloquée par tests** : `.github/workflows/test.yml` lance `npm test` sur push + PR. Un fail bloque le merge (mais pas le deploy CF Pages, qui suit son propre rythme).
