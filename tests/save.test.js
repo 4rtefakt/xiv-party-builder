@@ -94,14 +94,10 @@ test('validatePayload : cl=2 (défaut) accepté', () => {
   assert.equal(validatePayload(valid({ cl: 2 })), null);
 });
 
-test('validatePayload : cl=3 / 4 / 0 (illimité) acceptés', () => {
-  for (const v of [3, 4, 0]) {
+test('validatePayload : cl=1 / 3 / 4 / 0 (illimité) acceptés', () => {
+  for (const v of [1, 3, 4, 0]) {
     assert.equal(validatePayload(valid({ cl: v })), null, `cl=${v}`);
   }
-});
-
-test('validatePayload : cl=1 rejeté (en dessous du minimum utile)', () => {
-  assert.match(validatePayload(valid({ cl: 1 })), /claim limit/i);
 });
 
 test('validatePayload : cl=5, cl=-1, cl="2" rejetés', () => {
@@ -155,6 +151,29 @@ test('merge non-admin : un user au seuil (2/2) ne peut pas claim une 3ᵉ ligne'
   // Les 2 premières restent claim par "me"
   assert.equal(stored.p[0].by, 'me');
   assert.equal(stored.p[1].by, 'me');
+});
+
+test('merge non-admin : cl=1 (strict tryhard) → un user ne peut claim qu\'une seule ligne', () => {
+  const existing = makeExisting({
+    cl: 1,
+    p: [
+      makeRow('r0000001', 'A', 'me'),  // déjà 1 claim
+      makeRow('r0000002', 'B'),         // libre
+      makeRow('r0000003', 'C')          // libre
+    ]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A', 'me'),
+      makeRow('r0000002', 'B', 'me'),   // tentative de 2ᵉ claim → doit être refusé
+      makeRow('r0000003', 'C')
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p[0].by, 'me', '1er claim préservé');
+  assert.equal(stored.p[1].by, undefined, 'le 2ᵉ claim doit être rejeté en cl=1');
+  assert.equal(stored.p[2].by, undefined);
 });
 
 test('merge non-admin : libérer 1 puis claim 1 nouvelle reste sous la limite', () => {

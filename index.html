@@ -2752,7 +2752,7 @@ const STRINGS = {
     p_bannedJobs: 'Jobs bannis pour ce raid',
     p_bannedHelp: 'Aucun slot ne pourra leur être attribué · ignoré dans les préférences',
     p_claimLimit: 'Réservations max par personne',
-    p_claimLimitHelp: 'Une personne peut réserver jusqu\'à N lignes (utile pour binômes frère/sœur, conjoint·e·s) · admins non concerné·e·s',
+    p_claimLimitHelp: '1 = strict (raids tryhard / statique sérieux) · 2 = défaut (couvre les binômes frère/sœur, conjoint·e·s) · admins non concerné·e·s',
     p_claimUnlimited: '∞',
     perm_claimLimitReached: ({ n, limit }) => `Tu as réservé tes ${n}/${limit} lignes`,
     p_summaryBanned: ({ n }) => `${n} banni${n > 1 ? 's' : ''}`,
@@ -2996,7 +2996,7 @@ const STRINGS = {
     p_bannedJobs: 'Jobs banned for this raid',
     p_bannedHelp: 'No slot can be assigned to them · ignored in preferences',
     p_claimLimit: 'Max claims per person',
-    p_claimLimitHelp: 'A person can claim up to N rows (handy for sibling/partner pairs) · admins not affected',
+    p_claimLimitHelp: '1 = strict (tryhard raids / serious static) · 2 = default (covers sibling/partner pairs) · admins not affected',
     p_claimUnlimited: '∞',
     perm_claimLimitReached: ({ n, limit }) => `You claimed your ${n}/${limit} rows`,
     p_summaryBanned: ({ n }) => `${n} banned`,
@@ -3396,8 +3396,10 @@ function renderClaimLimitSeg() {
   if (!state.isAdmin) return;
 
   seg.innerHTML = '';
-  // Ordre fixe : 2, 3, 4, illimité (∞). 0 = illimité côté payload.
+  // Ordre fixe : 1 (strict tryhard), 2 (défaut), 3, 4, illimité (∞).
+  // 0 = illimité côté payload.
   const options = [
+    { value: 1, label: '1' },
     { value: 2, label: '2' },
     { value: 3, label: '3' },
     { value: 4, label: '4' },

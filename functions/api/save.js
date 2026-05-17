@@ -11,7 +11,7 @@ const VALID_CONTENT = new Set(['dungeon', 'raid8', 'raid24', 'raid24chaotic']);
 // Claim limit : nb max de lignes qu'un·e non-admin peut réserver. 0 = illimité.
 // Dupliqué de lib/codec.js (pattern existant : save.js a sa propre liste de
 // jobs valides aussi, pour éviter un import inter-projet en runtime worker).
-const VALID_CLAIM_LIMITS = new Set([0, 2, 3, 4]);
+const VALID_CLAIM_LIMITS = new Set([0, 1, 2, 3, 4]);
 const DEFAULT_CLAIM_LIMIT = 2;
 const VALID_DPS_MODE = new Set(['unified', 'split']);
 const VALID_JOBS = new Set([

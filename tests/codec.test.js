@@ -163,15 +163,15 @@ test('validateImportedPayload : cl absent → claimLimit = 2 (défaut)', () => {
   assert.equal(r.claimLimit, 2);
 });
 
-test('validateImportedPayload : cl=3 / 4 / 0 préservés', () => {
-  for (const v of [3, 4, 0]) {
+test('validateImportedPayload : cl=1 / 3 / 4 / 0 préservés', () => {
+  for (const v of [1, 3, 4, 0]) {
     const r = validateImportedPayload(validPayload({ cl: v }));
     assert.equal(r.claimLimit, v);
   }
 });
 
-test('validateImportedPayload : cl=1 / cl=99 / cl="2" → fallback 2', () => {
-  for (const v of [1, 99, '2', null]) {
+test('validateImportedPayload : cl=99 / cl="2" → fallback 2', () => {
+  for (const v of [99, '2', null]) {
     const r = validateImportedPayload(validPayload({ cl: v }));
     assert.equal(r.claimLimit, 2, `cl=${v} doit fallback à 2`);
   }
@@ -321,8 +321,8 @@ test('encodePayload : claimLimit invalide ignoré', () => {
   assert.equal(out.cl, undefined);
 });
 
-test('encodePayload : claimLimit valide (0/2/3/4) émis', () => {
-  for (const cl of [0, 2, 3, 4]) {
+test('encodePayload : claimLimit valide (0/1/2/3/4) émis', () => {
+  for (const cl of [0, 1, 2, 3, 4]) {
     const out = encodePayload({
       contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
       claimLimit: cl
