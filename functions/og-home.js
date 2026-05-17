@@ -11,7 +11,7 @@
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, ROLE_COLOR } from '../lib/jobs.js';
 
-const HOME_OG_VERSION = 5;  // v5 : ajoute mini heatmap dispos à droite des features
+const HOME_OG_VERSION = 6;  // v6 : compo en colonnes TANKS|HEALERS|DPS (sous-grille 2×2) comme la page web
 const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
 const iconUrl = (jobId) => {
   const j = JOB_BY_ID[jobId];
@@ -144,16 +144,70 @@ function renderHeatmap(dict) {
   `;
 }
 
-function renderDemoCard(player) {
+function renderDemoCard(player, width) {
   const job = JOB_BY_ID[player.jobId];
   if (!job) return '';
   const roleColor = ROLE_COLOR[job.role];
   return `
-    <div style="display:flex; align-items:center; height:50px; width:240px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; background:rgba(255,255,255,0.03);">
+    <div style="display:flex; align-items:center; height:50px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; background:rgba(255,255,255,0.03);">
       <img src="${iconUrl(player.jobId)}" width="36" height="36" style="margin-right:10px; flex-shrink:0;" />
       <div style="display:flex; flex-direction:row; align-items:center; flex:1;">
         <div style="display:flex; align-items:center; justify-content:center; height:18px; padding:0 5px; margin-right:6px; border:1px solid ${roleColor}99; color:${roleColor}; background:rgba(0,0,0,0.4); font-size:11px; font-weight:700; letter-spacing:1px; font-family:monospace; flex-shrink:0;">${esc(player.stratRole)}</div>
         <span style="display:flex; font-size:18px; font-weight:600; color:${roleColor}; font-family:monospace;">${esc(job.id)}</span>
+      </div>
+    </div>
+  `;
+}
+
+// Compo en 3 sections (TANKS | HEALERS | DPS), reproduit la mise en page de
+// la page web et de /og/[id].js. La section DPS contient une sous-grille 2×2
+// (M1/R1 sur row 0, M2/R2 sur row 1).
+//
+//   TANKS    HEALERS         DPS
+//   [MT]     [H1]      [M1]    [R1]
+//   [OT]     [H2]      [M2]    [R2]
+//
+// Largeurs : tank/heal col = CARD_W ; dps block = 2 × CARD_W + COL_GAP.
+function renderCompoGrid() {
+  const CARD_W = 230;
+  const COL_GAP = 12;
+  const ROW_GAP = 6;
+  const HDR_COLORS = { tank: '#2b9eff', heal: '#4ade80', dps: '#ff4f6e' };
+
+  function header(label, color, width) {
+    return `<div style="display:flex; align-items:center; justify-content:center; width:${width}px; height:22px; color:${color}; font-size:12px; letter-spacing:3px; font-weight:700; border-bottom:1px solid ${color}66; margin-bottom:8px;">${esc(label)}</div>`;
+  }
+
+  function stackedCol(headerLabel, color, width, cards) {
+    return `
+      <div style="display:flex; flex-direction:column; width:${width}px;">
+        ${header(headerLabel, color, width)}
+        <div style="display:flex; flex-direction:column; gap:${ROW_GAP}px;">
+          ${cards.join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // DEMO_COMPO indices : 0=MT 1=OT 2=H1 3=H2 4=M1 5=M2 6=R1 7=R2
+  const tankCards = [renderDemoCard(DEMO_COMPO[0], CARD_W), renderDemoCard(DEMO_COMPO[1], CARD_W)];
+  const healCards = [renderDemoCard(DEMO_COMPO[2], CARD_W), renderDemoCard(DEMO_COMPO[3], CARD_W)];
+  // DPS = sous-grille 2 col × 2 row (M slots à gauche, R à droite)
+  const dpsRow0 = `<div style="display:flex; flex-direction:row; gap:${COL_GAP}px;">${renderDemoCard(DEMO_COMPO[4], CARD_W)}${renderDemoCard(DEMO_COMPO[6], CARD_W)}</div>`;
+  const dpsRow1 = `<div style="display:flex; flex-direction:row; gap:${COL_GAP}px;">${renderDemoCard(DEMO_COMPO[5], CARD_W)}${renderDemoCard(DEMO_COMPO[7], CARD_W)}</div>`;
+
+  const dpsBlockW = CARD_W * 2 + COL_GAP;
+
+  return `
+    <div style="display:flex; flex-direction:row; gap:${COL_GAP}px;">
+      ${stackedCol('TANKS', HDR_COLORS.tank, CARD_W, tankCards)}
+      ${stackedCol('HEALERS', HDR_COLORS.heal, CARD_W, healCards)}
+      <div style="display:flex; flex-direction:column; width:${dpsBlockW}px;">
+        ${header('DPS', HDR_COLORS.dps, dpsBlockW)}
+        <div style="display:flex; flex-direction:column; gap:${ROW_GAP}px;">
+          ${dpsRow0}
+          ${dpsRow1}
+        </div>
       </div>
     </div>
   `;
@@ -186,32 +240,27 @@ export async function onRequestGet({ request }) {
      </div>`
   ).join('');
 
-  const row1 = DEMO_COMPO.slice(0, 4).map(renderDemoCard).join('');
-  const row2 = DEMO_COMPO.slice(4, 8).map(renderDemoCard).join('');
-
   // Layout :
   //   1. Header brand + titre + sous-titre
   //   2. Row : [features] | [heatmap]   ← side by side
-  //   3. Compo démo 2 rows × 4 cards
+  //   3. Compo démo en colonnes TANKS | HEALERS | DPS (DPS = sous-grille 2×2)
   //   4. Footer
   // Largeurs row 2 : features 560 + gap 28 + heatmap ~430 ≈ 1018 / 1088 dispo.
+  // Largeurs row 3 (compo) : 4 × 230 + 3 × 12 = 956 / 1088 dispo.
   const html = `
-    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:36px 56px; font-family:sans-serif;">
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:32px 56px; font-family:sans-serif;">
       <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:8px;">◆ PARTY // BUILDER</div>
-      <div style="display:flex; font-size:54px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:4px;">${esc(dict.title)}</div>
-      <div style="display:flex; font-size:21px; color:#ff2e9a; margin-bottom:20px;">${esc(dict.subtitle)}</div>
+      <div style="display:flex; font-size:52px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:4px;">${esc(dict.title)}</div>
+      <div style="display:flex; font-size:21px; color:#ff2e9a; margin-bottom:18px;">${esc(dict.subtitle)}</div>
 
-      <div style="display:flex; flex-direction:row; align-items:flex-start; gap:28px; margin-bottom:20px;">
+      <div style="display:flex; flex-direction:row; align-items:flex-start; gap:28px; margin-bottom:18px;">
         <div style="display:flex; flex-direction:column; width:560px;">
           ${featureLines}
         </div>
         ${renderHeatmap(dict)}
       </div>
 
-      <div style="display:flex; flex-direction:column;">
-        <div style="display:flex; flex-direction:row; gap:8px; margin-bottom:6px;">${row1}</div>
-        <div style="display:flex; flex-direction:row; gap:8px;">${row2}</div>
-      </div>
+      ${renderCompoGrid()}
 
       <div style="display:flex; margin-top:auto; justify-content:space-between; align-items:flex-end;">
         <div style="display:flex; font-size:18px; color:#3a4a5c; letter-spacing:2px;">${esc(dict.footerHint)}</div>
