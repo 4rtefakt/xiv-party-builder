@@ -3066,11 +3066,11 @@ const STRINGS = {
     av_preset_weekendAfternoon: 'WE aprèm',
     av_preset_weekendAll: 'WE complet',
     av_preset_clear: 'Effacer',
-    av_applyDefault: '↓ Appliquer mes dispos par défaut',
+    av_applyDefault: '↓ Mes dispos',
     av_applyDefaultTitle: 'Charge tes dispos par défaut (synchronisées dans ton profil cloud) dans cette ligne',
-    av_saveAsDefault: '↑ Enregistrer comme mes dispos par défaut',
+    av_saveAsDefault: '↑ Sauver comme défaut',
     av_saveAsDefaultTitle: "Sauve les cases cochées comme tes dispos par défaut, réutilisables dans n'importe quel salon (synchro cloud)",
-    av_clearDefault: '⊘ Oublier mes dispos par défaut',
+    av_clearDefault: '⊘ Oublier',
     av_clearDefaultTitle: 'Supprime tes dispos par défaut de ton profil',
     av_clearDefaultConfirm: 'Supprimer tes dispos par défaut ? Tu pourras en redéfinir plus tard.',
     av_defaultApplied: 'Dispos par défaut appliquées',
@@ -3111,6 +3111,11 @@ const STRINGS = {
     sg_missingGroupWithAbsent: ({ n, absent }) =>
       `Il manque <strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> pour compléter le groupe ` +
       `<span style="opacity:0.7">(${absent} ${absent > 1 ? 'absent·e·s non compté·e·s' : 'absent·e non compté·e'})</span>.`,
+    sg_idealPrefix: '<span style="opacity:0.75">▸ Idéalement&nbsp;:</span> ',
+    sg_idealRole: ({ n, role, jobs }) => {
+      const roleLabel = ({ tank: 'tank', heal: 'healer', dps: 'DPS' })[role] || role;
+      return `<strong>${n} ${roleLabel}${n > 1 ? 's' : ''}</strong> <span style="opacity:0.7">(${jobs})</span>`;
+    },
     sg_noPrefs: ({ n }) => `<strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> ${n > 1 ? 'n\'ont' : 'n\'a'} pas encore renseigné de préférence.`,
     sg_needs: '⚠ Besoins identifiés',
     sg_rosterState: '◆ État du roster',
@@ -3347,11 +3352,11 @@ const STRINGS = {
     av_preset_weekendAfternoon: 'Weekend afternoon',
     av_preset_weekendAll: 'Full weekend',
     av_preset_clear: 'Clear',
-    av_applyDefault: '↓ Apply my default availability',
+    av_applyDefault: '↓ My defaults',
     av_applyDefaultTitle: 'Load your default availability (synced via your cloud profile) into this row',
-    av_saveAsDefault: '↑ Save as my default availability',
+    av_saveAsDefault: '↑ Save as default',
     av_saveAsDefaultTitle: 'Save the ticked cells as your default availability, reusable in any room (cloud-synced)',
-    av_clearDefault: '⊘ Forget my default availability',
+    av_clearDefault: '⊘ Forget',
     av_clearDefaultTitle: 'Remove your default availability from your profile',
     av_clearDefaultConfirm: 'Remove your default availability? You can set it again later.',
     av_defaultApplied: 'Default availability applied',
@@ -3390,6 +3395,11 @@ const STRINGS = {
     sg_missingGroupWithAbsent: ({ n, absent }) =>
       `Need <strong>${n} more player${n > 1 ? 's' : ''}</strong> to complete the group ` +
       `<span style="opacity:0.7">(${absent} absentee${absent > 1 ? 's' : ''} not counted)</span>.`,
+    sg_idealPrefix: '<span style="opacity:0.75">▸ Ideally:</span> ',
+    sg_idealRole: ({ n, role, jobs }) => {
+      const roleLabel = ({ tank: 'tank', heal: 'healer', dps: 'DPS' })[role] || role;
+      return `<strong>${n} ${roleLabel}${n > 1 ? 's' : ''}</strong> <span style="opacity:0.7">(${jobs})</span>`;
+    },
     sg_noPrefs: ({ n }) => `<strong>${n} player${n > 1 ? 's' : ''}</strong> ${n > 1 ? "haven't" : "hasn't"} set preferences yet.`,
     sg_needs: '⚠ Needs identified',
     sg_rosterState: '◆ Roster state',
@@ -5096,6 +5106,54 @@ function formatGap(gap) {
   return `<strong>${gap.missing} ${label}</strong>`;
 }
 
+// Construit un message du type "Idéalement : 1 DPS (MNK, DRG, …)" en
+// analysant les slots laissés vides par la compo optimale. Retourne '' si
+// la compo est complète ou que l'analyse échoue.
+//
+// Sert à donner des recommandations CONCRÈTES quand on cherche un·e
+// joueur·euse en plus, plutôt que juste "il manque 1 joueur".
+function buildIdealRecruitMessage() {
+  const result = computeOptimalAssignment({ topK: 1 });
+  if (!result || result.error) return '';
+  const compRaw = CONTENT_BASE[state.contentType];
+  if (!compRaw) return '';
+  // Pour les contenus alliancés, allianceComp donne le besoin par alliance ;
+  // sinon comp = compo totale.
+  const comp = compRaw.allianceComp || compRaw.comp;
+  if (!comp) return '';
+
+  // Compte par rôle ce qui est déjà assigné par le solver
+  const filled = { tank: 0, heal: 0, melee: 0, ranged: 0, caster: 0 };
+  const sol = result.solutions ? result.solutions[0] : result;
+  sol.results.forEach(r => {
+    if (r.assigned && filled[r.role] !== undefined) filled[r.role]++;
+  });
+
+  const missing = [];
+  if (filled.tank < comp.tank) missing.push({ role: 'tank', n: comp.tank - filled.tank });
+  if (filled.heal < comp.heal) missing.push({ role: 'heal', n: comp.heal - filled.heal });
+  const dpsFilled = filled.melee + filled.ranged + filled.caster;
+  if (dpsFilled < comp.dps) missing.push({ role: 'dps', n: comp.dps - dpsFilled });
+  if (missing.length === 0) return '';
+
+  // Liste des jobs disponibles par rôle, filtre les bannis
+  function jobsForRole(roleKey) {
+    let jobs;
+    if (roleKey === 'dps') {
+      jobs = [...JOBS_BY_ROLE.melee, ...JOBS_BY_ROLE.ranged, ...JOBS_BY_ROLE.caster];
+    } else {
+      jobs = JOBS_BY_ROLE[roleKey] || [];
+    }
+    return jobs.filter(j => !state.bannedJobs.includes(j.id)).map(j => j.id);
+  }
+
+  const parts = missing.map(m => {
+    const jobs = jobsForRole(m.role);
+    return t('sg_idealRole', { n: m.n, role: m.role, jobs: jobs.join(', ') });
+  });
+  return t('sg_idealPrefix') + parts.join(' · ');
+}
+
 function renderSuggestions() {
   const el = document.getElementById('suggestions');
   const header = document.getElementById('suggestionHeader');
@@ -5141,6 +5199,15 @@ function renderSuggestions() {
       ? t('sg_missingGroupWithAbsent', { n: missing, absent })
       : t('sg_missingGroup', { n: missing });
     messages.push(msg);
+
+    // Suggestion ciblée : si la compo optimale laisse des slots vides,
+    // indique quel·s rôle·s seraient idéalement à recruter avec la liste
+    // des jobs concernés (filtre les jobs bannis).
+    // Skip raid24 (analyse par alliance plus complexe, à faire plus tard).
+    if (!isRaid24()) {
+      const idealMsg = buildIdealRecruitMessage();
+      if (idealMsg) messages.push(idealMsg);
+    }
   }
 
   if (noPref > 0) {
