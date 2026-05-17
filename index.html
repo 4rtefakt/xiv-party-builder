@@ -6519,12 +6519,25 @@ async function publishToDiscord() {
   }
 }
 
+// Vérif d'admin "réelle" : on ne fait pas confiance aveuglément à state.isAdmin
+// (qui peut être stale entre un fetch et un autre, ou tout simplement faux si
+// le serveur l'a renvoyé via legacy path). On exige une preuve côté client :
+//   - soit notre userId est dans state.admins[] (récupéré du serveur)
+//   - soit on a un secret de récup en localStorage
+// Sans aucun des deux, on cache les options admin même si state.isAdmin serait true.
+function isReallyAdminInRoom() {
+  if (!currentRoomId || !state.isAdmin) return false;
+  const hasAdminUser = Array.isArray(state.admins) && state.admins.includes(USER_ID);
+  const hasSecret = !!getAdminSecret(currentRoomId);
+  return hasAdminUser || hasSecret;
+}
+
 function refreshDiscordButtons() {
   const publishBtn = document.getElementById('publishDiscordBtn');
   const reconfBtn = document.getElementById('reconfigureWebhookBtn');
   const dupeBtn = document.getElementById('duplicateRoomBtn');
   const refreshBtn = document.getElementById('refreshDiscordBtn');
-  const isAdminInRoom = state.isAdmin && currentRoomId;
+  const isAdminInRoom = isReallyAdminInRoom();
   if (publishBtn) publishBtn.hidden = !isAdminInRoom;
   if (reconfBtn) reconfBtn.hidden = !(isAdminInRoom && getDiscordWebhook());
   if (dupeBtn) dupeBtn.hidden = !isAdminInRoom;
