@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 19; // v19 : shift heal cards +20 et DPS cards +15 (headers inchangés) + shortenName seuil 12 chars
+const OG_LAYOUT_VERSION = 20; // v20 : retire les shifts heal/DPS (cards alignées en colonne avec leurs headers, comme v18) + shortenName seuil 12c
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -221,15 +221,9 @@ function renderColumnLayout(rows, dict, dpsLayout) {
     return `<div style="display:flex; align-items:center; justify-content:center; width:${width}px; height:30px; color:${color}; font-size:14px; letter-spacing:3px; font-weight:700; border-bottom:1px solid ${color}66;">${esc(label)}</div>`;
   }
 
-  // shift = décalage horizontal en px appliqué aux CARDS uniquement (pas au
-  // header). Utilisé pour aligner les cards heal +20px et DPS (M/R) +15px par
-  // rapport à leur header. `position:relative; left:N` ne déplace que la
-  // colonne visuellement, sans repousser les suivantes (contrairement à
-  // margin-left qui propage la shift).
-  function columnCards(cards, shift) {
-    const shiftStyle = shift ? `position:relative; left:${shift}px;` : '';
+  function columnCards(cards) {
     return `
-      <div style="${shiftStyle} display:flex; flex-direction:column; width:${COL_W}px; gap:8px;">
+      <div style="display:flex; flex-direction:column; width:${COL_W}px; gap:8px;">
         ${cards.join('')}
       </div>
     `;
@@ -256,10 +250,10 @@ function renderColumnLayout(rows, dict, dpsLayout) {
         ${header(dict.colDps,    HDR_COLORS.dps,  dpsHeaderWidth)}
       </div>
       <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; align-items:flex-start;">
-        ${columnCards(rows.tank.map(m => renderCard(m, CARD_W)), 0)}
-        ${columnCards(rows.heal.map(m => renderCard(m, CARD_W)), 20)}
-        ${columnCards(mCards, 15)}
-        ${columnCards(rCards, 15)}
+        ${columnCards(rows.tank.map(m => renderCard(m, CARD_W)))}
+        ${columnCards(rows.heal.map(m => renderCard(m, CARD_W)))}
+        ${columnCards(mCards)}
+        ${columnCards(rCards)}
       </div>
     </div>
   `;
