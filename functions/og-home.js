@@ -11,7 +11,7 @@
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, ROLE_COLOR } from '../lib/jobs.js';
 
-const HOME_OG_VERSION = 4;  // v4 : layout vertical (features full-width au-dessus des cards) + retire '&' littéral non décodé par satori
+const HOME_OG_VERSION = 5;  // v5 : ajoute mini heatmap dispos à droite des features
 const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
 const iconUrl = (jobId) => {
   const j = JOB_BY_ID[jobId];
@@ -41,6 +41,9 @@ const STRINGS = {
       'Bonus Role Composition · +5% si tous les sous-rôles',
       'Partage 1-clic Discord · zéro compte'
     ],
+    heatmapTitle: 'CRÉNEAUX COMMUNS · 7 RÉPONSES',
+    heatmapBest: 'Best : Mardi 21h → 23h (7/7)',
+    dayLabels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
     footerHint: 'gratuit · open source · cloudflare pages'
   },
   en: {
@@ -52,9 +55,27 @@ const STRINGS = {
       'Role Composition bonus · +5% with all sub-roles',
       '1-click Discord share · no account needed'
     ],
+    heatmapTitle: 'COMMON SLOTS · 7 RESPONSES',
+    heatmapBest: 'Best : Tuesday 21h → 23h (7/7)',
+    dayLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     footerHint: 'free · open source · cloudflare pages'
   }
 };
+
+// Données démo de la heatmap : reflète une compo de raid hebdo typique
+// (soirées de semaine 19h-23h + plus de couverture en weekend). Mardi 21h/22h
+// = max 7/7 → cellules en cyan pour matcher le "best slot" mis en avant.
+const HEATMAP_HOURS = ['8h','10h','14h','16h','18h','19h','20h','21h','22h','23h'];
+const HEATMAP_COUNTS = [
+  [0, 0, 0, 0, 0, 0, 3, 5, 5, 4],  // Mon
+  [0, 0, 0, 0, 0, 0, 4, 7, 7, 5],  // Tue
+  [0, 0, 0, 0, 0, 0, 4, 5, 5, 4],  // Wed
+  [0, 0, 0, 0, 0, 0, 0, 4, 5, 4],  // Thu
+  [0, 0, 0, 0, 0, 0, 3, 5, 5, 5],  // Fri
+  [0, 2, 4, 4, 4, 4, 5, 5, 5, 4],  // Sat
+  [0, 2, 4, 4, 3, 4, 5, 5, 5, 4]   // Sun
+];
+const HEATMAP_MAX = 7;
 
 function pickLang(headers) {
   const al = (headers.get('accept-language') || '').toLowerCase();
@@ -68,6 +89,59 @@ function pickLang(headers) {
 // casseraient le parsing.
 function esc(s) {
   return String(s).replace(/[<>]/g, c => ({ '<':'&lt;','>':'&gt;' }[c]));
+}
+
+// Couleur d'une cellule heatmap selon son count (0 → max).
+// Max = cyan (best slot, matches le surlignage de l'UI), gradient de vert
+// pour les autres. Texte sombre sur fonds intenses, clair sur fonds faibles.
+function heatmapCellColor(count) {
+  if (count === 0) return { bg: 'rgba(255,255,255,0.04)', fg: 'transparent' };
+  if (count >= HEATMAP_MAX) return { bg: 'rgba(0,229,255,0.45)', fg: '#062b30' };
+  const t = count / HEATMAP_MAX;
+  if (t >= 0.7) return { bg: 'rgba(74,222,128,0.55)', fg: '#062114' };
+  if (t >= 0.45) return { bg: 'rgba(74,222,128,0.35)', fg: '#062114' };
+  if (t >= 0.25) return { bg: 'rgba(74,222,128,0.18)', fg: '#a7e8c0' };
+  return { bg: 'rgba(74,222,128,0.10)', fg: '#a7e8c0' };
+}
+
+// Mini heatmap dispos pour l'OG. Layout : header (titre vert), grille 10 cols
+// × 7 lignes (colonne 0 = labels jours), footer (best slot en cyan).
+// Dimensions : label 36px + 10 × 34px cells = 376px ; total avec border ≈ 410px.
+function renderHeatmap(dict) {
+  const CELL_W = 34;
+  const CELL_H = 22;
+  const LABEL_W = 36;
+
+  const headerCells = HEATMAP_HOURS.map(h =>
+    `<div style="display:flex; align-items:center; justify-content:center; width:${CELL_W}px; height:18px; color:#5a6a7c; font-size:10px; font-family:monospace;">${esc(h)}</div>`
+  ).join('');
+
+  const dayRows = HEATMAP_COUNTS.map((counts, di) => {
+    const cells = counts.map(c => {
+      const col = heatmapCellColor(c);
+      return `<div style="display:flex; align-items:center; justify-content:center; width:${CELL_W}px; height:${CELL_H}px; background:${col.bg}; color:${col.fg}; font-size:10px; font-weight:700; font-family:monospace; border:1px solid rgba(0,0,0,0.5);">${c > 0 ? c : ''}</div>`;
+    }).join('');
+    return `
+      <div style="display:flex; flex-direction:row; align-items:center;">
+        <div style="display:flex; align-items:center; justify-content:flex-start; width:${LABEL_W}px; height:${CELL_H}px; color:#5a6a7c; font-size:11px;">${esc(dict.dayLabels[di])}</div>
+        ${cells}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div style="display:flex; flex-direction:column; padding:10px 12px; border:1px solid rgba(74,222,128,0.25); background:rgba(74,222,128,0.04);">
+      <div style="display:flex; font-size:11px; color:#4ade80; letter-spacing:2px; font-weight:700; margin-bottom:8px;">📅 ${esc(dict.heatmapTitle)}</div>
+      <div style="display:flex; flex-direction:row; margin-bottom:2px;">
+        <div style="display:flex; width:${LABEL_W}px;"></div>
+        ${headerCells}
+      </div>
+      <div style="display:flex; flex-direction:column;">
+        ${dayRows}
+      </div>
+      <div style="display:flex; font-size:12px; color:#00e5ff; margin-top:8px; font-weight:600;">${esc(dict.heatmapBest)}</div>
+    </div>
+  `;
 }
 
 function renderDemoCard(player) {
@@ -115,14 +189,23 @@ export async function onRequestGet({ request }) {
   const row1 = DEMO_COMPO.slice(0, 4).map(renderDemoCard).join('');
   const row2 = DEMO_COMPO.slice(4, 8).map(renderDemoCard).join('');
 
+  // Layout :
+  //   1. Header brand + titre + sous-titre
+  //   2. Row : [features] | [heatmap]   ← side by side
+  //   3. Compo démo 2 rows × 4 cards
+  //   4. Footer
+  // Largeurs row 2 : features 560 + gap 28 + heatmap ~430 ≈ 1018 / 1088 dispo.
   const html = `
-    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:42px 56px; font-family:sans-serif;">
-      <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:10px;">◆ PARTY // BUILDER</div>
-      <div style="display:flex; font-size:56px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:4px;">${esc(dict.title)}</div>
-      <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:22px;">${esc(dict.subtitle)}</div>
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:36px 56px; font-family:sans-serif;">
+      <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:8px;">◆ PARTY // BUILDER</div>
+      <div style="display:flex; font-size:54px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:4px;">${esc(dict.title)}</div>
+      <div style="display:flex; font-size:21px; color:#ff2e9a; margin-bottom:20px;">${esc(dict.subtitle)}</div>
 
-      <div style="display:flex; flex-direction:column; margin-bottom:22px;">
-        ${featureLines}
+      <div style="display:flex; flex-direction:row; align-items:flex-start; gap:28px; margin-bottom:20px;">
+        <div style="display:flex; flex-direction:column; width:560px;">
+          ${featureLines}
+        </div>
+        ${renderHeatmap(dict)}
       </div>
 
       <div style="display:flex; flex-direction:column;">
