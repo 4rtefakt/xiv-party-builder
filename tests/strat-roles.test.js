@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignStratRoles, reorderResultsForDpsLayout } from '../lib/strat-roles.js';
+import { assignStratRoles, assignDpsGridPositions, getDpsLayout } from '../lib/strat-roles.js';
 
 function r(name, role) { return { name, role, assigned: true }; }
 function bench(name) { return { name, assigned: false }; }
@@ -153,77 +153,116 @@ test('Array null/undefined → renvoie tel quel', () => {
   assert.equal(assignStratRoles(undefined, 'raid8'), undefined);
 });
 
-// --- reorderResultsForDpsLayout ---
+// --- assignDpsGridPositions ---
 
-test('reorder : 2 mêlées + 2 autres → mêlées en col 0, autres en col 1', () => {
-  // Solver order arbitraire : [caster, melee, ranged, melee]
-  // Après reorder : [melee, caster, melee, ranged]
-  const results = [
-    r('T1', 'tank'), r('T2', 'tank'), r('H1', 'heal'), r('H2', 'heal'),
-    r('C', 'caster'),
-    r('M1', 'melee'),
-    r('R', 'ranged'),
-    r('M2', 'melee')
-  ];
-  const out = reorderResultsForDpsLayout(results);
-  // Les DPS aux mêmes index (4,5,6,7), réorganisés
-  assert.equal(out[4].role, 'melee', 'M1 slot = première mêlée');
-  assert.equal(out[5].role, 'caster', 'R1 slot = première non-mêlée');
-  assert.equal(out[6].role, 'melee', 'M2 slot = deuxième mêlée');
-  assert.equal(out[7].role, 'ranged', 'R2 slot = deuxième non-mêlée');
+test('grid positions : 2 mêlées + 2 autres → toutes positions remplies dans l\'ordre M-R-M-R', () => {
+  const m1 = r('M1', 'melee');
+  const c1 = r('C1', 'caster');
+  const m2 = r('M2', 'melee');
+  const r1 = r('R1', 'ranged');
+  // Order solver arbitraire
+  const results = [r('T', 'tank'), c1, m1, r1, m2];
+  assignDpsGridPositions(results, 4);
+  // Phase 1 : i=0 M→m1 (1ère mêlée), i=1 R→c1 (1ère non-mêlée), i=2 M→m2, i=3 R→r1
+  assert.equal(m1.gridPosition, 0);
+  assert.equal(c1.gridPosition, 1);
+  assert.equal(m2.gridPosition, 2);
+  assert.equal(r1.gridPosition, 3);
 });
 
-test('reorder : 3 mêlées + 1 autre → 2 mêlées en M, 1 mêlée en R + 1 autre', () => {
-  const results = [
-    r('M1', 'melee'), r('M2', 'melee'), r('M3', 'melee'),
-    r('C', 'caster')
-  ];
-  const out = reorderResultsForDpsLayout(results);
-  // i=0 (M): mêlée. i=1 (R): autre. i=2 (M): mêlée. i=3 (R): mêlée (fallback, plus d'autres).
-  assert.equal(out[0].name, 'M1');
-  assert.equal(out[1].name, 'C');
-  assert.equal(out[2].name, 'M2');
-  assert.equal(out[3].name, 'M3', 'mêlée résiduelle en R2');
+test('grid positions : 1 mêlée + 2 non-mêlées → M2 vide (cas user)', () => {
+  // Cas concret du screenshot : Silaron (DRG mêlée), Rhesh'a (DNC ranged),
+  // Sionra (RDM caster). Layout attendu :
+  //   M1=Silaron, R1=Rhesh'a, M2=VIDE, R2=Sionra
+  const sil = r('Silaron', 'melee');
+  const rhe = r('Rhesh\'a', 'ranged');
+  const sio = r('Sionra', 'caster');
+  const results = [r('T', 'tank'), r('H', 'heal'), sil, rhe, sio];
+  assignDpsGridPositions(results, 4);
+  assert.equal(sil.gridPosition, 0, 'Silaron mêlée → M1');
+  assert.equal(rhe.gridPosition, 1, 'Rhesh\'a ranged → R1');
+  assert.equal(sio.gridPosition, 3, 'Sionra caster → R2 (pas M2)');
 });
 
-test('reorder : seulement des non-mêlées → ordre original préservé', () => {
-  const results = [
-    r('R', 'ranged'), r('C1', 'caster'), r('C2', 'caster')
-  ];
-  const out = reorderResultsForDpsLayout(results);
-  // Pas de mêlées, tous les positions M et R sont remplies par des non-mêlées
-  // dans l'ordre où elles arrivent.
-  assert.equal(out[0].name, 'R');
-  assert.equal(out[1].name, 'C1');
-  assert.equal(out[2].name, 'C2');
+test('grid positions : 3 mêlées + 1 non-mêlée → overflow mêlée en R2', () => {
+  // 3 mêlées : remplissent M1, M2, et déborde en R2.
+  // 1 non-mêlée : en R1.
+  const m1 = r('M1', 'melee');
+  const m2 = r('M2', 'melee');
+  const m3 = r('M3', 'melee');
+  const o = r('O', 'ranged');
+  const results = [m1, m2, m3, o];
+  assignDpsGridPositions(results, 4);
+  assert.equal(m1.gridPosition, 0);
+  assert.equal(o.gridPosition, 1);
+  assert.equal(m2.gridPosition, 2);
+  assert.equal(m3.gridPosition, 3, 'mêlée en excédent → R2 par spillover');
 });
 
-test('reorder : couplé à assignStratRoles → labels matchent les rôles', () => {
-  // Cas typique : solver donne [caster, melee, melee]. Reorder puis labels
-  // donnent M1=melee, R1=caster, M2=melee.
-  const cas = r('Onyxis', 'caster'); cas.jobId = 'RDM';
-  const me1 = r('Sionra', 'melee');  me1.jobId = 'VPR';
-  const me2 = r('Silaron', 'melee'); me2.jobId = 'DRG';
-  const results = [r('T', 'tank'), r('H', 'heal'), cas, me1, me2];
-
-  const reordered = reorderResultsForDpsLayout(results);
-  assignStratRoles(reordered, 'raid8');
-
-  assert.equal(reordered[2].name, 'Sionra', 'M1 = première mêlée (pas le caster)');
-  assert.equal(reordered[2].stratRole, 'M1');
-  assert.equal(reordered[3].name, 'Onyxis', 'R1 = caster');
-  assert.equal(reordered[3].stratRole, 'R1');
-  assert.equal(reordered[4].name, 'Silaron', 'M2 = deuxième mêlée');
-  assert.equal(reordered[4].stratRole, 'M2');
+test('grid positions : 0 mêlée + 3 non-mêlées → 1 overflow en M', () => {
+  // Symétrique : 3 non-mêlées remplissent R1 et R2, et 1 déborde en M1.
+  const c = r('C', 'caster');
+  const r1 = r('R1', 'ranged');
+  const r2 = r('R2', 'ranged');
+  const results = [c, r1, r2];
+  assignDpsGridPositions(results, 4);
+  // Phase 1 : R1=c, R2=r1 (M1 et M2 restent null par manque de mêlées)
+  // Phase 2 : M1 vide → spillover r2 (non-mêlée restante)
+  assert.equal(c.gridPosition, 1, 'caster → R1');
+  assert.equal(r1.gridPosition, 3, 'ranged → R2');
+  assert.equal(r2.gridPosition, 0, 'ranged excédentaire → M1 par spillover');
 });
 
-test('reorder : roster sans DPS → renvoyé inchangé', () => {
+test('grid positions : 0 mêlée + 2 non-mêlées (dungeon) → R1 + M1 (spillover)', () => {
+  // Dungeon : slotCount = 2 (1 M, 1 R). 2 non-mêlées.
+  const c = r('C', 'caster');
+  const r1 = r('R', 'ranged');
+  const results = [c, r1];
+  assignDpsGridPositions(results, 2);
+  assert.equal(c.gridPosition, 1, 'caster → R1');
+  assert.equal(r1.gridPosition, 0, 'ranged excédentaire → M1 par spillover');
+});
+
+test('grid positions : couplé à assignStratRoles → labels matchent les positions', () => {
+  // Cas user concret reproduit
+  const sil = r('Silaron', 'melee');
+  const rhe = r('Rhesh\'a', 'ranged');
+  const sio = r('Sionra', 'caster');
+  const results = [r('T', 'tank'), r('H', 'heal'), sil, rhe, sio];
+  assignDpsGridPositions(results, 4);
+  assignStratRoles(results, 'raid8');
+  assert.equal(sil.stratRole, 'M1');
+  assert.equal(rhe.stratRole, 'R1');
+  assert.equal(sio.stratRole, 'R2', 'caster en pos 3 → R2 (pas M2)');
+});
+
+test('grid positions : sans DPS → no-op', () => {
   const results = [r('T', 'tank'), r('H', 'heal'), bench('B')];
-  const out = reorderResultsForDpsLayout(results);
-  assert.deepEqual(out, results);
+  assignDpsGridPositions(results, 4);
+  // Rien ne devrait avoir gridPosition
+  results.forEach(r => assert.equal(r.gridPosition, undefined));
 });
 
-test('reorder : null/undefined → renvoie tel quel', () => {
-  assert.equal(reorderResultsForDpsLayout(null), null);
-  assert.equal(reorderResultsForDpsLayout(undefined), undefined);
+// --- getDpsLayout ---
+
+test('getDpsLayout : 1 mêlée + 2 non-mêlées → layout [mel, oth, null, oth]', () => {
+  const sil = r('Silaron', 'melee');
+  const rhe = r('Rhesh\'a', 'ranged');
+  const sio = r('Sionra', 'caster');
+  const results = [r('T', 'tank'), r('H', 'heal'), sil, rhe, sio];
+  assignDpsGridPositions(results, 4);
+  const layout = getDpsLayout(results, 4);
+  assert.equal(layout.length, 4);
+  assert.equal(layout[0], sil);
+  assert.equal(layout[1], rhe);
+  assert.equal(layout[2], null, 'M2 vide');
+  assert.equal(layout[3], sio);
+});
+
+test('getDpsLayout : sans gridPosition (fallback) → layout vide', () => {
+  // Si on n'a pas appelé assignDpsGridPositions, les DPS n'ont pas de
+  // gridPosition → layout reste tout null (on n'invente pas).
+  const results = [r('T', 'tank'), r('M', 'melee')];
+  const layout = getDpsLayout(results, 4);
+  assert.deepEqual(layout, [null, null, null, null]);
 });

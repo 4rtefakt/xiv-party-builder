@@ -1639,6 +1639,23 @@
     grid-template-columns: 1fr 1fr;
     gap: 0.4rem;
   }
+  /* Placeholder pour un slot DPS vide (ex: layout 1 mêlée + 2 non-mêlées
+     en raid 8 → M2 vide, R2 occupé). Préserve l'alignement de la grille
+     sans imiter une vraie carte. */
+  .dps-placeholder {
+    border: 1px dashed var(--line);
+    background: rgba(0, 0, 0, 0.15);
+    min-height: 56px;
+    opacity: 0.4;
+  }
+  .dps-placeholder::before {
+    content: '—';
+    display: block;
+    color: var(--ink-faint);
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    padding: 0.5rem;
+  }
   @media (max-width: 1024px) {
     .result-col-dps { grid-column: span 2; }
   }
@@ -2958,7 +2975,7 @@ import {
   analyzeAvailability, bestSlotWithTail,
   countAvailCells, AVAIL_PRESETS, applyAvailPreset
 } from './lib/availability.js';
-import { assignStratRoles, reorderResultsForDpsLayout } from './lib/strat-roles.js';
+import { assignStratRoles, assignDpsGridPositions, getDpsLayout } from './lib/strat-roles.js';
 import {
   MAX_PRESETS, MAX_PRESET_NAME_LEN,
   MAX_TEMPLATES, MAX_TEMPLATE_NAME_LEN,
@@ -4963,7 +4980,11 @@ function build4ColLayout(targetGrid, results) {
     targetGrid.appendChild(colEl);
   });
 
-  // Colonne DPS : large (span 2) + sous-grid 2x2 pour permettre les swaps libres
+  // Colonne DPS : large (span 2) + sous-grid 2 colonnes. Le layout DPS
+  // est position-based : on rend les cards aux positions M/R selon la
+  // gridPosition de chaque DPS (assignée par assignDpsGridPositions).
+  // Si un slot est vide (ex: 1 mêlée pour 2 M slots), on rend un
+  // placeholder transparent pour préserver l'alignement.
   const dpsCol = document.createElement('div');
   dpsCol.className = 'result-col result-col-dps';
   const dpsHdr = document.createElement('div');
@@ -4978,7 +4999,21 @@ function build4ColLayout(targetGrid, results) {
   } else {
     const innerGrid = document.createElement('div');
     innerGrid.className = 'dps-cards-grid';
-    groups.dps.forEach(r => innerGrid.appendChild(buildAssignmentCard(r, results)));
+    // Récupère le slot count attendu (4 pour raid8 / chaotic alliance,
+    // 2 pour dungeon, 5 pour raid24 standard alliance)
+    const compBase = CONTENT_BASE[state.contentType];
+    const compDef = compBase && (compBase.allianceComp || compBase.comp);
+    const dpsSlotCount = compDef ? compDef.dps : groups.dps.length;
+    const layout = getDpsLayout(results, dpsSlotCount);
+    layout.forEach(item => {
+      if (item) {
+        innerGrid.appendChild(buildAssignmentCard(item, results));
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'dps-placeholder';
+        innerGrid.appendChild(placeholder);
+      }
+    });
     dpsCol.appendChild(innerGrid);
   }
   targetGrid.appendChild(dpsCol);
@@ -4991,13 +5026,14 @@ function renderSolution(sol) {
   const grid = document.getElementById('assignmentGrid');
   const warningArea = document.getElementById('warningArea');
   const stats = sol.stats;
-  // Réorganise les DPS dans `results` pour que les mêlées tombent dans les
-  // slots M (col 0) et les ranged/casters dans les slots R (col 1), puis
-  // applique les labels positionnels (M1=col0row0, R1=col1row0, etc.).
-  // Le reorder modifie sol.results sur place via slice → on a une référence
-  // propre pour renderResult / les drag handlers.
-  const results = reorderResultsForDpsLayout(sol.results);
-  sol.results = results;
+  const results = sol.results;
+  // Assigne gridPosition à chaque DPS pour placer mêlées en col M (0, 2)
+  // et non-mêlées en col R (1, 3) — avec gestion des excédents/manques.
+  // Puis assignStratRoles utilise gridPosition pour les labels.
+  const compBase = CONTENT_BASE[state.contentType];
+  const compDef = compBase && (compBase.allianceComp || compBase.comp);
+  const dpsSlotCount = compDef ? compDef.dps : 4;
+  assignDpsGridPositions(results, dpsSlotCount);
   assignStratRoles(results, state.contentType);
 
   // Stat "frustration max" : le pire rang attribué
@@ -5236,8 +5272,12 @@ function renderRaid24Result() {
       allianceGrid.appendChild(empty);
     } else {
       const sol = result.solutions[0];
-      // Réorganise (mêlées en M, autres en R) puis étiquette par alliance.
-      sol.results = reorderResultsForDpsLayout(sol.results);
+      // Layout DPS positionnel par alliance (mêlées en col M, autres en R),
+      // puis labels strat.
+      const compBase24 = CONTENT_BASE[state.contentType];
+      const compDef24 = compBase24 && (compBase24.allianceComp || compBase24.comp);
+      const dpsSlot24 = compDef24 ? compDef24.dps : 4;
+      assignDpsGridPositions(sol.results, dpsSlot24);
       assignStratRoles(sol.results, state.contentType);
       const bench = build4ColLayout(allianceGrid, sol.results);
       bench.forEach(b => allBench.push(b));

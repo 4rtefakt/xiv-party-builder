@@ -8,7 +8,7 @@ import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, CONTENT_COMP, ROLE_COLOR } from '../../lib/jobs.js';
 import { buildSlotsFromComp, computeOptimalAssignment } from '../../lib/scoring.js';
 import { analyzeAvailability, bestSlotWithTail } from '../../lib/availability.js';
-import { assignStratRoles, reorderResultsForDpsLayout } from '../../lib/strat-roles.js';
+import { assignStratRoles, assignDpsGridPositions, getDpsLayout } from '../../lib/strat-roles.js';
 
 const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 
@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 11; // v11 : SUBROLE_BONUS 10→30, le solver privilégie + le full +5%
+const OG_LAYOUT_VERSION = 12; // v12 : DPS layout strict M/R avec slots vides (plus de spillover M↔R)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -96,23 +96,18 @@ function computeForOg(data) {
   });
 
   if (out.error) {
-    return { players: rawPlayers, assignment: new Array(rawPlayers.length).fill(null), results: [] };
+    return { players: rawPlayers, assignment: new Array(rawPlayers.length).fill(null), results: [], comp: null };
   }
 
-  // Réorganise les DPS (mêlées en col M, autres en col R) avant de
-  // reconstruire l'assignment côté caller — l'order des entries détermine
-  // les positions dans la sous-grille DPS de l'OG.
-  const reordered = reorderResultsForDpsLayout(out.results);
-
-  const assignment = reordered.map(r => {
+  // L'assignment et les players gardent l'ordre solver. La reorganisation
+  // DPS pour le layout (mêlées en col M, autres en col R) se fait via
+  // gridPosition annotée sur chaque DPS, le rendu utilise getDpsLayout
+  // pour placer dans la sous-grille en respectant les positions / vides.
+  const assignment = out.results.map(r => {
     if (!r.assigned) return null;
     return { jobId: r.jobId };
   });
-  // Le caller doit aussi récupérer `players` reordonné (les noms doivent
-  // matcher les nouvelles positions). On reconstruit players via name.
-  const playersByName = new Map(rawPlayers.map(p => [p.name, p]));
-  const reorderedPlayers = reordered.map(r => playersByName.get(r.name) || { name: r.name });
-  return { players: reorderedPlayers, assignment, results: reordered };
+  return { players: rawPlayers, assignment, results: out.results, comp: base.comp };
 }
 
 function esc(s) {
@@ -189,6 +184,15 @@ function renderRow(roleKey, members) {
   return `<div style="display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:10px;">${cards}</div>`;
 }
 
+// Placeholder pour un slot DPS vide dans la sous-grille (ex: 1 mêlée +
+// 2 non-mêlées en raid8 → M2 vide). Préserve l'alignement sans imiter
+// une vraie carte.
+function renderEmptyDpsCard(width) {
+  return `
+    <div style="display:flex; align-items:center; justify-content:center; height:54px; width:${width}px; border:1px dashed rgba(255,255,255,0.1); background:rgba(0,0,0,0.15); color:#3a4a5c; font-size:18px; font-family:monospace;">—</div>
+  `;
+}
+
 // Layout en colonnes (TANKS | HEALERS | DPS 2×2) — mime la composition finale
 // affichée en bas de la page web. Utilisé pour les contenus ≤ 8 joueurs
 // (dungeon, raid8) où la grille tient confortablement dans 1200×630.
@@ -197,7 +201,9 @@ function renderRow(roleKey, members) {
 //   tank/heal col  = COL_W (260px) chacune
 //   dps col bloc   = 2 × COL_W (520px) découpé en sous-grille 2 cartes/ligne
 //   3 colonnes + 2 gaps de 20px = 1080px, tient dans 1200 - 2*56 padding.
-function renderColumnLayout(rows, dict) {
+// `dpsLayout` est un tableau sparse (size = slotCount, certains items
+// peuvent être null = slot vide). On itère dans l'ordre des positions.
+function renderColumnLayout(rows, dict, dpsLayout) {
   const COL_W = 260;
   const COL_GAP = 20;
   const HDR_COLORS = {
@@ -223,12 +229,14 @@ function renderColumnLayout(rows, dict) {
   // imprévisible avec `flex-wrap` (il rend souvent en colonne stretched
   // même quand le container fait la bonne largeur), donc on découpe nous-
   // mêmes en sous-rows explicites de 2 cartes.
+  // dpsLayout est un tableau sparse : null aux positions vides.
   const dpsWidth = COL_W * 2 + COL_GAP;
+  const dpsSource = Array.isArray(dpsLayout) && dpsLayout.length > 0 ? dpsLayout : rows.dps;
   const dpsRows = [];
-  for (let i = 0; i < rows.dps.length; i += 2) dpsRows.push(rows.dps.slice(i, i + 2));
+  for (let i = 0; i < dpsSource.length; i += 2) dpsRows.push(dpsSource.slice(i, i + 2));
   const dpsGrid = dpsRows.map(rowItems => `
     <div style="display:flex; flex-direction:row; gap:${COL_GAP}px;">
-      ${rowItems.map(m => renderCard(m, COL_W)).join('')}
+      ${rowItems.map(m => m ? renderCard(m, COL_W) : renderEmptyDpsCard(COL_W)).join('')}
     </div>
   `).join('');
 
@@ -296,8 +304,15 @@ export async function onRequestGet({ params, env, request }) {
   // d'alliance, et le layout par lignes ne distingue pas les alliances :
   // afficher les labels serait trompeur. On les omet ici, ils restent
   // visibles sur la page (rendue par alliance, cf. renderRaid24Result).
+  let dpsLayout = null;
   if (useColumnLayout && Array.isArray(results) && results.length > 0) {
+    const compRaw = CONTENT_COMP[data.c];
+    const dpsSlotCount = (compRaw && compRaw.comp && compRaw.comp.dps) || 4;
+    // Annote gridPosition sur chaque DPS pour placement positionnel
+    // (mêlées en col M, autres en col R, gaps possibles)
+    assignDpsGridPositions(results, dpsSlotCount);
     assignStratRoles(results, data.c);
+    dpsLayout = new Array(dpsSlotCount).fill(null);
   }
 
   const rows = useColumnLayout
@@ -314,17 +329,25 @@ export async function onRequestGet({ params, env, request }) {
     const locked = !!(p && p.lockedJob && p.lockedJob === a.jobId);
     if (locked) lockedCount++;
     const stratRole = results && results[i] ? results[i].stratRole : undefined;
+    const card = { name: playerName, job, locked, stratRole };
     if (useColumnLayout) {
-      // Tank / Heal séparés, tout le reste (melee + ranged + caster) dans dps,
-      // dans l'ordre des joueurs assignés (= ordre du résultat scoring).
       if (job.role === 'tank' || job.role === 'heal') {
-        rows[job.role].push({ name: playerName, job, locked, stratRole });
+        rows[job.role].push(card);
       } else {
-        rows.dps.push({ name: playerName, job, locked, stratRole });
+        // DPS : placement positionnel via gridPosition annotée par
+        // assignDpsGridPositions (mêlées en col M, autres en col R).
+        const pos = results[i] && typeof results[i].gridPosition === 'number'
+          ? results[i].gridPosition
+          : -1;
+        if (dpsLayout && pos >= 0 && pos < dpsLayout.length) {
+          dpsLayout[pos] = card;
+        } else {
+          rows.dps.push(card); // fallback (ne devrait pas arriver)
+        }
       }
     } else {
       const rowKey = job.role === 'caster' ? 'ranged' : job.role;
-      (rows[rowKey] || rows.ranged).push({ name: playerName, job, locked, stratRole });
+      (rows[rowKey] || rows.ranged).push(card);
     }
   });
 
@@ -375,7 +398,7 @@ export async function onRequestGet({ params, env, request }) {
       <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:${bestSlotLine ? '12' : '26'}px;">${esc(subtitle)}</div>
       ${bestSlotLine}
 
-      ${useColumnLayout ? renderColumnLayout(rows, dict) : (
+      ${useColumnLayout ? renderColumnLayout(rows, dict, dpsLayout) : (
         renderRow('tank', rows.tank) +
         renderRow('heal', rows.heal) +
         renderRow('melee', rows.melee) +
