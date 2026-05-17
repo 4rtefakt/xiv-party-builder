@@ -214,6 +214,32 @@
     background: rgba(0, 229, 255, 0.12);
     box-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
   }
+  /* Discret par défaut : se révèle au hover. Sert à libérer une ligne
+     que l'utilisateur·ice a réservée mais qu'iel ne veut plus garder
+     (équivalent du Réserver en sens inverse). */
+  .unclaim-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    opacity: 0.55;
+  }
+  .unclaim-btn:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: rgba(255, 46, 154, 0.08);
+    opacity: 1;
+  }
   .crown-btn {
     background: transparent;
     border: 1px solid transparent;
@@ -2483,6 +2509,8 @@ const STRINGS = {
     // Permissions / claim
     perm_claim: 'Réserver',
     perm_claimTitle: 'Réserver cette ligne (claim)',
+    perm_unclaim: 'Libérer',
+    perm_unclaimTitle: 'Libérer cette ligne (annuler ma réservation)',
     perm_yours: 'Toi',
     perm_owner: 'Owner',
     perm_admin: 'Admin',
@@ -2697,6 +2725,8 @@ const STRINGS = {
     // Permissions / claim
     perm_claim: 'Claim',
     perm_claimTitle: 'Claim this row',
+    perm_unclaim: 'Release',
+    perm_unclaimTitle: 'Release this row (cancel my claim)',
     perm_yours: 'You',
     perm_owner: 'Owner',
     perm_admin: 'Admin',
@@ -3098,6 +3128,24 @@ function buildPlayerRow(player, idx) {
         scheduleAutoSave(150); // save rapide pour matérialiser le claim côté serveur
       });
       row.appendChild(claimBtn);
+    }
+
+    // Bouton Libérer : visible sur SA propre ligne. Permet de rendre la
+    // ligne disponible (claimedBy → null) sans toucher au reste. Côté
+    // serveur, normalizeForNonAdminMerge accepte déjà ce clear.
+    if (isMine) {
+      const unclaimBtn = document.createElement('button');
+      unclaimBtn.className = 'unclaim-btn';
+      unclaimBtn.textContent = '✕';
+      unclaimBtn.title = t('perm_unclaimTitle');
+      unclaimBtn.setAttribute('aria-label', t('perm_unclaim'));
+      unclaimBtn.addEventListener('click', () => {
+        player.claimedBy = null;
+        renderPlayers();
+        renderSuggestions();
+        scheduleAutoSave(150);
+      });
+      row.appendChild(unclaimBtn);
     }
 
     const presenceEl = document.createElement('button');
