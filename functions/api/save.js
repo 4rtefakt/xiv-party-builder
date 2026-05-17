@@ -26,8 +26,10 @@ const VALID_PRESENCE = new Set(['in', 'maybe', 'out']);
 // inter-projet en runtime worker, pattern existant)
 const VALID_AVAIL_HOURS = new Set([8, 10, 14, 16, 18, 19, 20, 21, 22, 23]);
 const VALID_AVAIL_DAYS = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
-const MAX_BODY_BYTES = 16384; // élargi pour les dispos (jusqu'à 7 jours × 10h × 24 joueurs)
-const MAX_PLAYERS = 24;
+const MAX_BODY_BYTES = 32768; // 32ko : couvre 32 joueurs avec prefs + dispos + notes
+// 32 = taille raid24 (24) + ~8 absent·es de réserve. Couvre le cas réel des
+// raid statiques qui notent les dispos de + de monde que la taille effective.
+const MAX_PLAYERS = 32;
 const MAX_NAME_LEN = 32;
 const MAX_NOTE_LEN = 200;
 const MAX_WHEN_LEN = 80;
