@@ -150,11 +150,18 @@ function renderColumnLayout(rows, dict) {
     `;
   }
 
-  // DPS = colonne large avec sous-grille flex-wrap (2 cartes / ligne).
-  // L'ordre des DPS est conservé tel que reçu dans `rows.dps` (= ordre des
-  // joueurs assignés dans le résultat).
-  const dpsCards = rows.dps.map(m => renderCard(m, COL_W));
-  const dpsWidth = COL_W * 2 + COL_GAP; // 2 cartes côte à côte + leur gap
+  // DPS = colonne large avec sous-grille 2 cartes / ligne. Satori est
+  // imprévisible avec `flex-wrap` (il rend souvent en colonne stretched
+  // même quand le container fait la bonne largeur), donc on découpe nous-
+  // mêmes en sous-rows explicites de 2 cartes.
+  const dpsWidth = COL_W * 2 + COL_GAP;
+  const dpsRows = [];
+  for (let i = 0; i < rows.dps.length; i += 2) dpsRows.push(rows.dps.slice(i, i + 2));
+  const dpsGrid = dpsRows.map(rowItems => `
+    <div style="display:flex; flex-direction:row; gap:${COL_GAP}px;">
+      ${rowItems.map(m => renderCard(m, COL_W)).join('')}
+    </div>
+  `).join('');
 
   return `
     <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; align-items:flex-start;">
@@ -162,8 +169,8 @@ function renderColumnLayout(rows, dict) {
       ${column(dict.colHeals, HDR_COLORS.heal, COL_W, rows.heal.map(m => renderCard(m, COL_W)))}
       <div style="display:flex; flex-direction:column; width:${dpsWidth}px;">
         ${header(dict.colDps, HDR_COLORS.dps, dpsWidth)}
-        <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:${COL_GAP}px ${COL_GAP}px;">
-          ${dpsCards.join('')}
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          ${dpsGrid}
         </div>
       </div>
     </div>
