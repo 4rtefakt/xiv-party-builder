@@ -15,7 +15,7 @@ const iconUrl = (job) => ICON_BASE + job.icon + '.png';
 
 const OG_STRINGS = {
   fr: {
-    contentLabels: { dungeon: 'Donjon',  raid8: 'Raid 8', raid24: 'Raid 24', raid24chaotic: 'Chaotic 24' },
+    contentLabels: { dungeon: 'Donjon',  raid8: 'Raid', raid24: 'Raid Alliance', raid24chaotic: 'Raid Chaotic' },
     playerLabel: (n) => n > 1 ? 'joueur·euse·s' : 'joueur·euse',
     bench: ({ n }) => ` · ${n} au banc`,
     locked: ({ n }) => ` · ${n} verrouillé·e·s`,
@@ -23,7 +23,7 @@ const OG_STRINGS = {
     salon: ({ id }) => `salon ${id}`
   },
   en: {
-    contentLabels: { dungeon: 'Dungeon', raid8: 'Raid 8', raid24: 'Raid 24', raid24chaotic: 'Chaotic 24' },
+    contentLabels: { dungeon: 'Dungeon', raid8: 'Raid', raid24: 'Alliance Raid', raid24chaotic: 'Chaotic Raid' },
     playerLabel: (n) => n > 1 ? 'players' : 'player',
     bench: ({ n }) => ` · ${n} on bench`,
     locked: ({ n }) => ` · ${n} locked`,

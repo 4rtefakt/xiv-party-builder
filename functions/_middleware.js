@@ -6,11 +6,11 @@ const ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
 
 const STRINGS = {
   fr: {
-    contentLabel: { dungeon: 'Donjon', raid8: 'Raid 8', raid24: 'Alliance 24', raid24chaotic: 'Chaotic 24' },
+    contentLabel: { dungeon: 'Donjon', raid8: 'Raid', raid24: 'Raid Alliance', raid24chaotic: 'Raid Chaotic' },
     desc: (n) => `${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'} · clique pour rejoindre le salon et ajouter ta ligne.`
   },
   en: {
-    contentLabel: { dungeon: 'Dungeon', raid8: 'Raid 8', raid24: 'Alliance 24', raid24chaotic: 'Chaotic 24' },
+    contentLabel: { dungeon: 'Dungeon', raid8: 'Raid', raid24: 'Alliance Raid', raid24chaotic: 'Chaotic Raid' },
     desc: (n) => `${n} player${n > 1 ? 's' : ''} · click to join the room and add your line.`
   }
 };
