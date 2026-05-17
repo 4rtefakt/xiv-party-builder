@@ -6394,7 +6394,6 @@ document.getElementById('modalSyncBtn').addEventListener('click', async () => {
 // ============================================================
 
 const DISCORD_WEBHOOK_KEY = 'xiv-discord-webhook';
-const DISCORD_WEBHOOK_PATTERN = /^https:\/\/discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/;
 
 function getDiscordWebhook() {
   try { return localStorage.getItem(DISCORD_WEBHOOK_KEY) || null; } catch { return null; }
@@ -6406,18 +6405,20 @@ function clearDiscordWebhook() {
   try { localStorage.removeItem(DISCORD_WEBHOOK_KEY); } catch {}
 }
 
-function buildDiscordPayload() {
-  const ct = CONTENT_BASE[state.contentType];
-  const when = state.raidWhen.trim();
-  const title = when || (ct ? ct.label : 'Party Builder');
-  const link = currentRoomId
-    ? `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`
-    : window.location.href;
+// Lazy-load lib/discord.js : la plupart des utilisateur·ices n'utilisent
+// jamais les actions Discord. Charge le module à la première action.
+let _discordModPromise = null;
+function loadDiscordLib() {
+  if (!_discordModPromise) _discordModPromise = import('./lib/discord.js');
+  return _discordModPromise;
+}
 
+// Construit les `fields` du webhook : per-alliance pour raid24, par rôle
+// (tank/heal/dps) sinon. Orchestration locale parce que tributaire de
+// state + computeOptimalAssignment (wrapper local autour de lib/scoring).
+function buildDiscordFields() {
   const fields = [];
-
   if (isRaid24()) {
-    // 1 field par alliance (compo + roles), pour respecter la limite Discord
     for (let a = 0; a < 3; a++) {
       const start = a * ALLIANCE_SIZE;
       const allPlayers = state.players.slice(start, start + ALLIANCE_SIZE);
@@ -6447,29 +6448,32 @@ function buildDiscordPayload() {
       if (byRole.dps.length)  fields.push({ name: '⚔️ DPS',  value: byRole.dps.join('\n'),  inline: true });
     }
   }
-
-  // Description : type de contenu + nb joueurs
-  const activePlayers = state.players.filter(p => p.name.trim() && (p.presence || 'in') !== 'out').length;
-  const description = `${ct ? ct.label : ''} · ${activePlayers} joueur${activePlayers > 1 ? 's' : ''}`;
-
-  const embed = {
-    title: title.slice(0, 256),
-    url: link,
-    description: description.slice(0, 2048),
-    color: 0x00e5ff,
-    fields,
-    footer: { text: 'party-builder.pages.dev' },
-    timestamp: new Date().toISOString()
-  };
-  if (currentRoomId) {
-    // Cache-bust : Discord cache les images par URL exacte. On force une URL
-    // unique pour qu'il re-fetch à chaque publication.
-    embed.image = { url: `${window.location.origin}/og/${currentRoomId}?t=${Date.now()}` };
-  }
-  return { username: 'Party Builder', embeds: [embed] };
+  return fields;
 }
 
-function promptForDiscordWebhook() {
+async function buildDiscordPayload() {
+  const { buildEmbedPayload } = await loadDiscordLib();
+  const ct = CONTENT_BASE[state.contentType];
+  const when = state.raidWhen.trim();
+  const title = when || (ct ? ct.label : 'Party Builder');
+  const link = currentRoomId
+    ? `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`
+    : window.location.href;
+  const activePlayers = state.players.filter(p => p.name.trim() && (p.presence || 'in') !== 'out').length;
+  const description = `${ct ? ct.label : ''} · ${activePlayers} joueur${activePlayers > 1 ? 's' : ''}`;
+  // Cache-bust : Discord cache les images par URL exacte. On force une URL
+  // unique pour qu'il re-fetch à chaque publication.
+  const ogImageUrl = currentRoomId
+    ? `${window.location.origin}/og/${currentRoomId}?t=${Date.now()}`
+    : null;
+  return buildEmbedPayload({
+    title, description, link, ogImageUrl,
+    fields: buildDiscordFields()
+  });
+}
+
+async function promptForDiscordWebhook() {
+  const { isValidWebhookUrl } = await loadDiscordLib();
   const current = getDiscordWebhook() || '';
   const url = prompt(t('dc_promptUrl'), current);
   if (url === null) return false; // user cancelled
@@ -6482,7 +6486,7 @@ function promptForDiscordWebhook() {
     }
     return false;
   }
-  if (!DISCORD_WEBHOOK_PATTERN.test(trimmed)) {
+  if (!isValidWebhookUrl(trimmed)) {
     showToast(t('dc_invalidUrl'));
     return false;
   }
@@ -6493,22 +6497,24 @@ function promptForDiscordWebhook() {
 }
 
 async function publishToDiscord() {
+  const { isValidWebhookUrl } = await loadDiscordLib();
   let url = getDiscordWebhook();
   if (!url) {
-    const ok = promptForDiscordWebhook();
+    const ok = await promptForDiscordWebhook();
     if (!ok) return;
     url = getDiscordWebhook();
     if (!url) return;
   }
-  if (!DISCORD_WEBHOOK_PATTERN.test(url)) {
+  if (!isValidWebhookUrl(url)) {
     showToast(t('dc_invalidUrl'));
     return;
   }
   try {
+    const payload = await buildDiscordPayload();
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildDiscordPayload())
+      body: JSON.stringify(payload)
     });
     if (r.ok) showToast(t('dc_published'));
     else showToast(t('dc_failed', { status: r.status }));
@@ -6782,74 +6788,22 @@ document.getElementById('copyCodeBtn').addEventListener('click', async () => {
   else showToast(t('ts_copyFail'));
 });
 
-function buildDiscordText() {
-  const ROLE_LABELS = {
-    tank:   '🛡️ ' + t('res_slotTank'),
-    heal:   '💚 ' + t('res_slotHeal'),
-    melee:  '⚔️ ' + t('res_slotMelee'),
-    ranged: '🎯 ' + t('res_slotDistance'),
-    caster: '🔮 ' + t('res_slotCaster')
-  };
+async function buildDiscordText() {
+  const { buildMarkdown } = await loadDiscordLib();
   const ct = CONTENT_BASE[state.contentType];
-  const title = ct ? ct.label : state.contentType;
-  const when = state.raidWhen.trim();
-  const lines = [];
-  lines.push(`**Party Builder · ${title}${when ? ' · ' + when : ''}**`);
-  lines.push('');
-
-  const opt = computeOptimalAssignment();
-  if (opt && !opt.error) {
-    const byRole = { tank: [], heal: [], melee: [], ranged: [], caster: [] };
-    const bench = [];
-    opt.results.forEach(r => {
-      if (!r.assigned) { bench.push(r); return; }
-      byRole[r.role].push(r);
-    });
-    ['tank','heal','melee','ranged','caster'].forEach(role => {
-      const list = byRole[role];
-      if (list.length === 0) return;
-      lines.push(ROLE_LABELS[role]);
-      list.forEach(r => {
-        const tag = r.prefRank === 0 ? ' ★' : (r.forced ? ' ⚠️' : '');
-        lines.push(`  • ${r.name} — ${r.jobName}${tag}`);
-      });
-    });
-    if (bench.length > 0) {
-      lines.push('');
-      lines.push(t('dc_bench', { names: bench.map(r => r.name).join(', ') }));
-    }
-  } else {
-    // Pas de compo possible : on liste juste le roster
-    lines.push(t('dc_rosterFallback'));
-    state.players
-      .filter(p => p.name.trim() !== '' && (p.presence || 'in') !== 'out')
-      .forEach(p => {
-        const prefs = p.preferences
-          .map(id => (JOB_BY_ID[id] || {}).name || id)
-          .join(' > ') || '—';
-        const tag = p.presence === 'maybe' ? ' (?)' : '';
-        lines.push(`• ${p.name}${tag} : ${prefs}`);
-      });
-  }
-
-  const absents = state.players.filter(p => p.name.trim() && p.presence === 'out');
-  if (absents.length > 0) {
-    lines.push('');
-    lines.push(t('dc_absents', { names: absents.map(p => p.name).join(', ') }));
-  }
-
-  if (state.bannedJobs.length > 0) {
-    const names = state.bannedJobs.map(id => (JOB_BY_ID[id] || {}).name || id).join(', ');
-    lines.push(t('dc_banned', { names }));
-  }
-
-  lines.push('');
-  lines.push(`🔗 ${window.location.href}`);
-  return lines.join('\n');
+  return buildMarkdown({
+    contentLabel: ct ? ct.label : state.contentType,
+    raidWhen: state.raidWhen.trim(),
+    players: state.players,
+    bannedJobs: state.bannedJobs,
+    link: window.location.href,
+    result: computeOptimalAssignment(),
+    t
+  });
 }
 
 document.getElementById('copyDiscordBtn').addEventListener('click', async () => {
-  const text = buildDiscordText();
+  const text = await buildDiscordText();
   if (await copyToClipboard(text)) showToast(t('ts_discordCopied'));
   else showToast(t('ts_copyFail'));
 });
