@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 13; // v13 : strat role (MT/OT/H1/M1…) sous le nom à la place du nom de job
+const OG_LAYOUT_VERSION = 14; // v14 : badge strat role sous le nom + fix card width (DPS plus étroites avant)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -157,20 +157,19 @@ function renderCard(m, width) {
   const lockGlyph = m.locked
     ? `<div style="display:flex; align-items:center; justify-content:center; width:18px; height:18px; color:#ffb547; font-size:14px; font-weight:700; margin-left:auto; padding:0 2px;">◆</div>`
     : '';
-  // Sous-label : strat role (MT/OT/H1/M1…) en monospace pour le layout colonnes
-  // dungeon/raid8 ; fallback sur le nom de job pour raid24 (où le strat role
-  // global ne serait pas significatif sans split par alliance).
-  const subLabel = m.stratRole ? m.stratRole : m.job.name;
-  const subFamily = m.stratRole ? 'monospace' : 'sans-serif';
-  const subWeight = m.stratRole ? 700 : 500;
-  const subSize = m.stratRole ? 15 : 16;
-  const subTracking = m.stratRole ? '2px' : '0';
+  // Sous-label sous le nom : badge style strat role (MT/OT/H1/H2/M1…) pour le
+  // layout colonnes dungeon/raid8. Fallback sur le nom de job en texte simple
+  // pour raid24 (où le strat role global n'est pas significatif sans split par
+  // alliance, cf. handler principal).
+  const subRow = m.stratRole
+    ? `<div style="display:flex; align-self:flex-start; align-items:center; justify-content:center; height:18px; padding:0 6px; margin-top:3px; border:1px solid ${roleColor}99; color:${roleColor}; background:rgba(0,0,0,0.4); font-size:11px; font-weight:700; letter-spacing:1.5px; font-family:monospace;">${esc(m.stratRole)}</div>`
+    : `<div style="display:flex; font-size:15px; color:${roleColor}; line-height:1.1; margin-top:3px;">${esc(m.job.name)}</div>`;
   return `
     <div style="display:flex; align-items:center; height:54px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
       <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
       <div style="display:flex; flex-direction:column; overflow:hidden;">
         <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1; white-space:nowrap;">${esc(shortenName(m.name))}</div>
-        <div style="display:flex; font-size:${subSize}px; color:${roleColor}; line-height:1.1; margin-top:3px; font-family:${subFamily}; font-weight:${subWeight}; letter-spacing:${subTracking};">${esc(subLabel)}</div>
+        ${subRow}
       </div>
       ${lockGlyph}
     </div>
@@ -203,7 +202,12 @@ function renderEmptyDpsCard(width) {
 // `dpsLayout` est un tableau sparse (size = slotCount, certains items
 // peuvent être null = slot vide). On itère dans l'ordre des positions.
 function renderColumnLayout(rows, dict, dpsLayout) {
-  const COL_W = 260;
+  // Largeur utile = 1200 - 56*2 = 1088. Total layout = 4 × COL_W + 3 × COL_GAP
+  // (Tanks | Heals | DPS-block où DPS-block = 2 cards + 1 gap interne).
+  // Avant : COL_W=260, COL_GAP=20 → 1100, dépassait → satori serrait les cards
+  // DPS visiblement plus étroites. Maintenant 250+20 → 1060, tout est à largeur
+  // égale.
+  const COL_W = 250;
   const COL_GAP = 20;
   const HDR_COLORS = {
     tank: '#2b9eff', heal: '#4ade80', dps: '#ff4f6e'

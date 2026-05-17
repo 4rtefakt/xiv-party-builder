@@ -12,9 +12,9 @@ function bench(name) { return { name, assigned: false }; }
 
 // --- Tanks ---
 
-test('tanks : 1 → T', () => {
+test('tanks : 1 → MT (par défaut)', () => {
   const out = assignStratRoles([r('A', 'tank'), r('B', 'heal'), r('C', 'melee'), r('D', 'ranged')], 'dungeon');
-  assert.equal(out[0].stratRole, 'T');
+  assert.equal(out[0].stratRole, 'MT');
 });
 
 test('tanks : 2 → MT, OT (dans l\'ordre)', () => {
@@ -31,9 +31,9 @@ test('tanks : 3+ → T1, T2, T3', () => {
 
 // --- Heals ---
 
-test('heals : 1 → H', () => {
+test('heals : 1 → H1 (toujours numéroté)', () => {
   const out = assignStratRoles([r('A', 'heal')], 'dungeon');
-  assert.equal(out[0].stratRole, 'H');
+  assert.equal(out[0].stratRole, 'H1');
 });
 
 test('heals : 2 → H1, H2', () => {
@@ -125,9 +125,9 @@ test('benched / unassigned : pas de stratRole', () => {
     bench('D'), r('E', 'melee')
   ];
   assignStratRoles(results, 'raid8');
-  assert.equal(results[0].stratRole, 'T', 'seul tank assigné → T');
+  assert.equal(results[0].stratRole, 'MT', 'seul tank assigné → MT');
   assert.equal(results[1].stratRole, undefined, 'pas de label sur benched');
-  assert.equal(results[2].stratRole, 'H');
+  assert.equal(results[2].stratRole, 'H1');
   assert.equal(results[3].stratRole, undefined);
   assert.equal(results[4].stratRole, 'M1');
 });
@@ -139,7 +139,7 @@ test('contentType ignoré → mapping inchangé', () => {
     r('M1pl', 'melee'), r('R1pl', 'ranged')
   ];
   assignStratRoles(results, 'mystery-content');
-  assert.equal(results[0].stratRole, 'T');
+  assert.equal(results[0].stratRole, 'MT');
   assert.equal(results[1].stratRole, 'M1');
   assert.equal(results[2].stratRole, 'R1');
 });
