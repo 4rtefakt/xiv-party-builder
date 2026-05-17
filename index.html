@@ -3552,8 +3552,6 @@ function userClaimCount() {
   return state.players.filter(p => p.claimedBy === USER_ID).length;
 }
 
-function isCurrentAdmin() { return !!state.isAdmin; }
-
 // Une ligne est éditable par le user actuel si :
 //  - admin (toujours)
 //  - sa propre ligne déjà claim
@@ -3564,10 +3562,6 @@ function canEditPlayer(p) {
   if (p.claimedBy === USER_ID) return true;
   if (!p.claimedBy && !userAtClaimLimit()) return true;
   return false;
-}
-function canClaimPlayer(p) {
-  if (state.isAdmin) return false; // admin n'a pas besoin de claim
-  return !p.claimedBy;
 }
 
 // À appeler au début de tout handler qui modifie un player. Si la ligne est
@@ -5162,30 +5156,6 @@ function decodeState(code) {
 // Le payload minimal encodé fait ~48 chars, donc <= 12 + alphanumérique est sûr.
 const SHORT_ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
 
-async function requestShortId(payload) {
-  try {
-    const r = await fetch('/api/save', {
-      method: 'POST',
-      headers: apiHeaders(null),
-      body: JSON.stringify(payload)
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    if (data && typeof data.id === 'string' && SHORT_ID_PATTERN.test(data.id)) {
-      // Sur création, on récupère le secret de récupération admin
-      if (data.recoverySecret) setAdminSecret(data.id, data.recoverySecret);
-      // On peut aussi mettre à jour state.* depuis la réponse
-      if (typeof data.isAdmin === 'boolean') state.isAdmin = data.isAdmin;
-      if (typeof data.ownerId === 'string') state.ownerId = data.ownerId;
-      if (Array.isArray(data.admins)) state.admins = data.admins.slice();
-      return data.id;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 async function fetchPayloadById(id) {
   const r = await fetch(`/api/load/${encodeURIComponent(id)}`, { headers: apiHeaders(id) });
   if (!r.ok) {
@@ -6249,14 +6219,6 @@ function performUndo() {
   renderAll();
   scheduleAutoSave(100);
   showToast(t('undo_done'));
-}
-
-function snapshotAndToast(label, undoLabel) {
-  snapshotState(label);
-  showToast(label, {
-    action: { label: undoLabel || t('undo_btn'), onClick: performUndo },
-    duration: 4500
-  });
 }
 
 // Ctrl+Z global (sauf dans un input/textarea où la touche a son sens habituel)
