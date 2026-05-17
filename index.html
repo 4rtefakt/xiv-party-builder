@@ -2816,6 +2816,13 @@ import {
   VALID_AVAIL_HOURS, VALID_AVAIL_DAYS, normalizeAvail
 } from './lib/codec.js';
 import { analyzeAvailability, bestSlots } from './lib/availability.js';
+import {
+  MAX_PRESETS, MAX_PRESET_NAME_LEN,
+  MAX_TEMPLATES, MAX_TEMPLATE_NAME_LEN,
+  getPresets, writePresetsLocal,
+  getTemplates, writeTemplatesLocal,
+  getRecentRooms, writeRecentRoomsLocal
+} from './lib/local-store.js';
 // makePlayer reste local : a besoin de side-effects (nextPlayerId, generateRowId).
 
 // ICON_URL utilise le CDN jsDelivr externe (xivapi/classjob-icons).
@@ -5192,29 +5199,8 @@ async function fetchPayloadById(id) {
 // ============================================================
 // PRESETS DE PRÉFÉRENCES — mémoire locale des combos favorites
 // ============================================================
-
-const PRESETS_KEY = 'xiv-pref-presets';
-const MAX_PRESETS = 5;
-const MAX_PRESET_NAME_LEN = 30;
-
-function getPresets() {
-  try {
-    const v = localStorage.getItem(PRESETS_KEY);
-    if (!v) return [];
-    const arr = JSON.parse(v);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter(p => p && typeof p.name === 'string' && Array.isArray(p.jobs))
-      .slice(0, MAX_PRESETS);
-  } catch { return []; }
-}
-
-// Variant "local seulement" : utilisé par loadProfileFromCloud pour hydrater
-// les presets depuis le serveur sans déclencher un push retour (boucle).
-function writePresetsLocal(arr) {
-  try { localStorage.setItem(PRESETS_KEY, JSON.stringify(arr.slice(0, MAX_PRESETS))); }
-  catch { /* quota / mode privé : on ignore */ }
-}
+// Les helpers de lecture/écriture purs sont dans lib/local-store.js.
+// Ici on garde uniquement les wrappers qui synchronisent au cloud après écriture.
 
 function writePresets(arr) {
   writePresetsLocal(arr);
@@ -5632,27 +5618,7 @@ function renderAvailHeatmap() {
 // (contenu + jobs bannis + fairnessWeight ; PAS le roster ni le Quand?)
 // ============================================================
 
-const TEMPLATES_KEY = 'xiv-comp-templates';
-const MAX_TEMPLATES = 10;
-const MAX_TEMPLATE_NAME_LEN = 40;
-
-function getTemplates() {
-  try {
-    const v = localStorage.getItem(TEMPLATES_KEY);
-    if (!v) return [];
-    const arr = JSON.parse(v);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter(tp => tp && typeof tp.name === 'string' && typeof tp.contentType === 'string')
-      .slice(0, MAX_TEMPLATES);
-  } catch { return []; }
-}
-
-function writeTemplatesLocal(arr) {
-  try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(arr.slice(0, MAX_TEMPLATES))); }
-  catch { /* quota / mode privé : on ignore */ }
-}
-
+// Constantes + read/write purs : voir lib/local-store.js.
 function writeTemplates(arr) {
   writeTemplatesLocal(arr);
   pushProfileToCloud();
@@ -5797,24 +5763,7 @@ document.addEventListener('click', e => {
 // SALONS RÉCENTS — mémoire locale des derniers salons visités
 // ============================================================
 
-const RECENT_ROOMS_KEY = 'xiv-recent-rooms';
-const MAX_RECENT_ROOMS = 5;
-
-function getRecentRooms() {
-  try {
-    const v = localStorage.getItem(RECENT_ROOMS_KEY);
-    if (!v) return [];
-    const arr = JSON.parse(v);
-    if (!Array.isArray(arr)) return [];
-    return arr.filter(r => r && typeof r.id === 'string').slice(0, MAX_RECENT_ROOMS);
-  } catch { return []; }
-}
-
-function writeRecentRoomsLocal(arr) {
-  try { localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(arr.slice(0, MAX_RECENT_ROOMS))); }
-  catch { /* quota / mode privé : on ignore */ }
-}
-
+// Constantes + read/write purs : voir lib/local-store.js.
 function writeRecentRooms(arr) {
   writeRecentRoomsLocal(arr);
   pushProfileToCloud();
