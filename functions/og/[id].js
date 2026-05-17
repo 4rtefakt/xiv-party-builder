@@ -18,7 +18,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 3;  // v3 : ligne "📅 meilleur créneau" sur dungeon/raid8
+const OG_LAYOUT_VERSION = 4;  // v4 : meilleur créneau aussi pour raid24 (vue globale 24 joueur·euses)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -313,12 +313,13 @@ export async function onRequestGet({ params, env, request }) {
   const benchLabel = bench.length > 0 ? dict.bench({ n: bench.length }) : '';
   const subtitle = `${contentLabel} · ${playerCount} ${playerLabel}${benchLabel}${validationLabel}`;
 
-  // Meilleur créneau (dispos) — affiché uniquement pour dungeon/raid8 où
-  // ça a du sens à l'échelle d'un groupe homogène. Skip raid24 (3 alliances
-  // séparées, l'agrégat de dispos serait trompeur). Skip s'il n'y a pas
-  // d'avail rentrée ou < 2 répondants.
+  // Meilleur créneau (dispos) — affiché sur tous les types de contenu si
+  // ≥2 personnes ont rempli leurs dispos. Pour raid24, c'est l'agrégat des
+  // 24 joueur·euses (la planification du jour J = quand le plus de monde
+  // peut, indépendamment de l'alliance, qui est une question opérationnelle
+  // du jour J et pas de scheduling).
   let bestSlotLine = '';
-  if (useColumnLayout) {
+  {
     const playersWithAvail = (Array.isArray(data.p) ? data.p : []).map(p => ({
       name: typeof p.n === 'string' ? p.n : '',
       presence: p.s || 'in',
