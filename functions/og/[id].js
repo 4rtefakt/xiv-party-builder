@@ -20,7 +20,8 @@ const OG_STRINGS = {
     bench: ({ n }) => ` · ${n} au banc`,
     locked: ({ n }) => ` · ${n} verrouillé·e·s`,
     validated: '◆ COMPO VALIDÉE',
-    salon: ({ id }) => `salon ${id}`
+    salon: ({ id }) => `salon ${id}`,
+    colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS'
   },
   en: {
     contentLabels: { dungeon: 'Dungeon', raid8: 'Raid', raid24: 'Alliance Raid', raid24chaotic: 'Chaotic Raid' },
@@ -28,7 +29,8 @@ const OG_STRINGS = {
     bench: ({ n }) => ` · ${n} on bench`,
     locked: ({ n }) => ` · ${n} locked`,
     validated: '◆ COMP VALIDATED',
-    salon: ({ id }) => `room ${id}`
+    salon: ({ id }) => `room ${id}`,
+    colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS'
   }
 };
 
@@ -88,30 +90,84 @@ function fallback(text) {
   return new Response(text, { status: 500, headers: { 'Content-Type': 'text/plain' } });
 }
 
+// Layout par lignes (legacy) : utilisé pour raid24 / chaotic 24 (jusqu'à 24
+// cartes, ça ne rentre pas dans une grille 4-col × 2-row).
 const CARD_WIDTH = 280;
+
+function renderCard(m, width) {
+  const roleColor = ROLE_COLOR[m.job.role];
+  const lockBorder = m.locked
+    ? `border:1px solid #ffb547; background:rgba(255,181,71,0.08); box-shadow:0 0 8px rgba(255,181,71,0.25);`
+    : `background:rgba(255,255,255,0.03);`;
+  const lockGlyph = m.locked
+    ? `<div style="display:flex; align-items:center; justify-content:center; width:18px; height:18px; color:#ffb547; font-size:14px; font-weight:700; margin-left:auto; padding:0 2px;">◆</div>`
+    : '';
+  return `
+    <div style="display:flex; align-items:center; height:54px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
+      <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
+      <div style="display:flex; flex-direction:column; overflow:hidden;">
+        <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(m.name)}</div>
+        <div style="display:flex; font-size:16px; color:${roleColor}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
+      </div>
+      ${lockGlyph}
+    </div>
+  `;
+}
 
 function renderRow(roleKey, members) {
   if (members.length === 0) return '';
-  const cards = members.map(m => {
-    const roleColor = ROLE_COLOR[m.job.role];
-    const lockBorder = m.locked
-      ? `border:1px solid #ffb547; background:rgba(255,181,71,0.08); box-shadow:0 0 8px rgba(255,181,71,0.25);`
-      : `background:rgba(255,255,255,0.03);`;
-    const lockGlyph = m.locked
-      ? `<div style="display:flex; align-items:center; justify-content:center; width:18px; height:18px; color:#ffb547; font-size:14px; font-weight:700; margin-left:auto; padding:0 2px;">◆</div>`
-      : '';
+  const cards = members.map(m => renderCard(m, CARD_WIDTH)).join('');
+  return `<div style="display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:10px;">${cards}</div>`;
+}
+
+// Layout en colonnes (TANKS | HEALERS | DPS 2×2) — mime la composition finale
+// affichée en bas de la page web. Utilisé pour les contenus ≤ 8 joueurs
+// (dungeon, raid8) où la grille tient confortablement dans 1200×630.
+//
+// Largeurs :
+//   tank/heal col  = COL_W (260px) chacune
+//   dps col bloc   = 2 × COL_W (520px) découpé en sous-grille 2 cartes/ligne
+//   3 colonnes + 2 gaps de 20px = 1080px, tient dans 1200 - 2*56 padding.
+function renderColumnLayout(rows, dict) {
+  const COL_W = 260;
+  const COL_GAP = 20;
+  const HDR_COLORS = {
+    tank: '#2b9eff', heal: '#4ade80', dps: '#ff4f6e'
+  };
+
+  function header(label, color, width) {
+    return `<div style="display:flex; align-items:center; justify-content:center; width:${width}px; height:30px; color:${color}; font-size:14px; letter-spacing:3px; font-weight:700; border-bottom:1px solid ${color}66; margin-bottom:12px;">${esc(label)}</div>`;
+  }
+
+  function column(headerLabel, color, width, cards) {
     return `
-      <div style="display:flex; align-items:center; height:54px; width:${CARD_WIDTH}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
-        <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
-        <div style="display:flex; flex-direction:column; overflow:hidden;">
-          <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(m.name)}</div>
-          <div style="display:flex; font-size:16px; color:${roleColor}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
+      <div style="display:flex; flex-direction:column; width:${width}px;">
+        ${header(headerLabel, color, width)}
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          ${cards.join('')}
         </div>
-        ${lockGlyph}
       </div>
     `;
-  }).join('');
-  return `<div style="display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:10px;">${cards}</div>`;
+  }
+
+  // DPS = colonne large avec sous-grille flex-wrap (2 cartes / ligne).
+  // L'ordre des DPS est conservé tel que reçu dans `rows.dps` (= ordre des
+  // joueurs assignés dans le résultat).
+  const dpsCards = rows.dps.map(m => renderCard(m, COL_W));
+  const dpsWidth = COL_W * 2 + COL_GAP; // 2 cartes côte à côte + leur gap
+
+  return `
+    <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; align-items:flex-start;">
+      ${column(dict.colTanks, HDR_COLORS.tank, COL_W, rows.tank.map(m => renderCard(m, COL_W)))}
+      ${column(dict.colHeals, HDR_COLORS.heal, COL_W, rows.heal.map(m => renderCard(m, COL_W)))}
+      <div style="display:flex; flex-direction:column; width:${dpsWidth}px;">
+        ${header(dict.colDps, HDR_COLORS.dps, dpsWidth)}
+        <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:${COL_GAP}px ${COL_GAP}px;">
+          ${dpsCards.join('')}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 export async function onRequestGet({ params, env, request }) {
@@ -131,7 +187,16 @@ export async function onRequestGet({ params, env, request }) {
 
   const { players, assignment } = computeForOg(data);
 
-  const rows = { tank: [], heal: [], melee: [], ranged: [] };
+  // Layout 3-col (TANKS | HEALERS | DPS 2×2) pour les contenus ≤ 8 joueurs,
+  // miroir de la composition finale affichée en bas de la page web. Pour
+  // raid24 / chaotic 24, on retombe sur le layout par lignes (`rows.melee` +
+  // `rows.ranged` mêlant ranged et caster) parce que 24 cartes ne tiennent
+  // pas en 4 col × 2 row dans 1200×630.
+  const useColumnLayout = data.c === 'dungeon' || data.c === 'raid8';
+
+  const rows = useColumnLayout
+    ? { tank: [], heal: [], dps: [] }                       // 3 buckets
+    : { tank: [], heal: [], melee: [], ranged: [] };        // 4 lignes legacy
   const bench = [];
   let lockedCount = 0;
   assignment.forEach((a, i) => {
@@ -142,8 +207,18 @@ export async function onRequestGet({ params, env, request }) {
     if (!job) return;
     const locked = !!(p && p.lockedJob && p.lockedJob === a.jobId);
     if (locked) lockedCount++;
-    const rowKey = job.role === 'caster' ? 'ranged' : job.role;
-    (rows[rowKey] || rows.ranged).push({ name: playerName, job, locked });
+    if (useColumnLayout) {
+      // Tank / Heal séparés, tout le reste (melee + ranged + caster) dans dps,
+      // dans l'ordre des joueurs assignés (= ordre du résultat scoring).
+      if (job.role === 'tank' || job.role === 'heal') {
+        rows[job.role].push({ name: playerName, job, locked });
+      } else {
+        rows.dps.push({ name: playerName, job, locked });
+      }
+    } else {
+      const rowKey = job.role === 'caster' ? 'ranged' : job.role;
+      (rows[rowKey] || rows.ranged).push({ name: playerName, job, locked });
+    }
   });
 
   const contentLabel = dict.contentLabels[data.c] || 'Party';
@@ -168,10 +243,12 @@ export async function onRequestGet({ params, env, request }) {
       <div style="display:flex; font-size:${titleSize}px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:6px;">${esc(titleText)}</div>
       <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:26px;">${esc(subtitle)}</div>
 
-      ${renderRow('tank', rows.tank)}
-      ${renderRow('heal', rows.heal)}
-      ${renderRow('melee', rows.melee)}
-      ${renderRow('ranged', rows.ranged)}
+      ${useColumnLayout ? renderColumnLayout(rows, dict) : (
+        renderRow('tank', rows.tank) +
+        renderRow('heal', rows.heal) +
+        renderRow('melee', rows.melee) +
+        renderRow('ranged', rows.ranged)
+      )}
 
       <div style="display:flex; margin-top:auto; justify-content:space-between; align-items:flex-end;">
         <div style="display:flex; font-size:20px; color:#3a4a5c;">${esc(dict.salon({ id }))}</div>
