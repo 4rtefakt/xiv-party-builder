@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 17; // v17 : satori ignore box-sizing → compense en math : renderCard reçoit CARD_W = COL_W - 21 (padding+border)
+const OG_LAYOUT_VERSION = 18; // v18 : flatten DPS en 2 colonnes sœurs (M | R) au lieu du sub-grid imbriqué → toutes les cards visuellement = 250
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -202,67 +202,63 @@ function renderEmptyDpsCard(width) {
 // `dpsLayout` est un tableau sparse (size = slotCount, certains items
 // peuvent être null = slot vide). On itère dans l'ordre des positions.
 function renderColumnLayout(rows, dict, dpsLayout) {
-  // Largeur utile = 1200 - 56*2 = 1088. Total layout = 4 × COL_W + 3 × COL_GAP
-  // (Tanks | Heals | DPS-block où DPS-block = 2 cards + 1 gap interne).
+  // Layout 4 colonnes égales : Tanks | Heals | M-DPS | R-DPS.
+  // Avant on rendait DPS comme un bloc 2-cards/row imbriqué (sub-grid avec
+  // width:dpsWidth=520), ce qui forçait satori à écraser les 2 sub-cards
+  // (visuellement 271px chacune avec padding+border) pour rentrer dans 520.
+  // Maintenant les sub-cards DPS sont 2 colonnes sœurs des tanks/heals →
+  // aucune contrainte de largeur nested → toutes les cards rendent pareil.
   //
-  // Satori ignore `box-sizing:border-box` → la `width:N` d'une card est sa
-  // largeur de CONTENU. Or chaque card a padding 0 10 0 8 + border-left 3 =
-  // 21px de débord. On compense en passant à `renderCard` une largeur réduite
-  // de 21px → largeur VISIBLE = COL_W. Sans ça, les cards DPS s'écrasent
-  // visiblement dans la sous-row contrainte à 520px alors que les tanks/heals
-  // débordent invisiblement de leur colonne (rien ne les contraint à droite).
-  const COL_W = 250;
+  // Largeur utile = 1200 - 56*2 = 1088.
+  // Total visuel : 4 × CARD_VISUAL_W + 3 × COL_GAP.
+  // Satori ignore box-sizing:border-box → width sur la card = CONTENU.
+  // Une card avec padding 0 10 0 8 + border-left 3 = 21px de débord.
+  // Donc renderCard(m, 229) → visuel 250. Total : 4×250 + 3×20 = 1060 ≤ 1088.
+  const COL_W = 250;            // largeur visuelle voulue par colonne
   const COL_GAP = 20;
-  const CARD_BOX_EXTRA = 21;   // 8 + 10 padding + 3 border-left
-  const CARD_W = COL_W - CARD_BOX_EXTRA;
+  const CARD_BOX_EXTRA = 21;    // 8 + 10 padding + 3 border-left
+  const CARD_W = COL_W - CARD_BOX_EXTRA;  // 229 (passé à renderCard)
   const HDR_COLORS = {
     tank: '#2b9eff', heal: '#4ade80', dps: '#ff4f6e'
   };
 
   function header(label, color, width) {
-    return `<div style="display:flex; align-items:center; justify-content:center; width:${width}px; height:30px; color:${color}; font-size:14px; letter-spacing:3px; font-weight:700; border-bottom:1px solid ${color}66; margin-bottom:12px;">${esc(label)}</div>`;
+    return `<div style="display:flex; align-items:center; justify-content:center; width:${width}px; height:30px; color:${color}; font-size:14px; letter-spacing:3px; font-weight:700; border-bottom:1px solid ${color}66;">${esc(label)}</div>`;
   }
 
-  function column(headerLabel, color, width, cards) {
+  function columnCards(cards) {
     return `
-      <div style="display:flex; flex-direction:column; width:${width}px;">
-        ${header(headerLabel, color, width)}
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          ${cards.join('')}
-        </div>
+      <div style="display:flex; flex-direction:column; width:${COL_W}px; gap:8px;">
+        ${cards.join('')}
       </div>
     `;
   }
 
-  // DPS = colonne large avec sous-grille 2 cartes / ligne. Satori est
-  // imprévisible avec `flex-wrap` (il rend souvent en colonne stretched
-  // même quand le container fait la bonne largeur), donc on découpe nous-
-  // mêmes en sous-rows explicites de 2 cartes.
-  // dpsLayout est un tableau sparse : null aux positions vides.
-  const dpsWidth = COL_W * 2 + COL_GAP;
+  // Sépare le dpsLayout en M (positions paires) et R (positions impaires)
+  // pour rendre 2 colonnes sœurs au lieu d'un sub-grid imbriqué.
   const dpsSource = Array.isArray(dpsLayout) && dpsLayout.length > 0 ? dpsLayout : rows.dps;
-  const dpsRows = [];
-  for (let i = 0; i < dpsSource.length; i += 2) dpsRows.push(dpsSource.slice(i, i + 2));
-  // Sous-row DPS : largeur explicite (sinon satori l'écrase). 2 cards de
-  // CARD_W (content) + gap = 2*229 + 20 + 2*21 (debord box) = 520 = dpsWidth.
-  // L'empty card a un border:1px tout autour (renderEmptyDpsCard) qui ajoute
-  // 2px de débord ; on accepte cette légère inégalité plutôt que de faire un
-  // calcul différent pour les emptys.
-  const dpsGrid = dpsRows.map(rowItems => `
-    <div style="display:flex; flex-direction:row; width:${dpsWidth}px; gap:${COL_GAP}px;">
-      ${rowItems.map(m => m ? renderCard(m, CARD_W) : renderEmptyDpsCard(CARD_W)).join('')}
-    </div>
-  `).join('');
+  const mCards = [];
+  const rCards = [];
+  dpsSource.forEach((item, i) => {
+    const target = (i % 2 === 0) ? mCards : rCards;
+    target.push(item ? renderCard(item, CARD_W) : renderEmptyDpsCard(CARD_W));
+  });
+
+  // DPS header span sur 2 colonnes (M + R) pour ne pas en avoir 2 séparés.
+  const dpsHeaderWidth = COL_W * 2 + COL_GAP;
 
   return `
-    <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; align-items:flex-start;">
-      ${column(dict.colTanks, HDR_COLORS.tank, COL_W, rows.tank.map(m => renderCard(m, CARD_W)))}
-      ${column(dict.colHeals, HDR_COLORS.heal, COL_W, rows.heal.map(m => renderCard(m, CARD_W)))}
-      <div style="display:flex; flex-direction:column; width:${dpsWidth}px;">
-        ${header(dict.colDps, HDR_COLORS.dps, dpsWidth)}
-        <div style="display:flex; flex-direction:column; width:${dpsWidth}px; gap:8px;">
-          ${dpsGrid}
-        </div>
+    <div style="display:flex; flex-direction:column;">
+      <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; margin-bottom:12px;">
+        ${header(dict.colTanks,  HDR_COLORS.tank, COL_W)}
+        ${header(dict.colHeals,  HDR_COLORS.heal, COL_W)}
+        ${header(dict.colDps,    HDR_COLORS.dps,  dpsHeaderWidth)}
+      </div>
+      <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; align-items:flex-start;">
+        ${columnCards(rows.tank.map(m => renderCard(m, CARD_W)))}
+        ${columnCards(rows.heal.map(m => renderCard(m, CARD_W)))}
+        ${columnCards(mCards)}
+        ${columnCards(rCards)}
       </div>
     </div>
   `;
