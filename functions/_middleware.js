@@ -34,7 +34,7 @@ function escAttr(s) {
 // pour qu'un re-scrape Discord après bump produise une URL différente,
 // donc invalidate le cache image côté Discord. Doit suivre OG_LAYOUT_VERSION
 // dans og/[id].js.
-const OG_LAYOUT_VERSION = 5;
+const OG_LAYOUT_VERSION = 6;
 
 // Hash court (8 hex chars) du JSON stocké en KV. Sert de cache-buster pour
 // Discord/Twitter : ils ré-utilisent leur cache tant que le hash ne change pas,

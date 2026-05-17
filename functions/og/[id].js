@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 15; // v15 : largeur explicite sur sous-rows DPS (satori les serrait dans les flex nested)
+const OG_LAYOUT_VERSION = 16; // v16 : box-sizing:border-box sur les cards (sinon padding+border 21px de débord = sub-cards DPS squeezées)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -165,7 +165,7 @@ function renderCard(m, width) {
     ? `<div style="display:flex; align-self:flex-start; align-items:center; justify-content:center; height:18px; padding:0 6px; margin-top:3px; border:1px solid ${roleColor}99; color:${roleColor}; background:rgba(0,0,0,0.4); font-size:11px; font-weight:700; letter-spacing:1.5px; font-family:monospace;">${esc(m.stratRole)}</div>`
     : `<div style="display:flex; font-size:15px; color:${roleColor}; line-height:1.1; margin-top:3px;">${esc(m.job.name)}</div>`;
   return `
-    <div style="display:flex; align-items:center; height:54px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
+    <div style="box-sizing:border-box; display:flex; align-items:center; height:54px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
       <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
       <div style="display:flex; flex-direction:column; overflow:hidden;">
         <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1; white-space:nowrap;">${esc(shortenName(m.name))}</div>
@@ -187,7 +187,7 @@ function renderRow(roleKey, members) {
 // une vraie carte.
 function renderEmptyDpsCard(width) {
   return `
-    <div style="display:flex; align-items:center; justify-content:center; height:54px; width:${width}px; border:1px dashed rgba(255,255,255,0.1); background:rgba(0,0,0,0.15); color:#3a4a5c; font-size:18px; font-family:monospace;">—</div>
+    <div style="box-sizing:border-box; display:flex; align-items:center; justify-content:center; height:54px; width:${width}px; border:1px dashed rgba(255,255,255,0.1); background:rgba(0,0,0,0.15); color:#3a4a5c; font-size:18px; font-family:monospace;">—</div>
   `;
 }
 
