@@ -3108,6 +3108,9 @@ const STRINGS = {
     sg_viable: '◆ Composition viable',
     sg_viableText: 'Toutes les positions requises peuvent être pourvues avec les préférences actuelles.',
     sg_missingGroup: ({ n }) => `Il manque <strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> pour compléter le groupe.`,
+    sg_missingGroupWithAbsent: ({ n, absent }) =>
+      `Il manque <strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> pour compléter le groupe ` +
+      `<span style="opacity:0.7">(${absent} ${absent > 1 ? 'absent·e·s non compté·e·s' : 'absent·e non compté·e'})</span>.`,
     sg_noPrefs: ({ n }) => `<strong>${n} ${n > 1 ? 'joueur·euse·s' : 'joueur·euse'}</strong> ${n > 1 ? 'n\'ont' : 'n\'a'} pas encore renseigné de préférence.`,
     sg_needs: '⚠ Besoins identifiés',
     sg_rosterState: '◆ État du roster',
@@ -3384,6 +3387,9 @@ const STRINGS = {
     sg_viable: '◆ Viable composition',
     sg_viableText: 'All required positions can be filled with the current preferences.',
     sg_missingGroup: ({ n }) => `Need <strong>${n} more player${n > 1 ? 's' : ''}</strong> to complete the group.`,
+    sg_missingGroupWithAbsent: ({ n, absent }) =>
+      `Need <strong>${n} more player${n > 1 ? 's' : ''}</strong> to complete the group ` +
+      `<span style="opacity:0.7">(${absent} absentee${absent > 1 ? 's' : ''} not counted)</span>.`,
     sg_noPrefs: ({ n }) => `<strong>${n} player${n > 1 ? 's' : ''}</strong> ${n > 1 ? "haven't" : "hasn't"} set preferences yet.`,
     sg_needs: '⚠ Needs identified',
     sg_rosterState: '◆ Roster state',
@@ -5109,6 +5115,13 @@ function renderSuggestions() {
   // Joueurs sans préférence
   const noPref = playersWithName.length - playersWithPrefs.length;
 
+  // Compte les absent·es (avec un nom mais marqué·es ABS). Utile pour
+  // clarifier le message "Need X more player" quand le roster a des
+  // entrées qui ne sont pas comptées dans l'analyse de couverture.
+  const absent = state.players.filter(p =>
+    p && typeof p.name === 'string' && p.name.trim() !== '' && p.presence === 'out'
+  ).length;
+
   // Cas 1 : tout est couvert et roster complet
   if (gaps.length === 0 && playersWithName.length >= targetSize && noPref === 0) {
     el.classList.add('ok');
@@ -5122,7 +5135,12 @@ function renderSuggestions() {
 
   if (playersWithName.length < targetSize) {
     const missing = targetSize - playersWithName.length;
-    messages.push(t('sg_missingGroup', { n: missing }));
+    // On précise les absent·es entre parenthèses pour clarifier pourquoi
+    // le compte est inférieur au nombre de lignes visibles dans le roster.
+    const msg = absent > 0
+      ? t('sg_missingGroupWithAbsent', { n: missing, absent })
+      : t('sg_missingGroup', { n: missing });
+    messages.push(msg);
   }
 
   if (noPref > 0) {
