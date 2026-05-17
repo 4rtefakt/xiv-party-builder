@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 16; // v16 : box-sizing:border-box sur les cards (sinon padding+border 21px de débord = sub-cards DPS squeezées)
+const OG_LAYOUT_VERSION = 17; // v17 : satori ignore box-sizing → compense en math : renderCard reçoit CARD_W = COL_W - 21 (padding+border)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -204,11 +204,17 @@ function renderEmptyDpsCard(width) {
 function renderColumnLayout(rows, dict, dpsLayout) {
   // Largeur utile = 1200 - 56*2 = 1088. Total layout = 4 × COL_W + 3 × COL_GAP
   // (Tanks | Heals | DPS-block où DPS-block = 2 cards + 1 gap interne).
-  // Avant : COL_W=260, COL_GAP=20 → 1100, dépassait → satori serrait les cards
-  // DPS visiblement plus étroites. Maintenant 250+20 → 1060, tout est à largeur
-  // égale.
+  //
+  // Satori ignore `box-sizing:border-box` → la `width:N` d'une card est sa
+  // largeur de CONTENU. Or chaque card a padding 0 10 0 8 + border-left 3 =
+  // 21px de débord. On compense en passant à `renderCard` une largeur réduite
+  // de 21px → largeur VISIBLE = COL_W. Sans ça, les cards DPS s'écrasent
+  // visiblement dans la sous-row contrainte à 520px alors que les tanks/heals
+  // débordent invisiblement de leur colonne (rien ne les contraint à droite).
   const COL_W = 250;
   const COL_GAP = 20;
+  const CARD_BOX_EXTRA = 21;   // 8 + 10 padding + 3 border-left
+  const CARD_W = COL_W - CARD_BOX_EXTRA;
   const HDR_COLORS = {
     tank: '#2b9eff', heal: '#4ade80', dps: '#ff4f6e'
   };
@@ -237,20 +243,21 @@ function renderColumnLayout(rows, dict, dpsLayout) {
   const dpsSource = Array.isArray(dpsLayout) && dpsLayout.length > 0 ? dpsLayout : rows.dps;
   const dpsRows = [];
   for (let i = 0; i < dpsSource.length; i += 2) dpsRows.push(dpsSource.slice(i, i + 2));
-  // Satori a tendance à mal allouer l'espace dans les flex containers nested
-  // quand la largeur n'est pas explicitement déclarée → sous-cards DPS qui
-  // apparaissent plus étroites que les tanks/heals. On force la largeur sur
-  // chaque sous-row du bloc DPS pour éviter ça.
+  // Sous-row DPS : largeur explicite (sinon satori l'écrase). 2 cards de
+  // CARD_W (content) + gap = 2*229 + 20 + 2*21 (debord box) = 520 = dpsWidth.
+  // L'empty card a un border:1px tout autour (renderEmptyDpsCard) qui ajoute
+  // 2px de débord ; on accepte cette légère inégalité plutôt que de faire un
+  // calcul différent pour les emptys.
   const dpsGrid = dpsRows.map(rowItems => `
     <div style="display:flex; flex-direction:row; width:${dpsWidth}px; gap:${COL_GAP}px;">
-      ${rowItems.map(m => m ? renderCard(m, COL_W) : renderEmptyDpsCard(COL_W)).join('')}
+      ${rowItems.map(m => m ? renderCard(m, CARD_W) : renderEmptyDpsCard(CARD_W)).join('')}
     </div>
   `).join('');
 
   return `
     <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; align-items:flex-start;">
-      ${column(dict.colTanks, HDR_COLORS.tank, COL_W, rows.tank.map(m => renderCard(m, COL_W)))}
-      ${column(dict.colHeals, HDR_COLORS.heal, COL_W, rows.heal.map(m => renderCard(m, COL_W)))}
+      ${column(dict.colTanks, HDR_COLORS.tank, COL_W, rows.tank.map(m => renderCard(m, CARD_W)))}
+      ${column(dict.colHeals, HDR_COLORS.heal, COL_W, rows.heal.map(m => renderCard(m, CARD_W)))}
       <div style="display:flex; flex-direction:column; width:${dpsWidth}px;">
         ${header(dict.colDps, HDR_COLORS.dps, dpsWidth)}
         <div style="display:flex; flex-direction:column; width:${dpsWidth}px; gap:8px;">
