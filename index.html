@@ -2091,6 +2091,64 @@
     margin-bottom: 0.65rem;
     gap: 0.5rem;
   }
+  .balance-header-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Sections texte d'une modale d'aide (explication d'un contrôle).
+     Un mini-titre coloré, suivi d'un paragraphe lisible. */
+  .help-section {
+    margin-bottom: 0.9rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--line);
+  }
+  .help-section:last-child { margin-bottom: 0.2rem; }
+  .help-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: var(--ink);
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+  }
+  .help-section-title.balance-left  { color: #4ade80; }   /* vert = satisfaction */
+  .help-section-title.balance-right { color: #ffb547; }   /* ambre = équité */
+  .help-section-body {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--ink-dim);
+    margin: 0;
+  }
+  .help-section-body strong { color: var(--ink); }
+
+  /* Bouton (?) circulaire à côté d'un titre — ouvre une modale d'explication.
+     Réutilisable pour d'autres contrôles si besoin un jour. */
+  .help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    padding: 0;
+  }
+  .help-btn:hover, .help-btn:focus-visible {
+    color: var(--cyan);
+    border-color: var(--cyan);
+    background: rgba(0, 229, 255, 0.08);
+    outline: none;
+  }
 
   .balance-title {
     font-family: 'JetBrains Mono', monospace;
@@ -2370,7 +2428,10 @@
 
       <div class="balance-control">
         <div class="balance-header">
-          <span class="balance-title" data-i18n="p_strategy">Stratégie d'optimisation</span>
+          <span class="balance-header-left">
+            <span class="balance-title" data-i18n="p_strategy">Stratégie d'optimisation</span>
+            <button type="button" class="help-btn" id="balanceHelpBtn" data-i18n-title="bh_btnTitle" aria-label="?">?</button>
+          </span>
           <span class="balance-value" id="balanceValue">Équilibré</span>
         </div>
         <div class="balance-slider-wrap">
@@ -2505,6 +2566,35 @@
     </div>
 
     <div class="modal-warning" data-i18n="id_warning">⚠ Ce lien est ton identité personnelle...</div>
+  </div>
+</div>
+
+<!-- BALANCE HELP MODAL · explique le slider Stratégie d'optimisation -->
+<div class="modal-overlay" id="balanceHelpModal">
+  <div class="modal">
+    <button class="modal-close" data-modal-close>×</button>
+    <div class="modal-title" data-i18n="bh_title">Comment la jauge marche</div>
+    <div class="modal-subtitle" data-i18n="bh_subtitle">Optimisation joueur·euse → job</div>
+
+    <div class="help-section">
+      <div class="help-section-title" data-i18n="bh_scoreTitle">Le score par personne</div>
+      <p class="help-section-body" data-i18n-html="bh_scoreDesc">Chaque assignation rapporte des points selon le rang de la préférence : <strong>1er choix = 100 pts</strong>, 2ᵉ = 90, 3ᵉ = 80, et ainsi de suite (−10 par rang). Un job hors prefs ou le banc rapportent un score négatif. L'algo cherche la combinaison qui maximise un total — la jauge décide comment ce total est calculé.</p>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title balance-left" data-i18n="bh_globalTitle">◂ Satisfaction globale (jauge à gauche)</div>
+      <p class="help-section-body" data-i18n-html="bh_globalDesc">On maximise la <strong>somme brute</strong> des scores. Résultat : la moyenne du groupe est la plus haute possible — mais une personne peut hériter d'un 5ᵉ choix si ça permet à trois autres d'avoir leur 1er.</p>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title balance-right" data-i18n="bh_fairTitle">Frustration limitée (jauge à droite) ▸</div>
+      <p class="help-section-body" data-i18n-html="bh_fairDesc">On ajoute un <strong>malus qui grandit avec le rang</strong> (et qui explose pour un job forcé / banc). L'algo accepte de baisser un peu la moyenne pour éviter que quelqu'un soit très loin de son top : plus de 2-3ᵉ choix, presque jamais de 5-6ᵉ.</p>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title" data-i18n="bh_midTitle">Au milieu</div>
+      <p class="help-section-body" data-i18n="bh_midDesc">Compromis entre les deux. Bon point de départ pour la plupart des groupes.</p>
+    </div>
   </div>
 </div>
 
@@ -2645,6 +2735,17 @@ const STRINGS = {
     p_balanceEq: 'Équilibré',
     p_balanceFair: 'Plutôt équitable',
     p_balanceAnti: 'Anti-frustration',
+    bh_btnTitle: 'Comment cette jauge marche ?',
+    bh_title: 'Comment la jauge marche',
+    bh_subtitle: 'Optimisation joueur·euse → job',
+    bh_scoreTitle: 'Le score par personne',
+    bh_scoreDesc: 'Chaque assignation rapporte des points selon le rang de la préférence : <strong>1er choix = 100 pts</strong>, 2ᵉ = 90, 3ᵉ = 80, et ainsi de suite (−10 par rang). Un job hors prefs ou le banc rapportent un score négatif. L\'algo cherche la combinaison qui maximise un total — la jauge décide comment ce total est calculé.',
+    bh_globalTitle: '◂ Satisfaction globale (jauge à gauche)',
+    bh_globalDesc: 'On maximise la <strong>somme brute</strong> des scores. Résultat : la moyenne du groupe est la plus haute possible — mais une personne peut hériter d\'un 5ᵉ choix si ça permet à trois autres d\'avoir leur 1er.',
+    bh_fairTitle: 'Frustration limitée (jauge à droite) ▸',
+    bh_fairDesc: 'On ajoute un <strong>malus qui grandit avec le rang</strong> (et qui explose pour un job forcé / banc). L\'algo accepte de baisser un peu la moyenne pour éviter que quelqu\'un soit très loin de son top : plus de 2-3ᵉ choix, presque jamais de 5-6ᵉ.',
+    bh_midTitle: 'Au milieu',
+    bh_midDesc: 'Compromis entre les deux. Bon point de départ pour la plupart des groupes.',
     p_when: 'Quoi ? Quand ?',
     p_whenHelp: 'Nom du raid / date / heure · optionnel · partagé avec le salon',
     p_whenPlaceholder: 'Shinryu EX · samedi 21h · ven prochain à 20h30 …',
@@ -2878,6 +2979,17 @@ const STRINGS = {
     p_balanceEq: 'Balanced',
     p_balanceFair: 'Mostly fair',
     p_balanceAnti: 'Anti-frustration',
+    bh_btnTitle: 'How does this slider work?',
+    bh_title: 'How the slider works',
+    bh_subtitle: 'Player → job optimization',
+    bh_scoreTitle: 'The per-player score',
+    bh_scoreDesc: 'Each assignment earns points based on the preference rank: <strong>1st choice = 100 pts</strong>, 2nd = 90, 3rd = 80, and so on (−10 per rank). A job outside the player\'s prefs or the bench earn a negative score. The algorithm finds the combination that maximizes a total — the slider decides how that total is computed.',
+    bh_globalTitle: '◂ Global satisfaction (slider left)',
+    bh_globalDesc: 'Maximize the <strong>raw sum</strong> of scores. The group average is as high as possible — but one player might end up with their 5th choice if it lets three others get their 1st.',
+    bh_fairTitle: 'Limited frustration (slider right) ▸',
+    bh_fairDesc: 'Add a <strong>penalty that grows with rank</strong> (and explodes for a forced job / bench). The algorithm accepts a lower average to avoid anyone being far from their top: more 2nd-3rd choices, almost never 5th-6th.',
+    bh_midTitle: 'In the middle',
+    bh_midDesc: 'Compromise between the two. Good starting point for most groups.',
     p_when: 'What? When?',
     p_whenHelp: 'Raid name / date / time · optional · shared with the room',
     p_whenPlaceholder: 'Shinryu EX · Saturday 9pm · next Fri at 8:30pm …',
@@ -3094,6 +3206,12 @@ function applyStaticI18n() {
   document.documentElement.lang = LANG;
   document.querySelectorAll('[data-i18n]').forEach(el => {
     el.textContent = t(el.dataset.i18n);
+  });
+  // Variante rich-text : la string i18n peut contenir des balises HTML
+  // simples (<strong>, <em>, <br>). Réservé aux strings hardcodées du dico —
+  // jamais utilisé pour du contenu user-supplied.
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    el.innerHTML = t(el.dataset.i18nHtml);
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.dataset.i18nPlaceholder);
@@ -5982,6 +6100,9 @@ async function openIdentityModal() {
 
 const identityBtn = document.getElementById('identityBtn');
 if (identityBtn) identityBtn.addEventListener('click', openIdentityModal);
+
+const balanceHelpBtn = document.getElementById('balanceHelpBtn');
+if (balanceHelpBtn) balanceHelpBtn.addEventListener('click', () => openModal('balanceHelpModal'));
 
 const copyIdentityUrlBtn = document.getElementById('copyIdentityUrlBtn');
 if (copyIdentityUrlBtn) copyIdentityUrlBtn.addEventListener('click', () => {
