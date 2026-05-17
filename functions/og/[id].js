@@ -7,6 +7,7 @@
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, CONTENT_COMP, ROLE_COLOR } from '../../lib/jobs.js';
 import { buildSlotsFromComp, computeOptimalAssignment } from '../../lib/scoring.js';
+import { analyzeAvailability, bestSlotWithTail } from '../../lib/availability.js';
 
 const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 
@@ -17,7 +18,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 2;  // v2 : nom raccourci "Prénom N."
+const OG_LAYOUT_VERSION = 3;  // v3 : ligne "📅 meilleur créneau" sur dungeon/raid8
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -36,7 +37,10 @@ const OG_STRINGS = {
     locked: ({ n }) => ` · ${n} verrouillé·e·s`,
     validated: '◆ COMPO VALIDÉE',
     salon: ({ id }) => `salon ${id}`,
-    colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS'
+    colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS',
+    bestSlot: ({ day, hour, count, total, tail }) =>
+      `📅 ${day} ${hour}h · ${count}/${total} dispos` + (tail > 0 ? ` · +${tail}h` : ''),
+    daysLong: { mon: 'Lundi', tue: 'Mardi', wed: 'Mercredi', thu: 'Jeudi', fri: 'Vendredi', sat: 'Samedi', sun: 'Dimanche' }
   },
   en: {
     contentLabels: { dungeon: 'Dungeon', raid8: 'Raid', raid24: 'Alliance Raid', raid24chaotic: 'Chaotic Raid' },
@@ -45,7 +49,10 @@ const OG_STRINGS = {
     locked: ({ n }) => ` · ${n} locked`,
     validated: '◆ COMP VALIDATED',
     salon: ({ id }) => `room ${id}`,
-    colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS'
+    colTanks: 'TANKS', colHeals: 'HEALERS', colDps: 'DPS',
+    bestSlot: ({ day, hour, count, total, tail }) =>
+      `📅 ${day} ${hour}h · ${count}/${total} available` + (tail > 0 ? ` · +${tail}h` : ''),
+    daysLong: { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' }
   }
 };
 
@@ -306,11 +313,35 @@ export async function onRequestGet({ params, env, request }) {
   const benchLabel = bench.length > 0 ? dict.bench({ n: bench.length }) : '';
   const subtitle = `${contentLabel} · ${playerCount} ${playerLabel}${benchLabel}${validationLabel}`;
 
+  // Meilleur créneau (dispos) — affiché uniquement pour dungeon/raid8 où
+  // ça a du sens à l'échelle d'un groupe homogène. Skip raid24 (3 alliances
+  // séparées, l'agrégat de dispos serait trompeur). Skip s'il n'y a pas
+  // d'avail rentrée ou < 2 répondants.
+  let bestSlotLine = '';
+  if (useColumnLayout) {
+    const playersWithAvail = (Array.isArray(data.p) ? data.p : []).map(p => ({
+      name: typeof p.n === 'string' ? p.n : '',
+      presence: p.s || 'in',
+      availability: p.av || null
+    }));
+    const avAnalysis = analyzeAvailability(playersWithAvail);
+    const best = bestSlotWithTail(avAnalysis);
+    if (best && best.count > 0 && avAnalysis.respondentCount >= 2) {
+      const dayName = (dict.daysLong && dict.daysLong[best.day]) || best.day;
+      const text = dict.bestSlot({
+        day: dayName, hour: best.hour,
+        count: best.count, total: avAnalysis.respondentCount, tail: best.tail
+      });
+      bestSlotLine = `<div style="display:flex; font-size:18px; color:#4ade80; margin-bottom:14px;">${esc(text)}</div>`;
+    }
+  }
+
   const html = `
     <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:46px 56px; font-family:sans-serif;">
       <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:14px;">◆ PARTY // BUILDER</div>
       <div style="display:flex; font-size:${titleSize}px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:6px;">${esc(titleText)}</div>
-      <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:26px;">${esc(subtitle)}</div>
+      <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:${bestSlotLine ? '12' : '26'}px;">${esc(subtitle)}</div>
+      ${bestSlotLine}
 
       ${useColumnLayout ? renderColumnLayout(rows, dict) : (
         renderRow('tank', rows.tank) +

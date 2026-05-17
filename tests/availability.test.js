@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  analyzeAvailability, bestSlots,
+  analyzeAvailability, bestSlots, bestSlotWithTail,
   countAvailCells, AVAIL_PRESETS, applyAvailPreset
 } from '../lib/availability.js';
 import { normalizeAvail, VALID_AVAIL_HOURS, VALID_AVAIL_DAYS } from '../lib/codec.js';
@@ -226,6 +226,61 @@ test('applyAvailPreset : preset inconnu → no-op', () => {
   const pl = { availability: { mon: [20] } };
   applyAvailPreset(pl, 'inexistant');
   assert.deepEqual(pl.availability, { mon: [20] });
+});
+
+// ---------- bestSlotWithTail ----------
+
+test('bestSlotWithTail : null si pas de répondants', () => {
+  assert.equal(bestSlotWithTail(analyzeAvailability([])), null);
+});
+
+test('bestSlotWithTail : un seul slot max → retourné direct avec tail', () => {
+  const a = analyzeAvailability([p('Alice', { mon: [20, 21, 22] })]);
+  const b = bestSlotWithTail(a);
+  assert.equal(b.day, 'mon');
+  assert.equal(b.hour, 20);
+  assert.equal(b.count, 1);
+  assert.equal(b.tail, 2, '21h et 22h ont la même densité → tail = 2');
+});
+
+test('bestSlotWithTail : départage 2 ex-æquo par la longueur de tail', () => {
+  // Mardi : tous dispos uniquement à 20h, rien après
+  // Mercredi : tous dispos de 20h à 22h
+  // → Mercredi gagne malgré le tri "jour" qui ferait gagner mardi
+  const a = analyzeAvailability([
+    p('Alice', { tue: [20], wed: [20, 21, 22] }),
+    p('Bob',   { tue: [20], wed: [20, 21, 22] })
+  ]);
+  const b = bestSlotWithTail(a);
+  assert.equal(b.day, 'wed');
+  assert.equal(b.hour, 20);
+  assert.equal(b.count, 2);
+  assert.equal(b.tail, 2);
+});
+
+test('bestSlotWithTail : la chaîne se rompt sur un trou dans les heures consécutives', () => {
+  // 20h : 2/2 dispos
+  // 21h : 1/2 (chaîne rompue ici)
+  // 22h : 2/2 mais on a déjà cassé
+  const a = analyzeAvailability([
+    p('Alice', { mon: [20, 22] }),
+    p('Bob',   { mon: [20, 21, 22] })  // mais Alice manque 21h
+  ]);
+  const b = bestSlotWithTail(a);
+  assert.equal(b.day, 'mon');
+  assert.equal(b.hour, 20);
+  assert.equal(b.tail, 0, '21h tombe à 1/2 → chaîne rompue, tail=0');
+});
+
+test('bestSlotWithTail : ex-æquo en tail ET densité → départage par jour puis heure', () => {
+  // Lun 20h et Mar 20h ont mêmes count + tail. Lun gagne (jour avant).
+  const a = analyzeAvailability([
+    p('Alice', { mon: [20, 21], tue: [20, 21] }),
+    p('Bob',   { mon: [20, 21], tue: [20, 21] })
+  ]);
+  const b = bestSlotWithTail(a);
+  assert.equal(b.day, 'mon');
+  assert.equal(b.hour, 20);
 });
 
 test('AVAIL_PRESETS : chaque preset utilise des heures valides', () => {
