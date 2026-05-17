@@ -2,7 +2,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeAvailability, bestSlots } from '../lib/availability.js';
+import {
+  analyzeAvailability, bestSlots,
+  countAvailCells, AVAIL_PRESETS, applyAvailPreset
+} from '../lib/availability.js';
 import { normalizeAvail, VALID_AVAIL_HOURS, VALID_AVAIL_DAYS } from '../lib/codec.js';
 
 // ---------- normalizeAvail ----------
@@ -166,4 +169,74 @@ test('bestSlots : ex-æquo tri stable (jour puis heure)', () => {
   assert.equal(best[0].hour, 20);
   assert.equal(best[1].day, 'sat');
   assert.equal(best[1].hour, 22);
+});
+
+// ---------- countAvailCells ----------
+
+test('countAvailCells : null/undefined → 0', () => {
+  assert.equal(countAvailCells(null), 0);
+  assert.equal(countAvailCells(undefined), 0);
+  assert.equal(countAvailCells('not-an-object'), 0);
+});
+
+test('countAvailCells : compte sur tous les jours valides', () => {
+  assert.equal(countAvailCells({ mon: [20, 21], sat: [14, 16, 18] }), 5);
+});
+
+test('countAvailCells : jour inconnu ignoré (defensive)', () => {
+  // Ne compte que les jours dans VALID_AVAIL_DAYS, pas la fantaisie.
+  assert.equal(countAvailCells({ foo: [20, 21, 22], mon: [20] }), 1);
+});
+
+// ---------- applyAvailPreset ----------
+
+test('applyAvailPreset : clear → availability null', () => {
+  const pl = { availability: { mon: [20] } };
+  applyAvailPreset(pl, 'clear');
+  assert.equal(pl.availability, null);
+});
+
+test('applyAvailPreset : weekdayEvening sur player vierge → coche lun-ven', () => {
+  const pl = { availability: null };
+  applyAvailPreset(pl, 'weekdayEvening');
+  for (const day of ['mon', 'tue', 'wed', 'thu', 'fri']) {
+    assert.deepEqual(pl.availability[day], [20, 21, 22], `jour ${day}`);
+  }
+  assert.equal(pl.availability.sat, undefined);
+});
+
+test('applyAvailPreset : weekendAll sur player vierge → coche sam+dim', () => {
+  const pl = { availability: null };
+  applyAvailPreset(pl, 'weekendAll');
+  assert.ok(pl.availability.sat.length > 0);
+  assert.ok(pl.availability.sun.length > 0);
+  assert.equal(pl.availability.mon, undefined);
+});
+
+test('applyAvailPreset : merge additif (ne remplace pas ce qui existe)', () => {
+  const pl = { availability: { mon: [10], sat: [14] } };
+  applyAvailPreset(pl, 'weekdayEvening');
+  // Le 10h existant reste, + les 20-22h ajoutés
+  assert.deepEqual(pl.availability.mon, [10, 20, 21, 22]);
+  // Le sat 14h n'est pas touché par weekdayEvening
+  assert.deepEqual(pl.availability.sat, [14]);
+});
+
+test('applyAvailPreset : preset inconnu → no-op', () => {
+  const pl = { availability: { mon: [20] } };
+  applyAvailPreset(pl, 'inexistant');
+  assert.deepEqual(pl.availability, { mon: [20] });
+});
+
+test('AVAIL_PRESETS : chaque preset utilise des heures valides', () => {
+  // Garde-fou : si on étend la liste d'heures valides, les presets ne doivent
+  // pas avoir d'heures qui passent en dehors silencieusement.
+  for (const presetKey of Object.keys(AVAIL_PRESETS)) {
+    const preset = AVAIL_PRESETS[presetKey];
+    for (const day of Object.keys(preset)) {
+      for (const hour of preset[day]) {
+        assert.ok(VALID_AVAIL_HOURS.includes(hour), `preset ${presetKey} jour ${day} → heure invalide ${hour}`);
+      }
+    }
+  }
 });

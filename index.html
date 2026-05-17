@@ -2815,7 +2815,10 @@ import {
   DEFAULT_CLAIM_LIMIT, CLAIM_LIMIT_UNLIMITED, VALID_CLAIM_LIMITS,
   VALID_AVAIL_HOURS, VALID_AVAIL_DAYS, normalizeAvail
 } from './lib/codec.js';
-import { analyzeAvailability, bestSlots } from './lib/availability.js';
+import {
+  analyzeAvailability, bestSlots,
+  countAvailCells, AVAIL_PRESETS, applyAvailPreset
+} from './lib/availability.js';
 import {
   MAX_PRESETS, MAX_PRESET_NAME_LEN,
   MAX_TEMPLATES, MAX_TEMPLATE_NAME_LEN,
@@ -5292,44 +5295,8 @@ document.addEventListener('click', e => {
 
 let availPopoverTarget = null;
 
-function countAvailCells(av) {
-  if (!av || typeof av !== 'object') return 0;
-  let n = 0;
-  for (const day of VALID_AVAIL_DAYS) {
-    if (Array.isArray(av[day])) n += av[day].length;
-  }
-  return n;
-}
-
-// Presets de dispos : raccourcis pour pré-remplir un pattern fréquent.
-// Stockés comme des matrices day → hours qu'on merge dans l'avail courant.
-const AVAIL_PRESETS = {
-  weekdayEvening: { mon: [20, 21, 22], tue: [20, 21, 22], wed: [20, 21, 22], thu: [20, 21, 22], fri: [20, 21, 22] },
-  weekendAfternoon: { sat: [14, 16, 18], sun: [14, 16, 18] },
-  weekendAll: {
-    sat: [14, 16, 18, 19, 20, 21, 22, 23],
-    sun: [14, 16, 18, 19, 20, 21, 22]
-  }
-};
-
-function applyAvailPreset(player, presetKey) {
-  if (presetKey === 'clear') {
-    player.availability = null;
-    return;
-  }
-  const preset = AVAIL_PRESETS[presetKey];
-  if (!preset) return;
-  // Merge avec l'existant (toggle additif — on n'écrase pas ce que l'user
-  // a déjà coché manuellement)
-  const cur = player.availability || {};
-  const merged = { ...cur };
-  for (const day of Object.keys(preset)) {
-    const existing = new Set(merged[day] || []);
-    for (const h of preset[day]) existing.add(h);
-    merged[day] = [...existing].sort((a, b) => a - b);
-  }
-  player.availability = normalizeAvail(merged);
-}
+// countAvailCells / applyAvailPreset / AVAIL_PRESETS : voir lib/availability.js
+// (purs, testés).
 
 function closeAvailPopover() {
   const pop = document.getElementById('availPopover');
