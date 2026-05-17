@@ -2707,6 +2707,7 @@
       <button class="btn-tool" id="reconfigureWebhookBtn" hidden style="font-size:0.6rem;opacity:0.7"><span data-i18n="dc_reconfigure">↻ Reconfigurer le webhook</span></button>
       <button class="btn-tool" id="duplicateRoomBtn" hidden data-i18n-title="dupe_title"><span data-i18n="dupe_btn">↻ Dupliquer ce salon</span></button>
       <button class="btn-tool" id="modalSyncBtn" hidden><span data-i18n="t_syncNow">↻ Synchroniser</span></button>
+      <button class="btn-tool" id="refreshDiscordBtn" data-i18n-title="dc_refreshTitle" style="font-size:0.6rem;opacity:0.85"><span data-i18n="dc_refresh">↻ Forcer le refresh Discord</span></button>
     </div>
   </div>
 </div>
@@ -3128,6 +3129,9 @@ const STRINGS = {
     dc_publish: '▸ Publier sur Discord',
     dc_publishTitle: 'Poster la compo dans ton canal Discord configuré',
     dc_reconfigure: '↻ Reconfigurer le webhook',
+    dc_refresh: '↻ Forcer le refresh Discord',
+    dc_refreshTitle: "Copie un lien avec un paramètre frais — Discord verra une 'nouvelle' page et refera son embed (utile après une refonte visuelle de l'OG image)",
+    dc_refreshCopied: 'Lien copié — colle-le dans Discord pour forcer le refresh',
     dc_promptUrl: 'URL du webhook Discord :\n\nCrée-le dans : Paramètres du canal > Intégrations > Webhooks > Nouveau webhook > Copier l\'URL.\nIl reste stocké uniquement dans ton navigateur.',
     dc_invalidUrl: 'URL de webhook invalide',
     dc_published: 'Publié sur Discord ✓',
@@ -3376,6 +3380,9 @@ const STRINGS = {
     dc_publish: '▸ Publish to Discord',
     dc_publishTitle: 'Post the comp to your configured Discord channel',
     dc_reconfigure: '↻ Reconfigure webhook',
+    dc_refresh: '↻ Force Discord refresh',
+    dc_refreshTitle: "Copies a link with a fresh query param — Discord sees a 'new' page and rebuilds the embed (useful after a visual OG redesign)",
+    dc_refreshCopied: 'Link copied — paste in Discord to force a refresh',
     dc_promptUrl: 'Discord webhook URL:\n\nCreate one in: Channel Settings > Integrations > Webhooks > New webhook > Copy URL.\nStored only in your browser.',
     dc_invalidUrl: 'Invalid webhook URL',
     dc_published: 'Published to Discord ✓',
@@ -6516,14 +6523,33 @@ function refreshDiscordButtons() {
   const publishBtn = document.getElementById('publishDiscordBtn');
   const reconfBtn = document.getElementById('reconfigureWebhookBtn');
   const dupeBtn = document.getElementById('duplicateRoomBtn');
+  const refreshBtn = document.getElementById('refreshDiscordBtn');
   const isAdminInRoom = state.isAdmin && currentRoomId;
   if (publishBtn) publishBtn.hidden = !isAdminInRoom;
   if (reconfBtn) reconfBtn.hidden = !(isAdminInRoom && getDiscordWebhook());
   if (dupeBtn) dupeBtn.hidden = !isAdminInRoom;
+  // Refresh : utile à n'importe qui dans un salon (pas que admin)
+  if (refreshBtn) refreshBtn.hidden = !currentRoomId;
 }
 
 document.getElementById('publishDiscordBtn').addEventListener('click', () => publishToDiscord());
 document.getElementById('reconfigureWebhookBtn').addEventListener('click', () => promptForDiscordWebhook());
+
+// Forcer Discord à re-scrape l'embed : copie l'URL avec un timestamp en
+// param query qui change la signature de la page → Discord la traite
+// comme une "nouvelle" page et rebuild l'embed depuis zéro.
+// Utile après bump d'OG_LAYOUT_VERSION (Discord ne re-scrape pas tout seul
+// pour autant — son TTL interne peut tenir plusieurs jours).
+document.getElementById('refreshDiscordBtn').addEventListener('click', async () => {
+  if (!currentRoomId) {
+    // Pas de salon = pas d'OG dynamique à refresh
+    showToast(t('ts_copyFail'));
+    return;
+  }
+  const fresh = buildShareUrl(currentRoomId) + '&dr=' + Date.now().toString(36);
+  if (await copyToClipboard(fresh)) showToast(t('dc_refreshCopied'), { duration: 4500 });
+  else showToast(t('ts_copyFail'));
+});
 
 // Dupliquer le salon : crée un nouveau salon avec mêmes params + roster
 // mais sans Quand?, sans claims, sans locks. Ouvert dans un nouvel onglet.

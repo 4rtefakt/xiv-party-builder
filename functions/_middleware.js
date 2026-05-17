@@ -29,6 +29,13 @@ function escAttr(s) {
   }[c]));
 }
 
+// Version du layout OG. À incrémenter à chaque refonte visuelle du PNG
+// (worker og/[id].js). Inclus dans la query string `?v=` de l'og:image
+// pour qu'un re-scrape Discord après bump produise une URL différente,
+// donc invalidate le cache image côté Discord. Doit suivre OG_LAYOUT_VERSION
+// dans og/[id].js.
+const OG_LAYOUT_VERSION = 2;
+
 // Hash court (8 hex chars) du JSON stocké en KV. Sert de cache-buster pour
 // Discord/Twitter : ils ré-utilisent leur cache tant que le hash ne change pas,
 // et re-fetch l'OG image quand le salon a été modifié. Bien plus économique
@@ -79,11 +86,12 @@ export async function onRequest(context) {
     ? data.p.filter(x => x && x.n && x.s !== 'out').length
     : 0;
   const desc = dict.desc(playerCount);
-  // Cache-bust stable : hash du contenu KV. Tant que le salon est identique,
-  // l'URL reste la même → Discord/Twitter ré-utilisent leur cache d'OG image
-  // → pas de re-rasterization workers-og (coûteuse en CPU). Quand quelqu'un
-  // édite la compo, le hash change et le scrape suivant invalide le cache.
-  const ogImage = `${url.origin}/og/${p}?v=${await shortHash(raw)}`;
+  // Cache-bust stable : hash du contenu KV + version du layout. Tant que ces
+  // deux composantes restent identiques, l'URL og:image est la même
+  // → Discord/Twitter ré-utilisent leur cache (pas de re-rasterization).
+  // Quand le salon est édité OU qu'on bump OG_LAYOUT_VERSION, l'URL change
+  // → re-fetch côté scrapers.
+  const ogImage = `${url.origin}/og/${p}?v=${OG_LAYOUT_VERSION}_${await shortHash(raw)}`;
 
   html = html
     .replace(/<meta property="og:title" content="[^"]*">/i,
