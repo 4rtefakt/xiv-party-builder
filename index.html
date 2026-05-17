@@ -2762,6 +2762,7 @@ const STRINGS = {
     perm_claimTitle: 'Réserver cette ligne (claim)',
     perm_unclaim: 'Libérer',
     perm_unclaimTitle: 'Libérer cette ligne (annuler ma réservation)',
+    perm_unclaimAdminTitle: 'Libérer cette ligne (admin · le nom et les prefs restent, le claim est rendu)',
     perm_yours: 'Toi',
     perm_owner: 'Owner',
     perm_admin: 'Admin',
@@ -3006,6 +3007,7 @@ const STRINGS = {
     perm_claimTitle: 'Claim this row',
     perm_unclaim: 'Release',
     perm_unclaimTitle: 'Release this row (cancel my claim)',
+    perm_unclaimAdminTitle: 'Release this row (admin · name and prefs stay, the claim is freed)',
     perm_yours: 'You',
     perm_owner: 'Owner',
     perm_admin: 'Admin',
@@ -3511,14 +3513,21 @@ function buildPlayerRow(player, idx) {
     // appelé dans chaque handler ci-dessous). Le visuel `.unclaimed` (cyan)
     // signale que la ligne est libre, et le badge "Toi" apparaît dès le claim.
 
-    // Bouton Libérer : visible sur SA propre ligne. Permet de rendre la
-    // ligne disponible (claimedBy → null) sans toucher au reste. Côté
-    // serveur, normalizeForNonAdminMerge accepte déjà ce clear.
-    if (isMine) {
+    // Bouton Libérer : visible sur SA propre ligne (non-admin) OU sur n'importe
+    // quelle ligne claim quand on est admin (peut récupérer une ligne sans avoir
+    // à virer la personne). Côté serveur :
+    //   - non-admin sa ligne → normalizeForNonAdminMerge accepte le clear
+    //   - admin n'importe quelle ligne → normalizeForAdminUpdate overwrite total
+    const canUnclaim = isMine || (state.isAdmin && !!player.claimedBy);
+    if (canUnclaim) {
       const unclaimBtn = document.createElement('button');
       unclaimBtn.className = 'unclaim-btn';
       unclaimBtn.textContent = '✕';
-      unclaimBtn.title = t('perm_unclaimTitle');
+      // Tooltip différencié : admin libérant la ligne de quelqu'un d'autre
+      // (utile pour clarifier que ce n'est pas destructif — la personne peut
+      // re-claim, et son nom + prefs restent intacts)
+      const otherUserUnclaim = !isMine && state.isAdmin && player.claimedBy;
+      unclaimBtn.title = otherUserUnclaim ? t('perm_unclaimAdminTitle') : t('perm_unclaimTitle');
       unclaimBtn.setAttribute('aria-label', t('perm_unclaim'));
       unclaimBtn.addEventListener('click', () => {
         player.claimedBy = null;
