@@ -20,6 +20,10 @@ const VALID_JOBS = new Set([
   'BLM','SMN','RDM','PCT'
 ]);
 const VALID_CONTENT = new Set(['dungeon', 'raid8', 'raid24', 'raid24chaotic']);
+// Dispos : mêmes valeurs que lib/codec.js (dupliquées pour éviter un import
+// inter-projet en runtime worker).
+const VALID_AVAIL_HOURS = new Set([8, 10, 14, 16, 18, 19, 20, 21, 22, 23]);
+const VALID_AVAIL_DAYS = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 
 const TTL_SECONDS = 31536000; // 1 an
 const MAX_BODY_BYTES = 8192;
@@ -110,6 +114,30 @@ export function normalizeRecent(raw) {
   return out;
 }
 
+// Normalise un objet defaultAvailability { mon: [20, 21], sat: [...] }.
+// Filtre jours/heures inconnus, dédup + tri stable. Renvoie null si rien
+// de valide (champ sera omis du stockage).
+export function normalizeDefaultAvailability(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  for (const day of Object.keys(raw)) {
+    if (!VALID_AVAIL_DAYS.has(day)) continue;
+    const hours = raw[day];
+    if (!Array.isArray(hours)) continue;
+    const seen = new Set();
+    const valid = [];
+    for (const h of hours) {
+      if (typeof h !== 'number' || !VALID_AVAIL_HOURS.has(h) || seen.has(h)) continue;
+      seen.add(h);
+      valid.push(h);
+    }
+    if (valid.length === 0) continue;
+    valid.sort((a, b) => a - b);
+    out[day] = valid;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 // Valide le payload entier, renvoie l'objet à stocker ou { error: string }.
 export function validateProfile(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
@@ -139,6 +167,16 @@ export function validateProfile(payload) {
       .map(normalizeRecent)
       .filter(r => r !== null)
       .slice(0, MAX_RECENTS);
+  }
+
+  if (payload.defaultAvailability !== undefined) {
+    if (payload.defaultAvailability === null) {
+      // Permet d'effacer en POST avec null explicite (vs absence du champ)
+      out.defaultAvailability = null;
+    } else {
+      const cleaned = normalizeDefaultAvailability(payload.defaultAvailability);
+      if (cleaned) out.defaultAvailability = cleaned;
+    }
   }
 
   out.updatedAt = Date.now();

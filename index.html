@@ -3066,6 +3066,16 @@ const STRINGS = {
     av_preset_weekendAfternoon: 'WE aprèm',
     av_preset_weekendAll: 'WE complet',
     av_preset_clear: 'Effacer',
+    av_applyDefault: '↓ Appliquer mes dispos par défaut',
+    av_applyDefaultTitle: 'Charge tes dispos par défaut (synchronisées dans ton profil cloud) dans cette ligne',
+    av_saveAsDefault: '↑ Enregistrer comme mes dispos par défaut',
+    av_saveAsDefaultTitle: "Sauve les cases cochées comme tes dispos par défaut, réutilisables dans n'importe quel salon (synchro cloud)",
+    av_clearDefault: '⊘ Oublier mes dispos par défaut',
+    av_clearDefaultTitle: 'Supprime tes dispos par défaut de ton profil',
+    av_clearDefaultConfirm: 'Supprimer tes dispos par défaut ? Tu pourras en redéfinir plus tard.',
+    av_defaultApplied: 'Dispos par défaut appliquées',
+    av_defaultSaved: 'Dispos enregistrées comme défaut ✓',
+    av_defaultCleared: 'Dispos par défaut effacées',
     av_daysShort: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
     av_daysLong:  ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
     av_heatmapTitle: ({ n }) => `📅 Créneaux communs (${n} ${n > 1 ? 'réponses' : 'réponse'})`,
@@ -3334,6 +3344,16 @@ const STRINGS = {
     av_preset_weekendAfternoon: 'Weekend afternoon',
     av_preset_weekendAll: 'Full weekend',
     av_preset_clear: 'Clear',
+    av_applyDefault: '↓ Apply my default availability',
+    av_applyDefaultTitle: 'Load your default availability (synced via your cloud profile) into this row',
+    av_saveAsDefault: '↑ Save as my default availability',
+    av_saveAsDefaultTitle: 'Save the ticked cells as your default availability, reusable in any room (cloud-synced)',
+    av_clearDefault: '⊘ Forget my default availability',
+    av_clearDefaultTitle: 'Remove your default availability from your profile',
+    av_clearDefaultConfirm: 'Remove your default availability? You can set it again later.',
+    av_defaultApplied: 'Default availability applied',
+    av_defaultSaved: 'Saved as your default ✓',
+    av_defaultCleared: 'Default availability cleared',
     av_daysShort: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     av_daysLong:  ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     av_heatmapTitle: ({ n }) => `📅 Common slots (${n} ${n > 1 ? 'responses' : 'response'})`,
@@ -5395,6 +5415,75 @@ function openAvailPopover(btn, player) {
   });
   pop.appendChild(presetsBar);
 
+  // Deuxième barre : actions liées au "profil" (dispos par défaut de
+  // l'utilisateur·ice, persistées au profil cloud). Visible seulement si
+  // pertinent — pas de bouton "appliquer" si rien à appliquer, pas de
+  // bouton "enregistrer" si rien à enregistrer.
+  const profileBar = document.createElement('div');
+  profileBar.className = 'avail-presets';
+  profileBar.style.borderTop = '1px solid var(--line)';
+  profileBar.style.paddingTop = '0.45rem';
+
+  const myDefault = getDefaultAvailability();
+  const hasCurrentAvail = countAvailCells(player.availability) > 0;
+
+  if (myDefault) {
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'avail-preset-btn';
+    applyBtn.textContent = t('av_applyDefault');
+    applyBtn.title = t('av_applyDefaultTitle');
+    applyBtn.addEventListener('click', () => {
+      // Merge additif (cohérent avec applyAvailPreset) : on n'écrase pas
+      // ce que la personne a déjà coché manuellement, on ajoute le défaut.
+      const cur = player.availability || {};
+      const merged = { ...cur };
+      for (const day of Object.keys(myDefault)) {
+        const existing = new Set(merged[day] || []);
+        for (const h of myDefault[day]) existing.add(h);
+        merged[day] = [...existing].sort((a, b) => a - b);
+      }
+      player.availability = normalizeAvail(merged);
+      openAvailPopover(availPopoverTarget && availPopoverTarget.btn || btn, player);
+      scheduleAutoSave(150);
+      player._needsBadgeRender = true;
+      renderAvailHeatmap();
+      showToast(t('av_defaultApplied'));
+    });
+    profileBar.appendChild(applyBtn);
+  }
+
+  if (hasCurrentAvail) {
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'avail-preset-btn';
+    saveBtn.textContent = t('av_saveAsDefault');
+    saveBtn.title = t('av_saveAsDefaultTitle');
+    saveBtn.addEventListener('click', () => {
+      setDefaultAvailability(player.availability);
+      showToast(t('av_defaultSaved'));
+      // Rebuild le popover pour que le bouton "Appliquer" apparaisse s'il
+      // n'existait pas avant (premier enregistrement).
+      openAvailPopover(availPopoverTarget && availPopoverTarget.btn || btn, player);
+    });
+    profileBar.appendChild(saveBtn);
+  }
+
+  if (myDefault) {
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'avail-preset-btn danger';
+    clearBtn.textContent = t('av_clearDefault');
+    clearBtn.title = t('av_clearDefaultTitle');
+    clearBtn.addEventListener('click', () => {
+      if (!confirm(t('av_clearDefaultConfirm'))) return;
+      setDefaultAvailability(null);
+      showToast(t('av_defaultCleared'));
+      openAvailPopover(availPopoverTarget && availPopoverTarget.btn || btn, player);
+    });
+    profileBar.appendChild(clearBtn);
+  }
+
+  // N'ajoute la barre que si elle a au moins 1 bouton (sinon UI clutter)
+  if (profileBar.children.length > 0) pop.appendChild(profileBar);
+
   const grid = document.createElement('div');
   grid.className = 'avail-grid';
   // En-tête : coin vide puis les heures
@@ -5821,8 +5910,29 @@ function currentProfileSnapshot() {
   return JSON.stringify({
     presets: getPresets(),
     templates: getTemplates(),
-    recents: getRecentRooms()
+    recents: getRecentRooms(),
+    defaultAvailability: getDefaultAvailability()
   });
+}
+
+// --- Dispos par défaut : stockées en LS sous "xiv-default-avail" ---
+const DEFAULT_AVAIL_KEY = 'xiv-default-avail';
+
+function getDefaultAvailability() {
+  try {
+    const v = localStorage.getItem(DEFAULT_AVAIL_KEY);
+    if (!v) return null;
+    return normalizeAvail(JSON.parse(v));
+  } catch { return null; }
+}
+
+function setDefaultAvailability(av) {
+  try {
+    const clean = normalizeAvail(av);
+    if (clean) localStorage.setItem(DEFAULT_AVAIL_KEY, JSON.stringify(clean));
+    else localStorage.removeItem(DEFAULT_AVAIL_KEY);
+  } catch { /* mode privé / quota : on ignore */ }
+  pushProfileToCloud();
 }
 
 function pushProfileToCloud() {
@@ -5865,6 +5975,15 @@ async function loadProfileFromCloud() {
     if (Array.isArray(profile.recents) && profile.recents.length > 0) {
       writeRecentRoomsLocal(profile.recents);
       hasCloudData = true;
+    }
+    // Dispos par défaut : pas Array, c'est un objet ou null. On hydrate
+    // tant que c'est non-null et non-vide.
+    if (profile.defaultAvailability && typeof profile.defaultAvailability === 'object') {
+      const clean = normalizeAvail(profile.defaultAvailability);
+      if (clean) {
+        try { localStorage.setItem(DEFAULT_AVAIL_KEY, JSON.stringify(clean)); } catch {}
+        hasCloudData = true;
+      }
     }
     if (hasCloudData) {
       // Re-render recent rooms (visible en haut de page) ; les presets et

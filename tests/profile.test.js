@@ -5,7 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  normalizePreset, normalizeTemplate, normalizeRecent, validateProfile,
+  normalizePreset, normalizeTemplate, normalizeRecent,
+  normalizeDefaultAvailability, validateProfile,
   onRequestGet, onRequestPut
 } from '../functions/api/profile.js';
 
@@ -270,4 +271,38 @@ test('PUT : JSON malformé → 400', async () => {
   });
   const r = await onRequestPut({ request: req, env: { PARTY_KV: kv } });
   assert.equal(r.status, 400);
+});
+
+// ---------- normalizeDefaultAvailability ----------
+
+test('normalizeDefaultAvailability : objet valide → trié + dédupliqué', () => {
+  const r = normalizeDefaultAvailability({ mon: [21, 20, 20, 22], sat: [14, 16] });
+  assert.deepEqual(r, { mon: [20, 21, 22], sat: [14, 16] });
+});
+
+test('normalizeDefaultAvailability : jours/heures invalides filtrés', () => {
+  const r = normalizeDefaultAvailability({ mon: [20, 99, 0], foo: [20], sat: [14] });
+  assert.deepEqual(r, { mon: [20], sat: [14] });
+});
+
+test('normalizeDefaultAvailability : non-objet / vide → null', () => {
+  assert.equal(normalizeDefaultAvailability(null), null);
+  assert.equal(normalizeDefaultAvailability({}), null);
+  assert.equal(normalizeDefaultAvailability([1, 2]), null);
+  assert.equal(normalizeDefaultAvailability('foo'), null);
+});
+
+test('validateProfile : defaultAvailability inclus en sortie quand valide', () => {
+  const r = validateProfile({ defaultAvailability: { mon: [20, 21] } });
+  assert.deepEqual(r.stored.defaultAvailability, { mon: [20, 21] });
+});
+
+test('validateProfile : defaultAvailability null permet l\'effacement', () => {
+  const r = validateProfile({ defaultAvailability: null });
+  assert.equal(r.stored.defaultAvailability, null);
+});
+
+test('validateProfile : defaultAvailability absent → champ omis', () => {
+  const r = validateProfile({ presets: [] });
+  assert.equal(r.stored.defaultAvailability, undefined);
 });
