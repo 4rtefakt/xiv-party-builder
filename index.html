@@ -6349,7 +6349,11 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
   urlEl.dataset.code = code;
 
   function refreshAdminLinkVisibility() {
-    adminLinkBtn.hidden = !(state.isAdmin && currentRoomId && getAdminSecret(currentRoomId));
+    // Passe par isReallyAdminInRoom() (state.isAdmin + USER_ID dans admins[] OU
+    // secret en LS) pour éviter qu'un secret stale en LS suffise à montrer le
+    // bouton si le serveur ne nous a pas confirmé admin (cas legacy fixé en
+    // 3194d41 mais on garde une défense en profondeur).
+    adminLinkBtn.hidden = !(isReallyAdminInRoom() && getAdminSecret(currentRoomId));
     refreshDiscordButtons();
   }
 
