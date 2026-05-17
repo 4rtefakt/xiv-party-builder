@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 18; // v18 : flatten DPS en 2 colonnes sœurs (M | R) au lieu du sub-grid imbriqué → toutes les cards visuellement = 250
+const OG_LAYOUT_VERSION = 19; // v19 : shift heal cards +20 et DPS cards +15 (headers inchangés) + shortenName seuil 12 chars
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -115,23 +115,18 @@ function esc(s) {
 }
 
 // Compacte un nom FFXIV "Prénom Nom" en "Prénom N." pour les cartes de
-// l'OG image. Satori ne mesure pas le texte de façon prévisible (la
-// largeur des chars en Chakra Petch varie beaucoup : "Alice Erisia" tient
-// alors que "Daga Arken" wrap, à longueur égale) → on ne se fie pas au
-// nombre de chars mais à la STRUCTURE du nom :
-//   - 1 seul mot → kept tel quel (cap large avec ellipsis si très long)
-//   - 2+ mots (cas FFXIV "Prénom Nom") → TOUJOURS abrégé "Prénom N."
-// Le prénom est tronqué à FIRST_MAX chars si très long.
+// l'OG image — UNIQUEMENT si le nom complet dépasse MAX chars. Les noms
+// courts (≤ 12 chars) passent intacts. Sinon : abrégement "Prénom N." pour
+// les 2+ mots, troncature avec ellipsis pour les noms 1 mot.
 function shortenName(name) {
-  const FIRST_MAX = 9;          // cap pour le 1er token quand on a 2+ mots
-  const SINGLE_WORD_MAX = 14;   // cap pour les noms à 1 seul mot
+  const MAX = 12;               // seuil au-dessus duquel on raccourcit
+  const FIRST_MAX = 9;          // cap pour le 1er token quand on abrège
   const trimmed = String(name || '').trim();
   if (!trimmed) return trimmed;
+  if (trimmed.length <= MAX) return trimmed;
   const tokens = trimmed.split(/\s+/);
   if (tokens.length < 2) {
-    return trimmed.length <= SINGLE_WORD_MAX
-      ? trimmed
-      : trimmed.slice(0, SINGLE_WORD_MAX - 1) + '…';
+    return trimmed.slice(0, MAX - 1) + '…';
   }
   const first = tokens[0];
   const initials = tokens.slice(1).map(t => t.charAt(0).toUpperCase() + '.').join(' ');
@@ -226,9 +221,15 @@ function renderColumnLayout(rows, dict, dpsLayout) {
     return `<div style="display:flex; align-items:center; justify-content:center; width:${width}px; height:30px; color:${color}; font-size:14px; letter-spacing:3px; font-weight:700; border-bottom:1px solid ${color}66;">${esc(label)}</div>`;
   }
 
-  function columnCards(cards) {
+  // shift = décalage horizontal en px appliqué aux CARDS uniquement (pas au
+  // header). Utilisé pour aligner les cards heal +20px et DPS (M/R) +15px par
+  // rapport à leur header. `position:relative; left:N` ne déplace que la
+  // colonne visuellement, sans repousser les suivantes (contrairement à
+  // margin-left qui propage la shift).
+  function columnCards(cards, shift) {
+    const shiftStyle = shift ? `position:relative; left:${shift}px;` : '';
     return `
-      <div style="display:flex; flex-direction:column; width:${COL_W}px; gap:8px;">
+      <div style="${shiftStyle} display:flex; flex-direction:column; width:${COL_W}px; gap:8px;">
         ${cards.join('')}
       </div>
     `;
@@ -255,10 +256,10 @@ function renderColumnLayout(rows, dict, dpsLayout) {
         ${header(dict.colDps,    HDR_COLORS.dps,  dpsHeaderWidth)}
       </div>
       <div style="display:flex; flex-direction:row; gap:${COL_GAP}px; align-items:flex-start;">
-        ${columnCards(rows.tank.map(m => renderCard(m, CARD_W)))}
-        ${columnCards(rows.heal.map(m => renderCard(m, CARD_W)))}
-        ${columnCards(mCards)}
-        ${columnCards(rCards)}
+        ${columnCards(rows.tank.map(m => renderCard(m, CARD_W)), 0)}
+        ${columnCards(rows.heal.map(m => renderCard(m, CARD_W)), 20)}
+        ${columnCards(mCards, 15)}
+        ${columnCards(rCards, 15)}
       </div>
     </div>
   `;
