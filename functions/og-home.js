@@ -11,7 +11,7 @@
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, ROLE_COLOR } from '../lib/jobs.js';
 
-const HOME_OG_VERSION = 3;  // v3 : force render to buffer + remove width:fit-content (satori-incompat) + esc() pour '&'
+const HOME_OG_VERSION = 4;  // v4 : layout vertical (features full-width au-dessus des cards) + retire '&' littéral non décodé par satori
 const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
 const iconUrl = (jobId) => {
   const j = JOB_BY_ID[jobId];
@@ -36,9 +36,9 @@ const STRINGS = {
     title: 'Compose ta party FFXIV',
     subtitle: 'Optimise les jobs selon les préférences de chacun·e',
     features: [
-      'Préférences ordonnées + algo branch & bound',
-      'Dispos hebdo + meilleur créneau auto',
-      'Bonus Role Composition (+5% si tous les sous-rôles)',
+      'Préférences ordonnées · algo branch and bound',
+      'Dispos hebdo · meilleur créneau auto',
+      'Bonus Role Composition · +5% si tous les sous-rôles',
       'Partage 1-clic Discord · zéro compte'
     ],
     footerHint: 'gratuit · open source · cloudflare pages'
@@ -47,9 +47,9 @@ const STRINGS = {
     title: 'Build your FFXIV party',
     subtitle: 'Optimise jobs based on everyone\'s preferences',
     features: [
-      'Ranked preferences + branch & bound solver',
-      'Weekly availability + auto best slot',
-      'Role Composition bonus (+5% with all sub-roles)',
+      'Ranked preferences · branch and bound solver',
+      'Weekly availability · auto best slot',
+      'Role Composition bonus · +5% with all sub-roles',
       '1-click Discord share · no account needed'
     ],
     footerHint: 'free · open source · cloudflare pages'
@@ -62,11 +62,12 @@ function pickLang(headers) {
   return first.startsWith('en') ? 'en' : 'fr';
 }
 
-// Échappe les chars HTML/XML qui cassent la sérialisation SVG de satori.
-// Notamment '&' qui transforme un texte comme "branch & bound" en entité XML
-// invalide et fait avorter le rendu silencieusement (PNG 0 byte).
+// Échappe '<' et '>' seulement. PAS '&' : satori rend les entités HTML
+// littéralement (`&amp;` apparaît tel quel dans la sortie), donc on garde le
+// '&' raw et on évite simplement de mettre des '<' ou '>' bruts qui
+// casseraient le parsing.
 function esc(s) {
-  return String(s).replace(/[<>&]/g, c => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[c]));
+  return String(s).replace(/[<>]/g, c => ({ '<':'&lt;','>':'&gt;' }[c]));
 }
 
 function renderDemoCard(player) {
@@ -88,38 +89,45 @@ export async function onRequestGet({ request }) {
   const lang = pickLang(request.headers);
   const dict = STRINGS[lang];
 
-  // Layout : titre/baseline à gauche, mini-compo démo à droite.
-  // 1200×630, dark cyberpunk style cohérent avec /og/[id].
+  // Layout vertical (toutes les sections empilées full-width). Le précédent
+  // essai en 2 colonnes échouait parce que les 4 cartes (240px × 4 + gaps =
+  // ~970px) ne laissaient ~100px à la colonne features, qui wrappait à un
+  // mot par ligne. Plus simple, plus lisible :
+  //   1. header brand + titre + sous-titre
+  //   2. 4 features (1 par ligne, font-size resserrée)
+  //   3. compo démo 2 rows × 4 cards + badge +5%
+  //   4. footer
+  //
+  // Total vertical attendu (sans padding) :
+  //   header  ~140  (22 + 62 + 22 + margins)
+  //   feat    ~140  (4 lignes × 28px + margins)
+  //   compo   ~120  (2 × 50 + gap + badge 30)
+  //   footer  ~30
+  //   total   ~430 + 92 padding = 522. Tient dans 630.
+
   const featureLines = dict.features.map(f =>
-    `<div style="display:flex; align-items:center; gap:10px; font-size:21px; color:#d7e6f2; margin-bottom:8px;">
-       <span style="display:flex; color:#00e5ff; font-family:monospace; font-weight:700;">▸</span>
+    `<div style="display:flex; flex-direction:row; align-items:center; font-size:22px; color:#d7e6f2; margin-bottom:6px;">
+       <span style="display:flex; color:#00e5ff; font-family:monospace; font-weight:700; margin-right:10px;">▸</span>
        <span style="display:flex;">${esc(f)}</span>
      </div>`
   ).join('');
 
-  // 4 colonnes × 2 rows : [Tanks col][Heals col][DPS col M / DPS col R]
-  // Simplifié en 2 lignes de 4 cartes pour l'OG.
   const row1 = DEMO_COMPO.slice(0, 4).map(renderDemoCard).join('');
   const row2 = DEMO_COMPO.slice(4, 8).map(renderDemoCard).join('');
 
   const html = `
-    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:46px 56px; font-family:sans-serif;">
-      <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:14px;">◆ PARTY // BUILDER</div>
-      <div style="display:flex; font-size:62px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:8px;">${esc(dict.title)}</div>
-      <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:28px;">${esc(dict.subtitle)}</div>
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:42px 56px; font-family:sans-serif;">
+      <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:10px;">◆ PARTY // BUILDER</div>
+      <div style="display:flex; font-size:56px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:4px;">${esc(dict.title)}</div>
+      <div style="display:flex; font-size:22px; color:#ff2e9a; margin-bottom:22px;">${esc(dict.subtitle)}</div>
 
-      <div style="display:flex; flex-direction:row; gap:36px; align-items:flex-start;">
-        <div style="display:flex; flex-direction:column; flex:1;">
-          ${featureLines}
-        </div>
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <div style="display:flex; flex-direction:row; gap:6px;">${row1}</div>
-          <div style="display:flex; flex-direction:row; gap:6px;">${row2}</div>
-          <div style="display:flex; flex-direction:row; align-self:flex-start; align-items:center; gap:6px; margin-top:8px; padding:6px 10px; border:1px solid rgba(74,222,128,0.5); background:rgba(74,222,128,0.08);">
-            <span style="display:flex; color:#4ade80; font-size:18px; font-weight:700; font-family:monospace;">+5%</span>
-            <span style="display:flex; color:#d7e6f2; font-size:14px;">Role Composition Bonus</span>
-          </div>
-        </div>
+      <div style="display:flex; flex-direction:column; margin-bottom:22px;">
+        ${featureLines}
+      </div>
+
+      <div style="display:flex; flex-direction:column;">
+        <div style="display:flex; flex-direction:row; gap:8px; margin-bottom:6px;">${row1}</div>
+        <div style="display:flex; flex-direction:row; gap:8px;">${row2}</div>
       </div>
 
       <div style="display:flex; margin-top:auto; justify-content:space-between; align-items:flex-end;">
