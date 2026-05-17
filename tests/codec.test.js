@@ -379,6 +379,41 @@ test('encodePayload → validateImportedPayload : roundtrip stable', () => {
   assert.equal(validated.players[1].presence, 'maybe');
 });
 
+test('encodePayload : availability roundtrip (encode → validate)', () => {
+  const s = {
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50,
+    players: [{
+      name: 'Alice', preferences: [], rowId: 'rABC',
+      availability: { mon: [20, 21], sat: [14, 16, 18, 19, 20] }
+    }]
+  };
+  const out = encodePayload(s);
+  assert.deepEqual(out.p[0].av, { mon: [20, 21], sat: [14, 16, 18, 19, 20] });
+  const validated = validateImportedPayload(out);
+  assert.deepEqual(validated.players[0].availability, s.players[0].availability);
+});
+
+test('encodePayload : availability nulle ou vide → champ av omis', () => {
+  for (const av of [null, undefined, {}, { foo: [99] }]) {
+    const out = encodePayload({
+      contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50,
+      players: [{ name: 'A', preferences: [], availability: av }]
+    });
+    assert.equal(out.p[0].av, undefined, `av=${JSON.stringify(av)} doit être omis`);
+  }
+});
+
+test('encodePayload : availability avec heures invalides nettoyée à l\'émission', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50,
+    players: [{
+      name: 'A', preferences: [],
+      availability: { mon: [20, 99, 21, 0], foo: [20] }
+    }]
+  });
+  assert.deepEqual(out.p[0].av, { mon: [20, 21] });
+});
+
 test('encodePayload : claimLimit pas dans payload → roundtrip donne défaut', () => {
   // Quand l'admin ne fournit pas cl, l'importer applique DEFAULT_CLAIM_LIMIT
   const out = encodePayload({

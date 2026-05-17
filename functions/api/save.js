@@ -22,7 +22,11 @@ const VALID_JOBS = new Set([
   'BLM','SMN','RDM','PCT'
 ]);
 const VALID_PRESENCE = new Set(['in', 'maybe', 'out']);
-const MAX_BODY_BYTES = 8192; // élargi pour inclure les nouveaux champs (rowId, claimedBy, admins…)
+// Dispos : mêmes valeurs que lib/codec.js (dupliquées pour éviter un import
+// inter-projet en runtime worker, pattern existant)
+const VALID_AVAIL_HOURS = new Set([8, 10, 14, 16, 18, 19, 20, 21, 22, 23]);
+const VALID_AVAIL_DAYS = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+const MAX_BODY_BYTES = 16384; // élargi pour les dispos (jusqu'à 7 jours × 10h × 24 joueurs)
 const MAX_PLAYERS = 24;
 const MAX_NAME_LEN = 32;
 const MAX_NOTE_LEN = 200;
@@ -158,6 +162,18 @@ export function validatePayload(payload) {
         if (typeof tval !== 'number' || !Number.isFinite(tval) || tval < 0 || tval > 50) return 'Invalid tier value';
       }
     }
+    if (raw.av !== undefined) {
+      if (!raw.av || typeof raw.av !== 'object' || Array.isArray(raw.av)) return 'Invalid availability';
+      // Pour chaque jour fourni : doit être une liste d'heures valides (≤ 10)
+      for (const day of Object.keys(raw.av)) {
+        if (!VALID_AVAIL_DAYS.has(day)) return 'Invalid availability day';
+        const hours = raw.av[day];
+        if (!Array.isArray(hours) || hours.length > VALID_AVAIL_HOURS.size) return 'Invalid availability hours';
+        for (const h of hours) {
+          if (typeof h !== 'number' || !VALID_AVAIL_HOURS.has(h)) return 'Invalid availability hour';
+        }
+      }
+    }
   }
   if (payload.admins !== undefined) {
     if (!Array.isArray(payload.admins) || payload.admins.length > MAX_ADMINS) return 'Invalid admins array';
@@ -198,6 +214,27 @@ export function normalizePlayer(raw, existingRowId) {
   if (raw.by !== undefined && raw.by !== null && raw.by !== '') obj.by = raw.by;
   if (raw.nt !== undefined && raw.nt !== '') obj.nt = raw.nt.slice(0, MAX_NOTE_LEN);
   if (dedT !== null) obj.pt = dedT;
+  // Dispos : on filtre + dédup + tri à la volée. Si rien ne reste après
+  // filtrage, on omet le champ (économise les bytes).
+  if (raw.av && typeof raw.av === 'object' && !Array.isArray(raw.av)) {
+    const cleanAv = {};
+    for (const day of Object.keys(raw.av)) {
+      if (!VALID_AVAIL_DAYS.has(day)) continue;
+      const hours = Array.isArray(raw.av[day]) ? raw.av[day] : [];
+      const seen = new Set();
+      const valid = [];
+      for (const h of hours) {
+        if (typeof h !== 'number' || !VALID_AVAIL_HOURS.has(h) || seen.has(h)) continue;
+        seen.add(h);
+        valid.push(h);
+      }
+      if (valid.length > 0) {
+        valid.sort((a, b) => a - b);
+        cleanAv[day] = valid;
+      }
+    }
+    if (Object.keys(cleanAv).length > 0) obj.av = cleanAv;
+  }
   obj.id = (raw.id && ROW_ID_PATTERN.test(raw.id)) ? raw.id : (existingRowId || generateRowId());
   return obj;
 }

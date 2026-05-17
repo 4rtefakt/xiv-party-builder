@@ -1022,6 +1022,186 @@
   .preset-add.disabled { color: var(--ink-faint); cursor: default; }
   .preset-add.disabled:hover { background: transparent; }
 
+  /* ============================================================
+     DISPOS — bouton 🕐, popover de grille, heatmap groupe
+     ============================================================ */
+  .avail-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
+    padding: 0.2rem 0.4rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .avail-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+  .avail-btn .avail-count {
+    font-size: 0.68rem;
+    color: var(--cyan);
+    letter-spacing: 0.05em;
+  }
+  .avail-btn.has-data { border-color: rgba(0, 229, 255, 0.4); color: var(--cyan); }
+
+  .avail-popover {
+    position: fixed;
+    z-index: 1000;
+    background: var(--panel-2);
+    border: 1px solid var(--line-bright);
+    padding: 0.75rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    font-family: 'Chakra Petch', sans-serif;
+    user-select: none;
+    max-width: 96vw;
+  }
+  .avail-popover-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .avail-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.65rem;
+  }
+  .avail-preset-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+  .avail-preset-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+  .avail-preset-btn.danger:hover { color: var(--danger); border-color: var(--danger); }
+
+  .avail-grid {
+    display: grid;
+    grid-template-columns: auto repeat(10, 28px);
+    gap: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    touch-action: none; /* on gère le drag-paint via pointer events */
+  }
+  .avail-grid-corner { /* coin haut-gauche vide */ }
+  .avail-grid-hour, .avail-grid-day {
+    color: var(--ink-faint);
+    text-align: center;
+    padding: 0.15rem 0.2rem;
+    letter-spacing: 0.05em;
+  }
+  .avail-grid-day {
+    text-align: right;
+    padding-right: 0.5rem;
+  }
+  .avail-cell {
+    width: 28px;
+    height: 24px;
+    border: 1px solid var(--line);
+    background: rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .avail-cell:hover { border-color: var(--cyan); }
+  .avail-cell.on {
+    background: rgba(0, 229, 255, 0.35);
+    border-color: var(--cyan);
+    box-shadow: inset 0 0 6px rgba(0, 229, 255, 0.4);
+  }
+
+  /* Heatmap groupe — même grille, cellules colorées par densité */
+  .avail-heatmap-banner {
+    border: 1px solid var(--line);
+    margin: 0.75rem 0;
+    background: var(--bg-deep);
+  }
+  .avail-heatmap-toggle {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    padding: 0.55rem 0.75rem;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .avail-heatmap-toggle:hover { color: var(--cyan); }
+  .avail-heatmap-toggle .chevron { transition: transform 0.2s; }
+  .avail-heatmap-banner.collapsed .avail-heatmap-toggle .chevron { transform: rotate(-90deg); }
+  .avail-heatmap-body {
+    padding: 0.4rem 0.75rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .avail-heatmap-banner.collapsed .avail-heatmap-body { display: none; }
+  .avail-heatmap-grid {
+    display: grid;
+    grid-template-columns: auto repeat(10, 28px);
+    gap: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+  }
+  .avail-heatmap-grid .avail-grid-hour,
+  .avail-heatmap-grid .avail-grid-day {
+    color: var(--ink-faint);
+    text-align: center;
+    padding: 0.15rem 0.2rem;
+  }
+  .avail-heatmap-grid .avail-grid-day { text-align: right; padding-right: 0.5rem; }
+  .avail-heat-cell {
+    width: 28px;
+    height: 24px;
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+    font-size: 0.62rem;
+    font-weight: 600;
+    cursor: help;
+  }
+  .avail-heat-cell.d0 { background: rgba(58, 74, 92, 0.15); color: var(--ink-faint); }
+  .avail-heat-cell.d1 { background: rgba(74, 222, 128, 0.12); color: rgba(74, 222, 128, 0.7); }
+  .avail-heat-cell.d2 { background: rgba(74, 222, 128, 0.28); color: var(--heal); }
+  .avail-heat-cell.d3 { background: rgba(74, 222, 128, 0.5);  color: var(--ink); }
+  .avail-heat-cell.d4 { background: rgba(0, 229, 255, 0.55);  color: var(--ink); border-color: var(--cyan); box-shadow: 0 0 4px rgba(0,229,255,0.4); }
+
+  .avail-heatmap-legend {
+    font-size: 0.6rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .avail-heatmap-best {
+    font-size: 0.72rem;
+    color: var(--cyan);
+    font-family: 'Chakra Petch', sans-serif;
+    letter-spacing: 0.05em;
+  }
+
   .presence-pill {
     border: 1px solid var(--line);
     background: transparent;
@@ -2469,6 +2649,7 @@
       <div class="section-roster-info" id="rosterInfo"></div>
       <div class="section-line"></div>
     </div>
+    <div class="avail-heatmap-banner" id="availHeatmapBanner" hidden></div>
     <div class="players-list" id="playersList"></div>
     <div class="add-player">
       <button class="btn-secondary" id="addPlayerBtn" data-i18n="t_addPlayer">+ Ajouter</button>
@@ -2599,6 +2780,7 @@
 
 <div class="preset-menu" id="presetMenu" hidden></div>
 <div class="preset-menu" id="templateMenu" hidden></div>
+<div class="avail-popover" id="availPopover" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -2622,8 +2804,10 @@ import {
   encodePayload as _encodePayload,
   validateImportedPayload,
   PRESENCE_VALUES,
-  DEFAULT_CLAIM_LIMIT, CLAIM_LIMIT_UNLIMITED, VALID_CLAIM_LIMITS
+  DEFAULT_CLAIM_LIMIT, CLAIM_LIMIT_UNLIMITED, VALID_CLAIM_LIMITS,
+  VALID_AVAIL_HOURS, VALID_AVAIL_DAYS, normalizeAvail
 } from './lib/codec.js';
+import { analyzeAvailability, bestSlots } from './lib/availability.js';
 // makePlayer reste local : a besoin de side-effects (nextPlayerId, generateRowId).
 
 // ICON_URL utilise le CDN jsDelivr externe (xivapi/classjob-icons).
@@ -2827,6 +3011,20 @@ const STRINGS = {
     r_bannedTooltip: ({ name }) => `${name} · banni du raid`,
     r_presetTip: 'Presets de préférences',
     r_confirmReset: 'Réinitialiser le roster ?',
+    // — Dispos
+    av_btnTitle: 'Mes dispos (jours / heures de début)',
+    av_popoverTitle: ({ name }) => `Dispos de ${name || 'cette ligne'}`,
+    av_preset_weekdayEvening: 'Soirée semaine',
+    av_preset_weekendAfternoon: 'WE aprèm',
+    av_preset_weekendAll: 'WE complet',
+    av_preset_clear: 'Effacer',
+    av_daysShort: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+    av_daysLong:  ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+    av_heatmapTitle: ({ n }) => `📅 Créneaux communs (${n} ${n > 1 ? 'réponses' : 'réponse'})`,
+    av_cellTitle: ({ day, hour, count, total, missing }) =>
+      `${day} ${hour}h · ${count}/${total} dispos` + (missing && missing.length > 0 ? ` · manque ${missing.join(', ')}` : ''),
+    av_legend: 'Densité : 0 → 100% dispos',
+    av_best: ({ day, hour, count, total }) => `Meilleur créneau : ${day} ${hour}h (${count}/${total})`,
     undo_btn: 'Annuler',
     undo_done: 'Action annulée',
     undo_reset: 'Roster réinitialisé',
@@ -3069,6 +3267,19 @@ const STRINGS = {
     r_bannedTooltip: ({ name }) => `${name} · banned from this raid`,
     r_presetTip: 'Preference presets',
     r_confirmReset: 'Reset the roster?',
+    av_btnTitle: 'My availability (day / start hour)',
+    av_popoverTitle: ({ name }) => `Availability for ${name || 'this row'}`,
+    av_preset_weekdayEvening: 'Weekday evening',
+    av_preset_weekendAfternoon: 'Weekend afternoon',
+    av_preset_weekendAll: 'Full weekend',
+    av_preset_clear: 'Clear',
+    av_daysShort: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    av_daysLong:  ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+    av_heatmapTitle: ({ n }) => `📅 Common slots (${n} ${n > 1 ? 'responses' : 'response'})`,
+    av_cellTitle: ({ day, hour, count, total, missing }) =>
+      `${day} ${hour}h · ${count}/${total} available` + (missing && missing.length > 0 ? ` · missing: ${missing.join(', ')}` : ''),
+    av_legend: 'Density: 0 → 100% available',
+    av_best: ({ day, hour, count, total }) => `Best slot: ${day} ${hour}h (${count}/${total})`,
     undo_btn: 'Undo',
     undo_done: 'Action undone',
     undo_reset: 'Roster reset',
@@ -3355,7 +3566,11 @@ const makePlayer = (name = '') => ({
   presence: 'in',
   lockedJob: null,
   claimedBy: null,
-  note: ''
+  note: '',
+  // availability : { mon: [20, 21], sat: [...] } ou null. Mutate-in-place dans
+  // openAvailPopover. Null = pas de signal (le joueur n'est pas compté dans
+  // les agrégats de heatmap).
+  availability: null
 });
 
 // Normalise les tiers pour qu'ils soient consécutifs à partir de 0
@@ -3649,6 +3864,22 @@ function buildPlayerRow(player, idx) {
       else openPresetMenu(presetBtn, player);
     });
     row.appendChild(presetBtn);
+
+    // Bouton dispos : ouvre le popover de la grille jour × heure.
+    // Label inclut le compte de cases cochées si non vide (signal visuel
+    // discret côté roster sans encombrer la ligne).
+    const availBtn = document.createElement('button');
+    availBtn.className = 'avail-btn';
+    const availCount = countAvailCells(player.availability);
+    if (availCount > 0) availBtn.classList.add('has-data');
+    availBtn.innerHTML = '🕐' + (availCount > 0 ? `<span class="avail-count">${availCount}</span>` : '');
+    availBtn.title = t('av_btnTitle');
+    availBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (availPopoverTarget && availPopoverTarget.btn === availBtn) closeAvailPopover();
+      else openAvailPopover(availBtn, player);
+    });
+    row.appendChild(availBtn);
 
     const jobsRow = document.createElement('div');
     jobsRow.className = 'job-icons-row';
@@ -4162,6 +4393,7 @@ function renderAll() {
   renderSegments();
   renderRosterInfo();
   renderPlayers();
+  renderAvailHeatmap();
   renderSuggestions();
   renderBannedJobs();
   renderRaidWhen();
@@ -5057,6 +5289,303 @@ document.addEventListener('click', e => {
   if (presetMenuTarget && (presetMenuTarget.btn === e.target || presetMenuTarget.btn.contains(e.target))) return;
   closePresetMenu();
 });
+
+// ============================================================
+// DISPOS — popover grille jour × heure + heatmap groupe
+// ============================================================
+
+let availPopoverTarget = null;
+
+function countAvailCells(av) {
+  if (!av || typeof av !== 'object') return 0;
+  let n = 0;
+  for (const day of VALID_AVAIL_DAYS) {
+    if (Array.isArray(av[day])) n += av[day].length;
+  }
+  return n;
+}
+
+// Presets de dispos : raccourcis pour pré-remplir un pattern fréquent.
+// Stockés comme des matrices day → hours qu'on merge dans l'avail courant.
+const AVAIL_PRESETS = {
+  weekdayEvening: { mon: [20, 21, 22], tue: [20, 21, 22], wed: [20, 21, 22], thu: [20, 21, 22], fri: [20, 21, 22] },
+  weekendAfternoon: { sat: [14, 16, 18], sun: [14, 16, 18] },
+  weekendAll: {
+    sat: [14, 16, 18, 19, 20, 21, 22, 23],
+    sun: [14, 16, 18, 19, 20, 21, 22]
+  }
+};
+
+function applyAvailPreset(player, presetKey) {
+  if (presetKey === 'clear') {
+    player.availability = null;
+    return;
+  }
+  const preset = AVAIL_PRESETS[presetKey];
+  if (!preset) return;
+  // Merge avec l'existant (toggle additif — on n'écrase pas ce que l'user
+  // a déjà coché manuellement)
+  const cur = player.availability || {};
+  const merged = { ...cur };
+  for (const day of Object.keys(preset)) {
+    const existing = new Set(merged[day] || []);
+    for (const h of preset[day]) existing.add(h);
+    merged[day] = [...existing].sort((a, b) => a - b);
+  }
+  player.availability = normalizeAvail(merged);
+}
+
+function closeAvailPopover() {
+  const pop = document.getElementById('availPopover');
+  if (pop) pop.hidden = true;
+  availPopoverTarget = null;
+}
+
+function openAvailPopover(btn, player) {
+  // Si non-admin et ligne pas la sienne (ni claim possible), on bloque
+  if (!canEditPlayer(player) && !state.isAdmin) {
+    showToast(t('perm_readonly'));
+    return;
+  }
+  // Auto-claim si nécessaire avant d'éditer les dispos. On NE déclenche
+  // PAS renderPlayers ici (sinon le popover perd sa référence btn). Le
+  // badge "Toi" apparaîtra au prochain sync / au close du popover.
+  ensureClaim(player);
+
+  availPopoverTarget = { btn, player };
+  const pop = document.getElementById('availPopover');
+  pop.innerHTML = '';
+
+  const title = document.createElement('div');
+  title.className = 'avail-popover-title';
+  title.textContent = t('av_popoverTitle', { name: player.name || '' });
+  pop.appendChild(title);
+
+  const presetsBar = document.createElement('div');
+  presetsBar.className = 'avail-presets';
+  const presetButtons = [
+    { key: 'weekdayEvening',   label: t('av_preset_weekdayEvening') },
+    { key: 'weekendAfternoon', label: t('av_preset_weekendAfternoon') },
+    { key: 'weekendAll',       label: t('av_preset_weekendAll') },
+    { key: 'clear',            label: t('av_preset_clear'), danger: true }
+  ];
+  presetButtons.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'avail-preset-btn' + (p.danger ? ' danger' : '');
+    b.textContent = p.label;
+    b.addEventListener('click', () => {
+      applyAvailPreset(player, p.key);
+      // Rebuild le popover (et la ligne au prochain blur)
+      const sameBtn = availPopoverTarget && availPopoverTarget.btn;
+      openAvailPopover(sameBtn || btn, player);
+      scheduleAutoSave(150);
+      // Re-render différé pour mettre à jour le badge sur la ligne
+      player._needsBadgeRender = true;
+      renderAvailHeatmap();
+    });
+    presetsBar.appendChild(b);
+  });
+  pop.appendChild(presetsBar);
+
+  const grid = document.createElement('div');
+  grid.className = 'avail-grid';
+  // En-tête : coin vide puis les heures
+  const corner = document.createElement('div');
+  corner.className = 'avail-grid-corner';
+  grid.appendChild(corner);
+  VALID_AVAIL_HOURS.forEach(h => {
+    const hdr = document.createElement('div');
+    hdr.className = 'avail-grid-hour';
+    hdr.textContent = h + 'h';
+    grid.appendChild(hdr);
+  });
+  // Lignes : label jour + cellules
+  const daysShort = t('av_daysShort');
+  VALID_AVAIL_DAYS.forEach((day, di) => {
+    const dayLabel = document.createElement('div');
+    dayLabel.className = 'avail-grid-day';
+    dayLabel.textContent = (daysShort && daysShort[di]) || day;
+    grid.appendChild(dayLabel);
+    VALID_AVAIL_HOURS.forEach(h => {
+      const cell = document.createElement('div');
+      cell.className = 'avail-cell';
+      cell.dataset.day = day;
+      cell.dataset.hour = String(h);
+      const cur = player.availability && Array.isArray(player.availability[day]) ? player.availability[day] : [];
+      if (cur.includes(h)) cell.classList.add('on');
+      grid.appendChild(cell);
+    });
+  });
+
+  // Drag-paint : on enregistre l'état initial du 1er cell touché, ce sera
+  // notre "mode" (toute case visitée ensuite recevra le même état). Évite
+  // les flickers quand on traverse plusieurs cellules dans un sens.
+  let dragMode = null;            // 'add' | 'remove' | null
+  const dragSeen = new Set();
+  function applyCell(cell, mode) {
+    const day = cell.dataset.day;
+    const hour = Number(cell.dataset.hour);
+    if (!player.availability) player.availability = {};
+    const list = Array.isArray(player.availability[day]) ? player.availability[day].slice() : [];
+    const idx = list.indexOf(hour);
+    if (mode === 'add' && idx === -1) list.push(hour);
+    else if (mode === 'remove' && idx !== -1) list.splice(idx, 1);
+    else return;
+    if (list.length === 0) delete player.availability[day];
+    else { list.sort((a, b) => a - b); player.availability[day] = list; }
+    if (Object.keys(player.availability).length === 0) player.availability = null;
+    cell.classList.toggle('on', mode === 'add');
+  }
+  grid.addEventListener('pointerdown', e => {
+    const cell = e.target.closest('.avail-cell');
+    if (!cell) return;
+    e.preventDefault();
+    cell.setPointerCapture(e.pointerId);
+    dragMode = cell.classList.contains('on') ? 'remove' : 'add';
+    dragSeen.clear();
+    applyCell(cell, dragMode);
+    dragSeen.add(cell.dataset.day + ':' + cell.dataset.hour);
+  });
+  grid.addEventListener('pointermove', e => {
+    if (!dragMode) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el) return;
+    const cell = el.closest('.avail-cell');
+    if (!cell || !grid.contains(cell)) return;
+    const key = cell.dataset.day + ':' + cell.dataset.hour;
+    if (dragSeen.has(key)) return;
+    dragSeen.add(key);
+    applyCell(cell, dragMode);
+  });
+  function endDrag() {
+    if (!dragMode) return;
+    dragMode = null;
+    scheduleAutoSave(150);
+    player._needsBadgeRender = true;
+    renderAvailHeatmap();
+  }
+  grid.addEventListener('pointerup', endDrag);
+  grid.addEventListener('pointercancel', endDrag);
+  grid.addEventListener('pointerleave', endDrag);
+
+  pop.appendChild(grid);
+  pop.hidden = false;
+
+  // Positionnement : sous le bouton, clamp dans le viewport
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = (rect.bottom + 6) + 'px';
+  const popW = pop.offsetWidth;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - popW - 8, rect.left)) + 'px';
+}
+
+document.addEventListener('click', e => {
+  const pop = document.getElementById('availPopover');
+  if (!pop || pop.hidden) return;
+  if (pop.contains(e.target)) return;
+  if (availPopoverTarget && (availPopoverTarget.btn === e.target || availPopoverTarget.btn.contains(e.target))) return;
+  closeAvailPopover();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAvailPopover();
+});
+
+// Heatmap groupe — rendue dans la bannière au-dessus du roster. Discrète :
+// banner caché tant que < 2 répondants (pas d'info utile à montrer).
+function renderAvailHeatmap() {
+  const banner = document.getElementById('availHeatmapBanner');
+  if (!banner) return;
+  const analysis = analyzeAvailability(state.players);
+  if (analysis.respondentCount < 2) {
+    banner.hidden = true;
+    banner.innerHTML = '';
+    return;
+  }
+  banner.hidden = false;
+
+  const collapsed = banner.classList.contains('collapsed');
+  banner.innerHTML = '';
+
+  const toggle = document.createElement('button');
+  toggle.className = 'avail-heatmap-toggle';
+  const titleSpan = document.createElement('span');
+  titleSpan.textContent = t('av_heatmapTitle', { n: analysis.respondentCount });
+  const chevron = document.createElement('span');
+  chevron.className = 'chevron';
+  chevron.textContent = '▾';
+  toggle.appendChild(titleSpan);
+  toggle.appendChild(chevron);
+  toggle.addEventListener('click', () => {
+    banner.classList.toggle('collapsed');
+  });
+  banner.appendChild(toggle);
+
+  const body = document.createElement('div');
+  body.className = 'avail-heatmap-body';
+
+  const grid = document.createElement('div');
+  grid.className = 'avail-heatmap-grid';
+  const corner = document.createElement('div');
+  corner.className = 'avail-grid-corner';
+  grid.appendChild(corner);
+  VALID_AVAIL_HOURS.forEach(h => {
+    const hdr = document.createElement('div');
+    hdr.className = 'avail-grid-hour';
+    hdr.textContent = h + 'h';
+    grid.appendChild(hdr);
+  });
+  const daysShort = t('av_daysShort');
+  const daysLong = t('av_daysLong');
+  VALID_AVAIL_DAYS.forEach((day, di) => {
+    const dayLabel = document.createElement('div');
+    dayLabel.className = 'avail-grid-day';
+    dayLabel.textContent = (daysShort && daysShort[di]) || day;
+    grid.appendChild(dayLabel);
+    VALID_AVAIL_HOURS.forEach(h => {
+      const cell = document.createElement('div');
+      const count = analysis.matrix[day][h].length;
+      const total = analysis.respondentCount;
+      const ratio = total > 0 ? count / total : 0;
+      // 5 niveaux : 0, 1-49, 50-74, 75-99, 100
+      let densityCls = 'd0';
+      if (ratio >= 1)         densityCls = 'd4';
+      else if (ratio >= 0.75) densityCls = 'd3';
+      else if (ratio >= 0.5)  densityCls = 'd2';
+      else if (ratio > 0)     densityCls = 'd1';
+      cell.className = 'avail-heat-cell ' + densityCls;
+      cell.textContent = count > 0 ? String(count) : '';
+      const missing = analysis.missing[day][h];
+      cell.title = t('av_cellTitle', {
+        day: (daysLong && daysLong[di]) || day,
+        hour: h, count, total, missing
+      });
+      grid.appendChild(cell);
+    });
+  });
+  body.appendChild(grid);
+
+  // Meilleur créneau en tête (texte d'aide)
+  const best = bestSlots(analysis, { limit: 1 });
+  if (best.length > 0 && best[0].count > 0) {
+    const bestEl = document.createElement('div');
+    bestEl.className = 'avail-heatmap-best';
+    bestEl.textContent = t('av_best', {
+      day: (daysLong && daysLong[VALID_AVAIL_DAYS.indexOf(best[0].day)]) || best[0].day,
+      hour: best[0].hour,
+      count: best[0].count,
+      total: analysis.respondentCount
+    });
+    body.appendChild(bestEl);
+  }
+
+  const legend = document.createElement('div');
+  legend.className = 'avail-heatmap-legend';
+  legend.textContent = t('av_legend');
+  body.appendChild(legend);
+
+  banner.appendChild(body);
+  if (collapsed) banner.classList.add('collapsed');
+}
 
 // ============================================================
 // TEMPLATES DE COMPO — sauvegarde locale d'une config ré-utilisable

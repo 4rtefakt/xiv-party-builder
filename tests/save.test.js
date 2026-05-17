@@ -106,6 +106,71 @@ test('validatePayload : cl=5, cl=-1, cl="2" rejetés', () => {
   assert.match(validatePayload(valid({ cl: '2' })), /claim limit/i);
 });
 
+// ---------- validatePayload : availability ----------
+
+test('validatePayload : av valide accepté', () => {
+  const r = validatePayload(valid({
+    p: [{ n: 'Alice', j: [], av: { mon: [20, 21], sat: [14, 16] } }]
+  }));
+  assert.equal(r, null);
+});
+
+test('validatePayload : av tableau rejeté', () => {
+  assert.match(validatePayload(valid({
+    p: [{ n: 'A', j: [], av: [20] }]
+  })), /availability/i);
+});
+
+test('validatePayload : av avec jour inconnu rejeté', () => {
+  assert.match(validatePayload(valid({
+    p: [{ n: 'A', j: [], av: { foo: [20] } }]
+  })), /availability/i);
+});
+
+test('validatePayload : av avec heure hors liste rejeté', () => {
+  assert.match(validatePayload(valid({
+    p: [{ n: 'A', j: [], av: { mon: [99] } }]
+  })), /availability/i);
+  assert.match(validatePayload(valid({
+    p: [{ n: 'A', j: [], av: { mon: [0] } }]
+  })), /availability/i);
+});
+
+test('validatePayload : av avec heure string rejeté', () => {
+  assert.match(validatePayload(valid({
+    p: [{ n: 'A', j: [], av: { mon: ['20'] } }]
+  })), /availability/i);
+});
+
+test('validatePayload : av jour avec valeur non-tableau rejeté', () => {
+  assert.match(validatePayload(valid({
+    p: [{ n: 'A', j: [], av: { mon: 20 } }]
+  })), /availability/i);
+});
+
+// ---------- normalizePlayer : availability ----------
+
+test('normalizePlayer : av filtré + trié + dédupliqué', () => {
+  const out = normalizePlayer({
+    n: 'A', j: [],
+    av: { mon: [21, 20, 20, 99, 22], foo: [20], tue: [] }
+  });
+  assert.deepEqual(out.av, { mon: [20, 21, 22] });
+});
+
+test('normalizePlayer : av complètement invalide → champ omis', () => {
+  const out = normalizePlayer({
+    n: 'A', j: [],
+    av: { foo: [99], bar: [-1] }
+  });
+  assert.equal(out.av, undefined);
+});
+
+test('normalizePlayer : av absent → champ omis', () => {
+  const out = normalizePlayer({ n: 'A', j: [] });
+  assert.equal(out.av, undefined);
+});
+
 // ---------- normalizeForNonAdminMerge : enforcement de la limite ----------
 
 function makeExisting(over = {}) {
