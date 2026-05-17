@@ -241,14 +241,26 @@ test('bestSlotWithTail : un seul slot max → retourné direct avec tail et endH
   assert.equal(b.hour, 20);
   assert.equal(b.count, 1);
   assert.equal(b.tail, 2, '21h et 22h ont la même densité → tail = 2');
-  assert.equal(b.endHour, 22, 'endHour = hours[idx+tail] = 22h');
+  assert.equal(b.endHour, 23, 'endHour = last_start + 1 = 22+1 = 23 (fin du créneau 22h)');
 });
 
-test('bestSlotWithTail : tail = 0 → endHour === hour (single slot)', () => {
+test('bestSlotWithTail : tail = 0 → endHour = hour + 1 (1h de jeu)', () => {
   const a = analyzeAvailability([p('Alice', { mon: [20] })]);
   const b = bestSlotWithTail(a);
   assert.equal(b.tail, 0);
-  assert.equal(b.endHour, b.hour, 'pas de queue → endHour = start');
+  assert.equal(b.endHour, 21, 'créneau 20h → on joue jusqu\'à 21h');
+});
+
+test('bestSlotWithTail : gap dans la liste curée casse la chaîne (14h+16h → tail=0)', () => {
+  // Alice dispo à 14h ET 16h. Dans VALID_AVAIL_HOURS, 14 et 16 sont
+  // array-consecutive mais ne sont PAS strictement consécutifs en heure
+  // (15h n'existe pas dans la liste). On NE doit PAS les regrouper en
+  // "14h → 17h" qui suggérerait à tort qu'on peut jouer continûment.
+  const a = analyzeAvailability([p('Alice', { sat: [14, 16] })]);
+  const b = bestSlotWithTail(a);
+  assert.equal(b.hour, 14);
+  assert.equal(b.tail, 0, '14h et 16h ne sont pas h et h+1 → pas de tail');
+  assert.equal(b.endHour, 15);
 });
 
 test('bestSlotWithTail : départage 2 ex-æquo par la longueur de tail', () => {

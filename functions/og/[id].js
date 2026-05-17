@@ -18,7 +18,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 5;  // v5 : meilleur créneau en range "Mardi 21h → 23h"
+const OG_LAYOUT_VERSION = 6;  // v6 : endHour = fin de plage jouable + seuil shortenName 14→12
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -120,8 +120,12 @@ function esc(s) {
 //   - un seul token
 //   - le prénom seul tient déjà très court (≤ MAX_FULL chars)
 //   - le nom complet tient (≤ MAX_TOTAL chars) — pas de besoin d'abréger
+//
+// MAX_TOTAL=12 calé sur les noms 2-mots typiques en Chakra Petch 22px
+// dans une carte 260px : "Alice Erisia" (12 chars) tient, "Rhesh'a
+// Tefakt" (14 chars) wrap. Le seuil 14 d'avant était trop généreux.
 function shortenName(name) {
-  const MAX_TOTAL = 14;  // tient sur 1 ligne dans une carte 260px à 22px
+  const MAX_TOTAL = 12;
   const trimmed = String(name || '').trim();
   if (trimmed.length <= MAX_TOTAL) return trimmed;
   const tokens = trimmed.split(/\s+/);
@@ -159,7 +163,7 @@ function renderCard(m, width) {
     <div style="display:flex; align-items:center; height:54px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
       <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
       <div style="display:flex; flex-direction:column; overflow:hidden;">
-        <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(shortenName(m.name))}</div>
+        <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1; white-space:nowrap;">${esc(shortenName(m.name))}</div>
         <div style="display:flex; font-size:16px; color:${roleColor}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
       </div>
       ${lockGlyph}
