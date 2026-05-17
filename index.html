@@ -1637,21 +1637,16 @@
     flex-shrink: 0;
   }
 
+  /* Acronyme job (PLD, AST, RDM…) à droite de la carte. Le nom complet
+     est en title (tooltip) pour les utilisateur·ices qui ne reconnaissent
+     pas l'icône. Plus large que le nom complet → mieux pour parser
+     d'un coup d'œil et libère la place pour le nom à gauche. */
   .assigned-job {
-    font-family: 'Chakra Petch', sans-serif;
-    font-weight: 600;
-    font-size: 0.88rem;
-    color: var(--ink);
-    letter-spacing: 0.06em;
-  }
-
-  .assigned-slot {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    color: var(--ink-dim);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-top: 0.1rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--ink);
+    letter-spacing: 0.12em;
   }
 
   .warning {
@@ -2323,6 +2318,10 @@
     padding: 0.15rem 0.4rem;
     border-radius: 0;
     font-weight: 600;
+    /* Empêche le badge "★ 1ᵉ / 7" de passer sur 2 lignes quand le container
+       est étroit (cartes DPS sous-grid en mode raid 8/24). */
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .rank-display.rank-1 {
@@ -4222,18 +4221,6 @@ function scoringErrorMsg(code) {
   return code || '';
 }
 
-function slotShortLabel(slotRoles) {
-  if (slotRoles.length === 1) {
-    return {
-      tank: t('res_slotTank'), heal: t('res_slotHeal'), melee: t('res_slotMelee'),
-      ranged: t('res_slotRanged'), caster: t('res_slotCaster')
-    }[slotRoles[0]];
-  }
-  if (slotRoles.includes('melee') && slotRoles.includes('ranged') && slotRoles.includes('caster')) return t('res_slotFlexDps');
-  if (slotRoles.includes('ranged') && slotRoles.includes('caster')) return t('res_slotDistance');
-  return slotRoles.join('/');
-}
-
 // ============================================================
 // LIVE PREVIEW + ALTERNATIVES
 // ============================================================
@@ -4334,8 +4321,7 @@ function buildAssignmentCard(r, resultsCtx) {
         </div>
       </div>
       <div class="assignment-right">
-        <div class="assigned-job">${r.jobName}</div>
-        <div class="assigned-slot">${slotShortLabel(r.slotRoles)}</div>
+        <div class="assigned-job" title="${escapeHtml(r.jobName)}">${r.jobId}</div>
       </div>
       <div class="reorder-controls" style="margin-left:6px;">
         <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
