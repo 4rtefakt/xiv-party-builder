@@ -500,6 +500,17 @@
   }
   .live-indicator.computing { animation: live-pulse 1s ease-in-out infinite; }
 
+  /* Surlignage doux des lignes modifiées par un·e autre joueur·euse pendant
+     un sync (focus → reload). Aide à comprendre ce qui a changé sans
+     interrompre. Cyan léger qui fade vers transparent en 2s. */
+  @keyframes just-synced-pulse {
+    0%   { background: rgba(0, 229, 255, 0.18); box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.45); }
+    100% { background: var(--bg-deep);          box-shadow: inset 0 0 0 1px transparent; }
+  }
+  .player-row.just-synced {
+    animation: just-synced-pulse 2s ease-out 1;
+  }
+
   /* Respect prefers-reduced-motion : on coupe tout pour les utilisateur·ices
      qui ont activé "réduire les animations" système */
   @media (prefers-reduced-motion: reduce) {
@@ -3321,6 +3332,10 @@ function buildPlayerRow(player, idx) {
       + (isMine ? ' mine' : '')
       + (isUnclaimed && !state.isAdmin ? ' unclaimed' : '')
       + (!editable ? ' readonly' : '');
+    // rowId stable, persistant à travers re-renders : utilisé par le diff
+    // visuel post-sync (highlightChangedRows) pour retrouver les lignes
+    // modifiées par un·e autre joueur·euse.
+    if (player.rowId) row.dataset.rowId = player.rowId;
 
     const handle = document.createElement('div');
     handle.className = 'drag-handle';
@@ -5369,6 +5384,37 @@ async function flushPendingSave() {
   }
 }
 
+// Snapshot stable d'une ligne pour le diff visuel post-sync. Ne compare que
+// ce qui est visible à l'écran (nom, prefs, présence, lock, claim, note) —
+// les champs internes (id local) ne changent pas l'affichage.
+function snapshotPlayerForDiff(p) {
+  return JSON.stringify([
+    p.name || '',
+    p.preferences || [],
+    p.prefTiers || [],
+    p.presence || 'in',
+    p.lockedJob || null,
+    p.claimedBy || null,
+    p.note || ''
+  ]);
+}
+
+// Surligne les lignes dont le rowId a changé entre deux états (sync depuis
+// le serveur). L'animation CSS dure 2s ; on retire la classe après pour
+// que la prochaine modif puisse re-trigger l'anim (sinon CSS ne re-joue pas).
+function highlightChangedRows(rowIds) {
+  if (!rowIds || rowIds.size === 0) return;
+  for (const rowId of rowIds) {
+    const el = document.querySelector(`.player-row[data-row-id="${rowId}"]`);
+    if (!el) continue;
+    el.classList.remove('just-synced');
+    // Reflow forcé pour que la suppression+ajout déclenche bien l'anim
+    void el.offsetWidth;
+    el.classList.add('just-synced');
+    setTimeout(() => el.classList.remove('just-synced'), 2100);
+  }
+}
+
 async function syncRoom() {
   if (!currentRoomId || saving) return;
   // Ne pas écraser ce que l'utilisateur est en train de taper
@@ -5383,10 +5429,26 @@ async function syncRoom() {
   saving = true;
   updateSyncStatus();
   suppressAutoSave = true;
+  // Snapshot AVANT pour pouvoir diff après applyImportedState
+  const before = new Map();
+  for (const p of state.players) {
+    if (p.rowId) before.set(p.rowId, snapshotPlayerForDiff(p));
+  }
   try {
     const imported = await fetchPayloadById(currentRoomId);
     applyImportedState(imported);
     lastSavedAt = Date.now();
+    // Diff : rowIds dont le snapshot a changé. On ignore les nouvelles lignes
+    // (rare en pratique — non-admin ne peut pas ajouter, admin distant non plus
+    // s'il s'agit d'un upsert ; on n'highlight que les vraies modifs).
+    const changed = new Set();
+    for (const p of state.players) {
+      if (!p.rowId) continue;
+      const old = before.get(p.rowId);
+      if (old === undefined) continue;
+      if (snapshotPlayerForDiff(p) !== old) changed.add(p.rowId);
+    }
+    if (changed.size > 0) highlightChangedRows(changed);
   } catch { /* silencieux */ }
   suppressAutoSave = false;
   saving = false;
