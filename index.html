@@ -1155,11 +1155,25 @@
     align-self: center;
     padding: 0;
   }
-  .role-bulk-btn svg {
-    width: 14px;
-    height: 14px;
-    display: block;
+  /* Icônes officielles de rôle FFXIV servies via jsDelivr (alostsock/ffxiv-icons,
+     licence MIT). Les SVG sources sont mono-path sans `fill` explicite, donc
+     on les utilise comme masque CSS : le bouton les "remplit" avec sa propre
+     couleur (var(--ink-faint) au repos, var(--tank|heal|…) au hover) — pareil
+     mécanique qu'une icon-font sans en charger une. */
+  .role-bulk-btn::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    background-color: currentColor;
+    mask: var(--role-icon) center / contain no-repeat;
+    -webkit-mask: var(--role-icon) center / contain no-repeat;
+    transition: background-color 0.15s;
   }
+  .role-bulk-btn[data-role="tank"]   { --role-icon: url('https://cdn.jsdelivr.net/gh/alostsock/ffxiv-icons@main/icons/role/tank.svg'); }
+  .role-bulk-btn[data-role="heal"]   { --role-icon: url('https://cdn.jsdelivr.net/gh/alostsock/ffxiv-icons@main/icons/role/healer.svg'); }
+  .role-bulk-btn[data-role="melee"]  { --role-icon: url('https://cdn.jsdelivr.net/gh/alostsock/ffxiv-icons@main/icons/role/dps-physical.svg'); }
+  .role-bulk-btn[data-role="ranged"] { --role-icon: url('https://cdn.jsdelivr.net/gh/alostsock/ffxiv-icons@main/icons/role/dps-ranged.svg'); }
+  .role-bulk-btn[data-role="caster"] { --role-icon: url('https://cdn.jsdelivr.net/gh/alostsock/ffxiv-icons@main/icons/role/dps-magical.svg'); }
   .role-bulk-btn[data-role="tank"]:hover   { color: var(--tank);   border-color: var(--tank);   background: rgba(43, 158, 255, 0.08); }
   .role-bulk-btn[data-role="heal"]:hover   { color: var(--heal);   border-color: var(--heal);   background: rgba(74, 222, 128, 0.08); }
   .role-bulk-btn[data-role="melee"]:hover  { color: var(--melee);  border-color: var(--melee);  background: rgba(255, 79, 110, 0.08); }
@@ -3198,18 +3212,10 @@ function buildPlayerRow(player, idx) {
     }
 
     const roles = ['tank', 'heal', 'melee', 'ranged', 'caster'];
-    // Icônes inline inspirées des conventions FFXIV (bouclier / croix / épée /
-    // cible / étoile). SVG mono-color avec stroke="currentColor" : héritent
-    // automatiquement de la teinte CSS du rôle (var(--tank), var(--heal), ...).
-    // Préféré aux fichiers externes : pas de 404 potentiel, pas de flicker au
-    // chargement, taille négligeable (~150 octets par bouton).
-    const ROLE_ICONS = {
-      tank:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>',
-      heal:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3z"/></svg>',
-      melee:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 17.5L19 22 22 19 17.5 14.5M3 3l8 8M11 11l3 3 3-3-3-3-3 3z"/></svg>',
-      ranged: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
-      caster: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l4 4M15 15l4 4M19 5l-4 4M9 15l-4 4"/></svg>'
-    };
+    // Le visuel des boutons bulk est entièrement piloté par CSS :
+    // `.role-bulk-btn[data-role=…]::before` masque l'icône officielle FFXIV
+    // hébergée sur jsDelivr (cf. CSS plus haut). On a juste besoin du
+    // data-role + l'aria-label ici.
     const ROLE_ARIA = { tank: 'Tank', heal: 'Healer', melee: 'Melee', ranged: 'Ranged', caster: 'Caster' };
     roles.forEach((role, roleIdx) => {
       if (roleIdx > 0) {
@@ -3222,7 +3228,7 @@ function buildPlayerRow(player, idx) {
       const bulkBtn = document.createElement('button');
       bulkBtn.className = 'role-bulk-btn';
       bulkBtn.dataset.role = role;
-      bulkBtn.innerHTML = ROLE_ICONS[role];
+      // Visuel = pseudo ::before en CSS (mask-image sur l'icône officielle).
       bulkBtn.setAttribute('aria-label', ROLE_ARIA[role]);
       bulkBtn.title = t('r_bulkRole', { role });
       bulkBtn.addEventListener('click', e => {
