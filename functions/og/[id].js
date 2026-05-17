@@ -10,6 +10,19 @@ import { buildSlotsFromComp, computeOptimalAssignment } from '../../lib/scoring.
 
 const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 
+// Cache PNG en KV : la rasterization workers-og (satori + resvg-wasm) coûte
+// 300-500ms CPU par scrape. La sortie est déterministe pour un (id, contenu)
+// donné → on cache l'output sous `og:<id>:<hash(KV)>` avec TTL 7j. Le hash
+// change quand le salon est modifié, donc une nouvelle URL est servie au
+// scrape suivant et le cache devient stale tout seul.
+const OG_CACHE_TTL = 7 * 86400;
+
+async function shortHash(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  const arr = new Uint8Array(buf, 0, 4);
+  return [...arr].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
 const iconUrl = (job) => ICON_BASE + job.icon + '.png';
 
@@ -188,6 +201,25 @@ export async function onRequestGet({ params, env, request }) {
   const raw = await env.PARTY_KV.get(id);
   if (!raw) return new Response('Not found', { status: 404 });
 
+  // Cache hit ? La langue fait partie de la clé (titre "Donjon" vs "Dungeon")
+  const contentHash = await shortHash(raw);
+  const cacheKey = `og:${id}:${lang}:${contentHash}`;
+  const cached = await env.PARTY_KV.get(cacheKey, 'arrayBuffer');
+  if (cached) {
+    return new Response(cached, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        // L'URL exposée par le middleware contient déjà le hash → immutable
+        // pour les CDN/scrapers, mais on garde max-age=60 pour le cas où
+        // quelqu'un hit /og/<id> sans ?v= (curl, test direct).
+        'Cache-Control': 'public, max-age=60',
+        'Access-Control-Allow-Origin': '*',
+        'X-OG-Cache': 'hit'
+      }
+    });
+  }
+
   let data;
   try { data = JSON.parse(raw); }
   catch { return new Response('Bad data', { status: 500 }); }
@@ -265,15 +297,25 @@ export async function onRequestGet({ params, env, request }) {
   `;
 
   try {
-    return new ImageResponse(html, {
+    const response = new ImageResponse(html, {
       width: 1200,
       height: 630,
       format: 'png',
       headers: {
         'Cache-Control': 'public, max-age=60',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'X-OG-Cache': 'miss'
       }
     });
+    // Stocke le PNG en KV pour les scrapes suivants du même hash. On clone
+    // pour ne pas consommer le body du response qu'on retourne. Best-effort :
+    // si KV échoue (rare), on continue, le worst case c'est qu'on re-rasterize
+    // au prochain hit.
+    try {
+      const bytes = await response.clone().arrayBuffer();
+      await env.PARTY_KV.put(cacheKey, bytes, { expirationTtl: OG_CACHE_TTL });
+    } catch { /* swallow */ }
+    return response;
   } catch (e) {
     return fallback('OG render error: ' + (e && e.message ? e.message : 'unknown'));
   }
