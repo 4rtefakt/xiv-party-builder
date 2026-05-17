@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignStratRoles } from '../lib/strat-roles.js';
+import { assignStratRoles, reorderResultsForDpsLayout } from '../lib/strat-roles.js';
 
 function r(name, role) { return { name, role, assigned: true }; }
 function bench(name) { return { name, assigned: false }; }
@@ -151,4 +151,79 @@ test('roster vide → no-op', () => {
 test('Array null/undefined → renvoie tel quel', () => {
   assert.equal(assignStratRoles(null, 'raid8'), null);
   assert.equal(assignStratRoles(undefined, 'raid8'), undefined);
+});
+
+// --- reorderResultsForDpsLayout ---
+
+test('reorder : 2 mêlées + 2 autres → mêlées en col 0, autres en col 1', () => {
+  // Solver order arbitraire : [caster, melee, ranged, melee]
+  // Après reorder : [melee, caster, melee, ranged]
+  const results = [
+    r('T1', 'tank'), r('T2', 'tank'), r('H1', 'heal'), r('H2', 'heal'),
+    r('C', 'caster'),
+    r('M1', 'melee'),
+    r('R', 'ranged'),
+    r('M2', 'melee')
+  ];
+  const out = reorderResultsForDpsLayout(results);
+  // Les DPS aux mêmes index (4,5,6,7), réorganisés
+  assert.equal(out[4].role, 'melee', 'M1 slot = première mêlée');
+  assert.equal(out[5].role, 'caster', 'R1 slot = première non-mêlée');
+  assert.equal(out[6].role, 'melee', 'M2 slot = deuxième mêlée');
+  assert.equal(out[7].role, 'ranged', 'R2 slot = deuxième non-mêlée');
+});
+
+test('reorder : 3 mêlées + 1 autre → 2 mêlées en M, 1 mêlée en R + 1 autre', () => {
+  const results = [
+    r('M1', 'melee'), r('M2', 'melee'), r('M3', 'melee'),
+    r('C', 'caster')
+  ];
+  const out = reorderResultsForDpsLayout(results);
+  // i=0 (M): mêlée. i=1 (R): autre. i=2 (M): mêlée. i=3 (R): mêlée (fallback, plus d'autres).
+  assert.equal(out[0].name, 'M1');
+  assert.equal(out[1].name, 'C');
+  assert.equal(out[2].name, 'M2');
+  assert.equal(out[3].name, 'M3', 'mêlée résiduelle en R2');
+});
+
+test('reorder : seulement des non-mêlées → ordre original préservé', () => {
+  const results = [
+    r('R', 'ranged'), r('C1', 'caster'), r('C2', 'caster')
+  ];
+  const out = reorderResultsForDpsLayout(results);
+  // Pas de mêlées, tous les positions M et R sont remplies par des non-mêlées
+  // dans l'ordre où elles arrivent.
+  assert.equal(out[0].name, 'R');
+  assert.equal(out[1].name, 'C1');
+  assert.equal(out[2].name, 'C2');
+});
+
+test('reorder : couplé à assignStratRoles → labels matchent les rôles', () => {
+  // Cas typique : solver donne [caster, melee, melee]. Reorder puis labels
+  // donnent M1=melee, R1=caster, M2=melee.
+  const cas = r('Onyxis', 'caster'); cas.jobId = 'RDM';
+  const me1 = r('Sionra', 'melee');  me1.jobId = 'VPR';
+  const me2 = r('Silaron', 'melee'); me2.jobId = 'DRG';
+  const results = [r('T', 'tank'), r('H', 'heal'), cas, me1, me2];
+
+  const reordered = reorderResultsForDpsLayout(results);
+  assignStratRoles(reordered, 'raid8');
+
+  assert.equal(reordered[2].name, 'Sionra', 'M1 = première mêlée (pas le caster)');
+  assert.equal(reordered[2].stratRole, 'M1');
+  assert.equal(reordered[3].name, 'Onyxis', 'R1 = caster');
+  assert.equal(reordered[3].stratRole, 'R1');
+  assert.equal(reordered[4].name, 'Silaron', 'M2 = deuxième mêlée');
+  assert.equal(reordered[4].stratRole, 'M2');
+});
+
+test('reorder : roster sans DPS → renvoyé inchangé', () => {
+  const results = [r('T', 'tank'), r('H', 'heal'), bench('B')];
+  const out = reorderResultsForDpsLayout(results);
+  assert.deepEqual(out, results);
+});
+
+test('reorder : null/undefined → renvoie tel quel', () => {
+  assert.equal(reorderResultsForDpsLayout(null), null);
+  assert.equal(reorderResultsForDpsLayout(undefined), undefined);
 });

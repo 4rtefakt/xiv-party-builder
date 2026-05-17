@@ -8,7 +8,7 @@ import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, CONTENT_COMP, ROLE_COLOR } from '../../lib/jobs.js';
 import { buildSlotsFromComp, computeOptimalAssignment } from '../../lib/scoring.js';
 import { analyzeAvailability, bestSlotWithTail } from '../../lib/availability.js';
-import { assignStratRoles } from '../../lib/strat-roles.js';
+import { assignStratRoles, reorderResultsForDpsLayout } from '../../lib/strat-roles.js';
 
 const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 
@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 9;  // v9 : shortenName systématique sur 2+ mots (badge bouffe ~36px, plus de seuil de chars)
+const OG_LAYOUT_VERSION = 10; // v10 : DPS reorder mêlées→col M, ranged/casters→col R
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -99,14 +99,20 @@ function computeForOg(data) {
     return { players: rawPlayers, assignment: new Array(rawPlayers.length).fill(null), results: [] };
   }
 
-  // Reconstitue { players, assignment } à partir des results, mais on
-  // expose aussi results en sortie pour pouvoir y attacher les stratRoles
-  // (MT/OT/H1/H2/M1/M2/R1/R2) avant le rendu.
-  const assignment = out.results.map(r => {
+  // Réorganise les DPS (mêlées en col M, autres en col R) avant de
+  // reconstruire l'assignment côté caller — l'order des entries détermine
+  // les positions dans la sous-grille DPS de l'OG.
+  const reordered = reorderResultsForDpsLayout(out.results);
+
+  const assignment = reordered.map(r => {
     if (!r.assigned) return null;
     return { jobId: r.jobId };
   });
-  return { players: rawPlayers, assignment, results: out.results };
+  // Le caller doit aussi récupérer `players` reordonné (les noms doivent
+  // matcher les nouvelles positions). On reconstruit players via name.
+  const playersByName = new Map(rawPlayers.map(p => [p.name, p]));
+  const reorderedPlayers = reordered.map(r => playersByName.get(r.name) || { name: r.name });
+  return { players: reorderedPlayers, assignment, results: reordered };
 }
 
 function esc(s) {

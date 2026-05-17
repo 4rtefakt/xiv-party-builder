@@ -2958,7 +2958,7 @@ import {
   analyzeAvailability, bestSlotWithTail,
   countAvailCells, AVAIL_PRESETS, applyAvailPreset
 } from './lib/availability.js';
-import { assignStratRoles } from './lib/strat-roles.js';
+import { assignStratRoles, reorderResultsForDpsLayout } from './lib/strat-roles.js';
 import {
   MAX_PRESETS, MAX_PRESET_NAME_LEN,
   MAX_TEMPLATES, MAX_TEMPLATE_NAME_LEN,
@@ -4990,12 +4990,14 @@ function renderSolution(sol) {
   const summary = document.getElementById('resultSummary');
   const grid = document.getElementById('assignmentGrid');
   const warningArea = document.getElementById('warningArea');
-  const { results, stats } = sol;
-  // Étiquette les assignments avec leurs rôles strat (MT/OT/H1/H2/M1/M2/R1/R2)
-  // selon le type de contenu. Mute results en ajoutant `stratRole` à chaque
-  // entrée assignée. Appelé ici (renderSolution) plutôt que dans le solver
-  // pour rester indépendant — le solver lib/ reste pur, indifférent au sens
-  // "strat" des positions.
+  const stats = sol.stats;
+  // Réorganise les DPS dans `results` pour que les mêlées tombent dans les
+  // slots M (col 0) et les ranged/casters dans les slots R (col 1), puis
+  // applique les labels positionnels (M1=col0row0, R1=col1row0, etc.).
+  // Le reorder modifie sol.results sur place via slice → on a une référence
+  // propre pour renderResult / les drag handlers.
+  const results = reorderResultsForDpsLayout(sol.results);
+  sol.results = results;
   assignStratRoles(results, state.contentType);
 
   // Stat "frustration max" : le pire rang attribué
@@ -5234,9 +5236,8 @@ function renderRaid24Result() {
       allianceGrid.appendChild(empty);
     } else {
       const sol = result.solutions[0];
-      // Étiquette par alliance : chaque alliance reçoit son propre set
-      // MT/OT/H1/H2/M1/M2/R1/R2 (raid24chaotic) ou T/H1/H2/M1..Mn/R1..Rn
-      // (raid24 standard 1T/2H/5DPS).
+      // Réorganise (mêlées en M, autres en R) puis étiquette par alliance.
+      sol.results = reorderResultsForDpsLayout(sol.results);
       assignStratRoles(sol.results, state.contentType);
       const bench = build4ColLayout(allianceGrid, sol.results);
       bench.forEach(b => allBench.push(b));
