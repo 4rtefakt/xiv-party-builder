@@ -8,7 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  validatePayload, dedupPrefs, normalizePlayer,
+  validatePayload, dedupPrefs, normalizePlayer, normalizeForNonAdminMerge,
   checkRateLimit, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_SECONDS
 } from '../functions/api/save.js';
 
@@ -86,6 +86,154 @@ test('validatePayload : pt avec valeur hors borne rejetée', () => {
   assert.match(validatePayload(valid({
     p: [{ n: 'X', j: ['PLD'], pt: [99] }]
   })), /tier/i);
+});
+
+// ---------- validatePayload : claim limit ----------
+
+test('validatePayload : cl=2 (défaut) accepté', () => {
+  assert.equal(validatePayload(valid({ cl: 2 })), null);
+});
+
+test('validatePayload : cl=3 / 4 / 0 (illimité) acceptés', () => {
+  for (const v of [3, 4, 0]) {
+    assert.equal(validatePayload(valid({ cl: v })), null, `cl=${v}`);
+  }
+});
+
+test('validatePayload : cl=1 rejeté (en dessous du minimum utile)', () => {
+  assert.match(validatePayload(valid({ cl: 1 })), /claim limit/i);
+});
+
+test('validatePayload : cl=5, cl=-1, cl="2" rejetés', () => {
+  assert.match(validatePayload(valid({ cl: 5 })), /claim limit/i);
+  assert.match(validatePayload(valid({ cl: -1 })), /claim limit/i);
+  assert.match(validatePayload(valid({ cl: '2' })), /claim limit/i);
+});
+
+// ---------- normalizeForNonAdminMerge : enforcement de la limite ----------
+
+function makeExisting(over = {}) {
+  return {
+    c: 'raid8',
+    d: 'unified',
+    ownerId: 'owner-1',
+    admins: ['owner-1'],
+    recoveryHash: 'fakehash',
+    p: [],
+    ...over
+  };
+}
+
+function makeRow(rowId, name, by = null) {
+  const row = { id: rowId, n: name, j: [] };
+  if (by) row.by = by;
+  return row;
+}
+
+test('merge non-admin : un user au seuil (2/2) ne peut pas claim une 3ᵉ ligne', () => {
+  const existing = makeExisting({
+    cl: 2,
+    p: [
+      makeRow('r0000001', 'A', 'me'),
+      makeRow('r0000002', 'B', 'me'),
+      makeRow('r0000003', 'C'),       // libre
+      makeRow('r0000004', 'D')
+    ]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A', 'me'),
+      makeRow('r0000002', 'B', 'me'),
+      makeRow('r0000003', 'C', 'me'),  // tentative de 3ᵉ claim
+      makeRow('r0000004', 'D')
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  // La 3ᵉ ligne doit rester libre
+  assert.equal(stored.p[2].by, undefined, 'le 3ᵉ claim doit être rejeté');
+  // Les 2 premières restent claim par "me"
+  assert.equal(stored.p[0].by, 'me');
+  assert.equal(stored.p[1].by, 'me');
+});
+
+test('merge non-admin : libérer 1 puis claim 1 nouvelle reste sous la limite', () => {
+  const existing = makeExisting({
+    cl: 2,
+    p: [
+      makeRow('r0000001', 'A', 'me'),
+      makeRow('r0000002', 'B', 'me'),
+      makeRow('r0000003', 'C')
+    ]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A'),         // libère son claim
+      makeRow('r0000002', 'B', 'me'),
+      makeRow('r0000003', 'C', 'me')    // nouveau claim
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p[0].by, undefined, 'ligne 1 libérée');
+  assert.equal(stored.p[1].by, 'me');
+  assert.equal(stored.p[2].by, 'me', 'nouveau claim accepté (place libérée)');
+});
+
+test('merge non-admin : cl=0 (illimité) → tous les claims passent', () => {
+  const existing = makeExisting({
+    cl: 0,
+    p: Array.from({ length: 8 }, (_, i) => makeRow(`r000000${i + 1}`, `P${i}`))
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: Array.from({ length: 8 }, (_, i) => makeRow(`r000000${i + 1}`, `P${i}`, 'greedy'))
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'greedy');
+  // Toutes les lignes doivent être claim
+  assert.equal(stored.p.filter(p => p.by === 'greedy').length, 8);
+});
+
+test('merge non-admin : cl absent dans existing → défaut 2 appliqué', () => {
+  // Ancien salon sans cl : on doit traiter comme limite=2
+  const existing = makeExisting({
+    p: [
+      makeRow('r0000001', 'A'),
+      makeRow('r0000002', 'B'),
+      makeRow('r0000003', 'C')
+    ]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A', 'me'),
+      makeRow('r0000002', 'B', 'me'),
+      makeRow('r0000003', 'C', 'me')   // doit être rejeté (limite défaut = 2)
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p[2].by, undefined);
+});
+
+test('merge non-admin : claims pré-existants au-dessus de la limite sont préservés', () => {
+  // Cas où la limite a été baissée après-coup (ex: l'owner a passé de 4 à 2).
+  // Les claims déjà en place ne sont pas wipés.
+  const existing = makeExisting({
+    cl: 2,
+    p: [
+      makeRow('r0000001', 'A', 'me'),
+      makeRow('r0000002', 'B', 'me'),
+      makeRow('r0000003', 'C', 'me'),  // déjà au-dessus de la limite actuelle
+      makeRow('r0000004', 'D', 'me')
+    ]
+  });
+  // L'utilisateur modifie juste son nom sur la ligne 4, sans nouveau claim
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: existing.p.map(p => ({ ...p }))
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p.filter(p => p.by === 'me').length, 4, 'tous les claims pré-existants conservés');
 });
 
 // ---------- dedupPrefs ----------
