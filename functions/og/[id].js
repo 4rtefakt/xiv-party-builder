@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 8;  // v8 : rôles strat = positionnels (dps[0]=M1, dps[1]=R1, dps[2]=M2, dps[3]=R2)
+const OG_LAYOUT_VERSION = 9;  // v9 : shortenName systématique sur 2+ mots (badge bouffe ~36px, plus de seuil de chars)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -114,34 +114,30 @@ function esc(s) {
 }
 
 // Compacte un nom FFXIV "Prénom Nom" en "Prénom N." pour les cartes de
-// l'OG image, où Satori ne supporte pas vraiment text-overflow: ellipsis
-// (il rend les noms longs sur 2 lignes ou les coupe au milieu). On garde
-// le prénom complet (= ce que les gens identifient en premier) et on
-// abrège les tokens suivants en initiale. Inchangé si :
-//   - un seul token
-//   - le prénom seul tient déjà très court (≤ MAX_FULL chars)
-//   - le nom complet tient (≤ MAX_TOTAL chars) — pas de besoin d'abréger
-//
-// MAX_TOTAL=12 calé sur les noms 2-mots typiques en Chakra Petch 22px
-// dans une carte 260px : "Alice Erisia" (12 chars) tient, "Rhesh'a
-// Tefakt" (14 chars) wrap. Le seuil 14 d'avant était trop généreux.
+// l'OG image. Satori ne mesure pas le texte de façon prévisible (la
+// largeur des chars en Chakra Petch varie beaucoup : "Alice Erisia" tient
+// alors que "Daga Arken" wrap, à longueur égale) → on ne se fie pas au
+// nombre de chars mais à la STRUCTURE du nom :
+//   - 1 seul mot → kept tel quel (cap large avec ellipsis si très long)
+//   - 2+ mots (cas FFXIV "Prénom Nom") → TOUJOURS abrégé "Prénom N."
+// Le prénom est tronqué à FIRST_MAX chars si très long.
 function shortenName(name) {
-  const MAX_TOTAL = 12;
+  const FIRST_MAX = 9;          // cap pour le 1er token quand on a 2+ mots
+  const SINGLE_WORD_MAX = 14;   // cap pour les noms à 1 seul mot
   const trimmed = String(name || '').trim();
-  if (trimmed.length <= MAX_TOTAL) return trimmed;
+  if (!trimmed) return trimmed;
   const tokens = trimmed.split(/\s+/);
   if (tokens.length < 2) {
-    // Mot unique trop long : on coupe avec ellipsis manuel
-    return trimmed.slice(0, MAX_TOTAL - 1) + '…';
+    return trimmed.length <= SINGLE_WORD_MAX
+      ? trimmed
+      : trimmed.slice(0, SINGLE_WORD_MAX - 1) + '…';
   }
   const first = tokens[0];
   const initials = tokens.slice(1).map(t => t.charAt(0).toUpperCase() + '.').join(' ');
-  const compact = first + ' ' + initials;
-  // Si même le compact dépasse (prénom déjà long), coupe le prénom aussi
-  if (compact.length > MAX_TOTAL) {
-    return first.slice(0, MAX_TOTAL - initials.length - 2) + '… ' + initials;
-  }
-  return compact;
+  const compactFirst = first.length <= FIRST_MAX
+    ? first
+    : first.slice(0, FIRST_MAX - 1) + '…';
+  return compactFirst + ' ' + initials;
 }
 
 function fallback(text) {
