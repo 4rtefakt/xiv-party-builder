@@ -11,7 +11,7 @@
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, ROLE_COLOR } from '../lib/jobs.js';
 
-const HOME_OG_VERSION = 6;  // v6 : compo en colonnes TANKS|HEALERS|DPS (sous-grille 2×2) comme la page web
+const HOME_OG_VERSION = 7;  // v7 : heatmap remonte à côté du title (combler le gap top-right) + tighten gap features↔compo
 const ICON_BASE = 'https://cdn.jsdelivr.net/gh/xivapi/classjob-icons@master/icons/';
 const iconUrl = (jobId) => {
   const j = JOB_BY_ID[jobId];
@@ -241,20 +241,21 @@ export async function onRequestGet({ request }) {
   ).join('');
 
   // Layout :
-  //   1. Header brand + titre + sous-titre
-  //   2. Row : [features] | [heatmap]   ← side by side
-  //   3. Compo démo en colonnes TANKS | HEALERS | DPS (DPS = sous-grille 2×2)
+  //   1. Brand (pleine largeur, en haut)
+  //   2. Row : [Title + Subtitle + Features stack (gauche)] | [Heatmap (droite)]
+  //      → la heatmap remonte tout en haut au lieu d'être sous le sous-titre
+  //   3. Compo démo en colonnes TANKS | HEALERS | DPS (full width)
   //   4. Footer
-  // Largeurs row 2 : features 560 + gap 28 + heatmap ~430 ≈ 1018 / 1088 dispo.
+  // Largeurs row 2 : left ~620 + gap 28 + heatmap ~430 ≈ 1078 / 1088 dispo.
   // Largeurs row 3 (compo) : 4 × 230 + 3 × 12 = 956 / 1088 dispo.
   const html = `
-    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:32px 56px; font-family:sans-serif;">
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; background:#050810; padding:30px 56px; font-family:sans-serif;">
       <div style="display:flex; font-size:22px; color:#00e5ff; letter-spacing:6px; margin-bottom:8px;">◆ PARTY // BUILDER</div>
-      <div style="display:flex; font-size:52px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:4px;">${esc(dict.title)}</div>
-      <div style="display:flex; font-size:21px; color:#ff2e9a; margin-bottom:18px;">${esc(dict.subtitle)}</div>
 
-      <div style="display:flex; flex-direction:row; align-items:flex-start; gap:28px; margin-bottom:18px;">
-        <div style="display:flex; flex-direction:column; width:560px;">
+      <div style="display:flex; flex-direction:row; align-items:flex-start; gap:28px; margin-bottom:14px;">
+        <div style="display:flex; flex-direction:column; width:620px;">
+          <div style="display:flex; font-size:52px; font-weight:700; color:#d7e6f2; line-height:1.05; margin-bottom:4px;">${esc(dict.title)}</div>
+          <div style="display:flex; font-size:21px; color:#ff2e9a; margin-bottom:14px;">${esc(dict.subtitle)}</div>
           ${featureLines}
         </div>
         ${renderHeatmap(dict)}
