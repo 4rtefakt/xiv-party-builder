@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 7;  // v7 : badges rôles strat (MT/OT/H1/H2/M1/M2/R1/R2) sur dungeon/raid8
+const OG_LAYOUT_VERSION = 8;  // v8 : rôles strat = positionnels (dps[0]=M1, dps[1]=R1, dps[2]=M2, dps[3]=R2)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
