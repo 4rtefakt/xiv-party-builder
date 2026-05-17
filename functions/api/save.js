@@ -8,6 +8,11 @@
 // Resp: { id, isAdmin, ownerId, admins, recoverySecret? (sur création uniquement) }
 
 const VALID_CONTENT = new Set(['dungeon', 'raid8', 'raid24', 'raid24chaotic']);
+// Claim limit : nb max de lignes qu'un·e non-admin peut réserver. 0 = illimité.
+// Dupliqué de lib/codec.js (pattern existant : save.js a sa propre liste de
+// jobs valides aussi, pour éviter un import inter-projet en runtime worker).
+const VALID_CLAIM_LIMITS = new Set([0, 2, 3, 4]);
+const DEFAULT_CLAIM_LIMIT = 2;
 const VALID_DPS_MODE = new Set(['unified', 'split']);
 const VALID_JOBS = new Set([
   'PLD','WAR','DRK','GNB',
@@ -131,6 +136,9 @@ export function validatePayload(payload) {
       if (typeof id !== 'string' || !VALID_JOBS.has(id)) return 'Invalid banned job id';
     }
   }
+  if (payload.cl !== undefined) {
+    if (typeof payload.cl !== 'number' || !VALID_CLAIM_LIMITS.has(payload.cl)) return 'Invalid claim limit';
+  }
   if (!Array.isArray(payload.p) || payload.p.length > MAX_PLAYERS) return 'Invalid players array';
   for (const raw of payload.p) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'Invalid player entry';
@@ -215,12 +223,13 @@ function normalizeForAdminUpdate(payload, existing) {
   if (payload.f !== undefined) stored.f = payload.f;
   if (payload.w !== undefined && payload.w !== '') stored.w = payload.w;
   if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
+  if (payload.cl !== undefined) stored.cl = payload.cl;
   return stored;
 }
 
 // Pour un non-admin : merge per-row par rowId
-function normalizeForNonAdminMerge(payload, existing, userId) {
-  // Tout le top-level (c, d, f, w, bj) : on garde l'existant
+export function normalizeForNonAdminMerge(payload, existing, userId) {
+  // Tout le top-level (c, d, f, w, bj, cl) : on garde l'existant
   const stored = {
     c: existing.c,
     d: existing.d,
@@ -231,10 +240,20 @@ function normalizeForNonAdminMerge(payload, existing, userId) {
   if (existing.f !== undefined) stored.f = existing.f;
   if (existing.w) stored.w = existing.w;
   if (existing.bj && existing.bj.length > 0) stored.bj = existing.bj.slice();
+  if (existing.cl !== undefined) stored.cl = existing.cl;
+
+  // Limite de claims : on lit depuis existing (les non-admins ne peuvent pas
+  // la modifier). 0 = illimité, undefined → défaut (2).
+  const claimLimit = existing.cl !== undefined ? existing.cl : DEFAULT_CLAIM_LIMIT;
+  // On compte les claims du userId DÉJÀ présents dans existing pour
+  // initialiser le compteur — on n'augmente que si un nouveau claim est
+  // accepté pendant ce merge.
+  const existingPlayers = Array.isArray(existing.p) ? existing.p : [];
+  let userClaims = existingPlayers.filter(p => p.by === userId).length;
+  const limitReached = () => claimLimit !== 0 && userClaims >= claimLimit;
 
   // Players : on conserve l'ordre et le nombre existants. Pour chaque row, on
   // applique les modifs incoming SI permises.
-  const existingPlayers = Array.isArray(existing.p) ? existing.p : [];
   const incomingByRowId = new Map();
   for (const ip of (Array.isArray(payload.p) ? payload.p : [])) {
     if (typeof ip.id === 'string') incomingByRowId.set(ip.id, ip);
@@ -247,11 +266,15 @@ function normalizeForNonAdminMerge(payload, existing, userId) {
       // Sa ligne : peut tout changer, sauf le rowId et le claimedBy (ne peut pas transférer)
       // (un re-claim avec autre userId est ignoré ; clearer son claim = ok)
       const stillOwned = (typeof ip.by === 'string' && ip.by === userId);
+      if (!stillOwned) userClaims--;  // libération
       return normalizePlayer({ ...ip, by: stillOwned ? userId : null }, ep.id);
     }
     if (!epBy) {
-      // Ligne libre : peut être claim si l'incoming demande claim
-      if (typeof ip.by === 'string' && ip.by === userId) {
+      // Ligne libre : peut être claim si l'incoming demande claim ET si la
+      // limite n'est pas atteinte. Sinon, on ignore silencieusement le claim
+      // (la ligne reste libre côté serveur, le front re-synchro au save+1).
+      if (typeof ip.by === 'string' && ip.by === userId && !limitReached()) {
+        userClaims++;
         return normalizePlayer({ ...ip, by: userId }, ep.id);
       }
       return ep;
@@ -337,6 +360,7 @@ export async function onRequestPost(context) {
     if (payload.f !== undefined) stored.f = payload.f;
     if (payload.w !== undefined && payload.w !== '') stored.w = payload.w;
     if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
+    if (payload.cl !== undefined) stored.cl = payload.cl;
     response = {
       id, isAdmin: true, ownerId: userId, admins: [userId],
       recoverySecret // renvoyé UNE seule fois, sur la création

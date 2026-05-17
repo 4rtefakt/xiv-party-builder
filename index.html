@@ -642,6 +642,20 @@
   }
   .section-roster-info .count.over { color: var(--amber); }
   .section-roster-info .count.under { color: var(--ink-dim); }
+  /* Compteur de réservations affiché à droite du count "X / N" du roster
+     pour les non-admins qui ont au moins 1 claim. `reached` = limite atteinte,
+     teinte ambre pour rappel non-bloquant (les nouveaux Réserver sont cachés). */
+  .section-roster-info .claim-counter {
+    margin-left: 0.9rem;
+    padding-left: 0.9rem;
+    border-left: 1px solid var(--line);
+    color: var(--ink-dim);
+    text-transform: none;
+    letter-spacing: 0.04em;
+  }
+  .section-roster-info .claim-counter.reached {
+    color: var(--amber);
+  }
 
   .controls-row {
     display: grid;
@@ -2302,6 +2316,12 @@
         <div class="control-block-label-sub" data-i18n="p_bannedHelp">Aucun slot ne pourra leur être attribué · ignoré dans les préférences</div>
         <div class="banned-jobs-row" id="bannedJobsRow"></div>
       </div>
+
+      <div class="balance-control" style="margin-top:0.75rem" id="claimLimitControl">
+        <div class="control-block-label" data-i18n="p_claimLimit">Réservations max par personne</div>
+        <div class="control-block-label-sub" data-i18n="p_claimLimitHelp">Une personne peut réserver jusqu'à N lignes (utile pour binômes frère/sœur, conjoint·e·s) · admins non concerné·e·s</div>
+        <div class="segment" id="claimLimitSeg"></div>
+      </div>
     </div>
   </section>
 
@@ -2410,7 +2430,8 @@ import {
   encodeState as _encodeState,
   decodeState as _decodeStateRaw,
   validateImportedPayload,
-  PRESENCE_VALUES
+  PRESENCE_VALUES,
+  DEFAULT_CLAIM_LIMIT, CLAIM_LIMIT_UNLIMITED, VALID_CLAIM_LIMITS
 } from './lib/codec.js';
 // makePlayer reste local : a besoin de side-effects (nextPlayerId, generateRowId).
 
@@ -2504,6 +2525,10 @@ const STRINGS = {
     p_whenPlaceholder: 'Shinryu EX · samedi 21h · ven prochain à 20h30 …',
     p_bannedJobs: 'Jobs bannis pour ce raid',
     p_bannedHelp: 'Aucun slot ne pourra leur être attribué · ignoré dans les préférences',
+    p_claimLimit: 'Réservations max par personne',
+    p_claimLimitHelp: 'Une personne peut réserver jusqu\'à N lignes (utile pour binômes frère/sœur, conjoint·e·s) · admins non concerné·e·s',
+    p_claimUnlimited: '∞',
+    perm_claimLimitReached: ({ n, limit }) => `Tu as réservé tes ${n}/${limit} lignes`,
     p_summaryBanned: ({ n }) => `${n} banni${n > 1 ? 's' : ''}`,
     p_summarySplit: 'Mêlée/Distance',
     // Permissions / claim
@@ -2720,6 +2745,10 @@ const STRINGS = {
     p_whenPlaceholder: 'Shinryu EX · Saturday 9pm · next Fri at 8:30pm …',
     p_bannedJobs: 'Jobs banned for this raid',
     p_bannedHelp: 'No slot can be assigned to them · ignored in preferences',
+    p_claimLimit: 'Max claims per person',
+    p_claimLimitHelp: 'A person can claim up to N rows (handy for sibling/partner pairs) · admins not affected',
+    p_claimUnlimited: '∞',
+    perm_claimLimitReached: ({ n, limit }) => `You claimed your ${n}/${limit} rows`,
     p_summaryBanned: ({ n }) => `${n} banned`,
     p_summarySplit: 'Melee/Ranged',
     // Permissions / claim
@@ -2984,6 +3013,9 @@ const state = {
   fairnessWeight: 50,  // 0 = max satisfaction globale, 100 = anti-frustration max
   raidWhen: '',
   bannedJobs: [],      // IDs de jobs interdits dans la compo
+  // Nb max de lignes qu'un·e non-admin peut claim. 0 = illimité. L'owner
+  // peut bouger ce nb à 2/3/4/0 depuis les settings. Cf. lib/codec.js.
+  claimLimit: DEFAULT_CLAIM_LIMIT,
   showAlternatives: false,
   players: [],
   // Permissions (mises à jour à chaque load/save) :
@@ -2991,6 +3023,20 @@ const state = {
   admins: [],
   isAdmin: true        // en local mode, on est toujours "admin" de ce qu'on créera
 };
+
+// Helper : le user courant a-t-il atteint sa limite de réservations ?
+// Admin = pas de limite. claimLimit = 0 → illimité.
+function userAtClaimLimit() {
+  if (state.isAdmin) return false;
+  const limit = state.claimLimit;
+  if (!limit || limit === CLAIM_LIMIT_UNLIMITED) return false;
+  return state.players.filter(p => p.claimedBy === USER_ID).length >= limit;
+}
+
+// Compte des claims actuels (pour l'affichage du compteur "X/N réservées").
+function userClaimCount() {
+  return state.players.filter(p => p.claimedBy === USER_ID).length;
+}
 
 function isCurrentAdmin() { return !!state.isAdmin; }
 function canEditPlayer(p) {
@@ -3065,6 +3111,41 @@ function renderSegments() {
 
   // Le contrôle DPS Split/Unifié a été retiré : on est toujours en unified
   // (les 4 DPS sont mixés et permutables librement dans le résultat).
+
+  renderClaimLimitSeg();
+}
+
+// Segmented control "Réservations max par personne" : visible aux admins.
+// Pour les non-admins, on masque le contrôle (pas leur prérogative) mais
+// la valeur reste lue depuis state.claimLimit (importée du serveur).
+function renderClaimLimitSeg() {
+  const control = document.getElementById('claimLimitControl');
+  const seg = document.getElementById('claimLimitSeg');
+  if (!control || !seg) return;
+  // Non-admin : on cache complètement, ils n'ont rien à régler ici.
+  control.style.display = state.isAdmin ? '' : 'none';
+  if (!state.isAdmin) return;
+
+  seg.innerHTML = '';
+  // Ordre fixe : 2, 3, 4, illimité (∞). 0 = illimité côté payload.
+  const options = [
+    { value: 2, label: '2' },
+    { value: 3, label: '3' },
+    { value: 4, label: '4' },
+    { value: CLAIM_LIMIT_UNLIMITED, label: t('p_claimUnlimited') }
+  ];
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'segment-btn' + (state.claimLimit === opt.value ? ' active' : '');
+    btn.textContent = opt.label;
+    btn.addEventListener('click', () => {
+      if (state.claimLimit === opt.value) return;
+      state.claimLimit = opt.value;
+      renderClaimLimitSeg();
+      scheduleAutoSave(200);
+    });
+    seg.appendChild(btn);
+  });
 }
 
 function renderRosterInfo() {
@@ -3074,7 +3155,20 @@ function renderRosterInfo() {
   let cls = '';
   if (current > targetSize) cls = 'over';
   else if (current < targetSize) cls = 'under';
-  info.innerHTML = `<span class="count ${cls}">${current}</span> / ${targetSize}`;
+
+  // Mini-indicateur compteur de claims pour les non-admins, seulement quand
+  // iels ont déjà au moins 1 réservation. La limite vaut 0 = illimité, on
+  // n'affiche rien dans ce cas (rien à compter).
+  let claimsInfo = '';
+  const limit = state.claimLimit;
+  const myClaims = state.isAdmin ? 0 : userClaimCount();
+  if (!state.isAdmin && myClaims > 0 && limit && limit !== CLAIM_LIMIT_UNLIMITED) {
+    const reached = myClaims >= limit;
+    const msg = t('perm_claimLimitReached', { n: myClaims, limit });
+    claimsInfo = `<span class="claim-counter${reached ? ' reached' : ''}">${escapeHtml(msg)}</span>`;
+  }
+
+  info.innerHTML = `<span class="count ${cls}">${current}</span> / ${targetSize}${claimsInfo}`;
 }
 
 function buildPlayerRow(player, idx) {
@@ -3115,8 +3209,10 @@ function buildPlayerRow(player, idx) {
       }
     }
 
-    // Bouton Réserver pour les non-admins sur ligne libre
-    if (!state.isAdmin && isUnclaimed) {
+    // Bouton Réserver pour les non-admins sur ligne libre. Caché quand la
+    // limite de claims est atteinte (cf. userAtClaimLimit / state.claimLimit),
+    // un mini-message global dans renderRosterInfo l'explique.
+    if (!state.isAdmin && isUnclaimed && !userAtClaimLimit()) {
       const claimBtn = document.createElement('button');
       claimBtn.className = 'claim-btn';
       claimBtn.textContent = t('perm_claim');
@@ -4452,6 +4548,12 @@ function buildPayload() {
   const w = state.raidWhen.trim();
   if (w) payload.w = w;
   if (state.bannedJobs.length > 0) payload.bj = state.bannedJobs.slice();
+  // Claim limit : on envoie seulement si on est admin (le serveur ignorerait
+  // ce champ pour un non-admin de toute façon ; mais ça évite le bruit
+  // réseau et le diff KV non-pertinent).
+  if (state.isAdmin && typeof state.claimLimit === 'number' && VALID_CLAIM_LIMITS.has(state.claimLimit)) {
+    payload.cl = state.claimLimit;
+  }
   // Admins : on n'envoie cette liste que si on est admin (le serveur l'ignorerait sinon)
   if (state.isAdmin && state.admins && state.admins.length > 0) {
     payload.admins = state.admins.slice();
@@ -5075,6 +5177,9 @@ function applyImportedState(imported) {
   state.fairnessWeight = imported.fairnessWeight ?? 50;
   state.raidWhen = imported.raidWhen ?? '';
   state.bannedJobs = Array.isArray(imported.bannedJobs) ? imported.bannedJobs.slice() : [];
+  // claimLimit fallback : si l'import vient d'un vieux salon ou d'un base64
+  // sans cl, validateImportedPayload retourne déjà le défaut (2).
+  state.claimLimit = typeof imported.claimLimit === 'number' ? imported.claimLimit : DEFAULT_CLAIM_LIMIT;
   state.players = imported.players;
   // Permissions : si l'import vient du serveur on a ces champs ; sinon (base64
   // local) on reste en mode "admin local"
@@ -5160,7 +5265,8 @@ function snapshotState(label) {
     dpsMode: state.dpsMode,
     raidWhen: state.raidWhen,
     bannedJobs: state.bannedJobs.slice(),
-    fairnessWeight: state.fairnessWeight
+    fairnessWeight: state.fairnessWeight,
+    claimLimit: state.claimLimit
   };
   undoStack.push(snap);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -5178,6 +5284,7 @@ function performUndo() {
   state.raidWhen = snap.raidWhen;
   state.bannedJobs = snap.bannedJobs.slice();
   state.fairnessWeight = snap.fairnessWeight;
+  if (typeof snap.claimLimit === 'number') state.claimLimit = snap.claimLimit;
   // Joueurs : on reconstruit pour préserver les refs propres
   state.players = snap.players.map(s => ({
     id: s.id,

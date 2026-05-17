@@ -158,6 +158,25 @@ test('validateImportedPayload : bj filtre les job IDs inconnus', () => {
   assert.deepEqual(r.bannedJobs.sort(), ['PLD', 'WAR']);
 });
 
+test('validateImportedPayload : cl absent → claimLimit = 2 (défaut)', () => {
+  const r = validateImportedPayload(validPayload());
+  assert.equal(r.claimLimit, 2);
+});
+
+test('validateImportedPayload : cl=3 / 4 / 0 préservés', () => {
+  for (const v of [3, 4, 0]) {
+    const r = validateImportedPayload(validPayload({ cl: v }));
+    assert.equal(r.claimLimit, v);
+  }
+});
+
+test('validateImportedPayload : cl=1 / cl=99 / cl="2" → fallback 2', () => {
+  for (const v of [1, 99, '2', null]) {
+    const r = validateImportedPayload(validPayload({ cl: v }));
+    assert.equal(r.claimLimit, 2, `cl=${v} doit fallback à 2`);
+  }
+});
+
 test('roundtrip avec validation : encode → decode → validate', () => {
   const original = {
     c: 'raid24chaotic',
