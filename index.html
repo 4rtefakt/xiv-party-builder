@@ -1813,6 +1813,45 @@
     border-color: var(--cyan);
   }
 
+  /* Modale "Mon identité" (QR transfer) */
+  .identity-qr-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 0.5rem 0 1rem;
+  }
+  .identity-qr {
+    /* Cadre blanc autour du QR pour garantir le contraste de scan, même
+       en mode sombre. Les libs QR produisent du noir-sur-blanc par défaut. */
+    background: #fff;
+    padding: 12px;
+    min-width: 220px;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .identity-qr canvas, .identity-qr img, .identity-qr svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .modal-warning {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--amber);
+    background: rgba(255, 181, 71, 0.06);
+    border: 1px solid rgba(255, 181, 71, 0.4);
+    padding: 0.55rem 0.7rem;
+    margin: 0.5rem 0 1rem;
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+  }
+
   .modal-actions {
     display: flex;
     gap: 0.5rem;
@@ -2262,6 +2301,7 @@
     </div>
     <div class="meta-info">
       <button class="btn-new" id="newBtn" data-i18n="t_new" data-i18n-title="t_newTitle">Nouveau</button>
+      <button class="btn-new" id="identityBtn" data-i18n="t_identity" data-i18n-title="t_identityTitle">Mon identité</button>
       <span>S9.NET</span>
       <span>v7.1</span>
     </div>
@@ -2407,6 +2447,23 @@
   </div>
 </div>
 
+<!-- IDENTITY (QR transfer) MODAL -->
+<div class="modal-overlay" id="identityModal">
+  <div class="modal">
+    <button class="modal-close" data-modal-close>×</button>
+    <div class="modal-title" data-i18n="id_title">Mon identité</div>
+    <div class="modal-subtitle" data-i18n="id_intro">Scanne ce QR code sur un autre appareil...</div>
+    <div class="identity-qr-wrap">
+      <div id="identityQr" class="identity-qr" data-i18n="id_loadingQr">Génération du QR…</div>
+    </div>
+    <div class="modal-warning" data-i18n="id_warning">⚠ Ce QR est ton identité personnelle...</div>
+    <textarea id="identityUrl" readonly></textarea>
+    <div class="modal-actions">
+      <button class="btn-tool" id="copyIdentityUrlBtn"><span class="arrow">▸</span> <span data-i18n="id_copyUrl">Copier l'URL</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="preset-menu" id="presetMenu" hidden></div>
 <div class="preset-menu" id="templateMenu" hidden></div>
 <div class="toast" id="toast"></div>
@@ -2442,6 +2499,29 @@ const ICON_URL = (job) => ICON_BASE + job.icon + '.png';
 // ============================================================
 // IDENTITÉ — userId persistant en localStorage (auth "faible")
 // ============================================================
+
+// Détection d'un transfer d'identité via QR scan : ?import=<base64url(USER_ID)>.
+// Exécuté AVANT la lecture du USER_ID localStorage pour que la nouvelle
+// identité soit prise en compte immédiatement. L'URL est nettoyée du param
+// `?import=` après application (history.replaceState, pas de reload visible).
+(() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const imp = params.get('import');
+    if (!imp) return;
+    let b64 = imp.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const newId = atob(b64).trim();
+    if (/^[A-Za-z0-9_-]{4,64}$/.test(newId)) {
+      localStorage.setItem('xiv-user-id', newId);
+    }
+    // Nettoie l'URL même si l'id était invalide (sécu : pas de boucle de scan)
+    params.delete('import');
+    const cleanQs = params.toString();
+    const cleanUrl = window.location.pathname + (cleanQs ? '?' + cleanQs : '') + window.location.hash;
+    history.replaceState(null, '', cleanUrl);
+  } catch { /* invalide, on ignore — le user existant garde son identité */ }
+})();
 
 const USER_ID = (() => {
   try {
@@ -2570,6 +2650,16 @@ const STRINGS = {
     t_salonAt: ({ time }) => `Salon · ${time}`,
     t_new: 'Nouveau',
     t_newTitle: 'Ouvrir un onglet vide',
+    t_identity: 'Mon identité',
+    t_identityTitle: 'Transférer mon identité (presets, templates, salons récents) vers un autre appareil',
+    id_title: 'Mon identité',
+    id_intro: 'Scanne ce QR code sur un autre appareil pour y retrouver tes presets, templates et salons récents — sans recréer de compte.',
+    id_warning: '⚠ Ce QR est ton identité personnelle : ne le partage qu\'avec toi-même. Toute personne qui le scanne aura accès à tes salons admin.',
+    id_copyUrl: 'Copier l\'URL',
+    id_copied: 'URL copiée',
+    id_loadingQr: 'Génération du QR…',
+    id_qrError: 'Impossible de générer le QR — utilise le bouton "Copier l\'URL" à la place.',
+    id_close: 'Fermer',
     t_syncNow: '↻ Synchroniser',
     // — Roster row
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
@@ -2788,6 +2878,16 @@ const STRINGS = {
     t_salonAt: ({ time }) => `Room · ${time}`,
     t_new: 'New',
     t_newTitle: 'Open an empty tab',
+    t_identity: 'My identity',
+    t_identityTitle: 'Transfer my identity (presets, templates, recent rooms) to another device',
+    id_title: 'My identity',
+    id_intro: 'Scan this QR code on another device to retrieve your presets, templates and recent rooms — no account needed.',
+    id_warning: '⚠ This QR is your personal identity: only share it with yourself. Anyone who scans it gains admin access to your rooms.',
+    id_copyUrl: 'Copy URL',
+    id_copied: 'URL copied',
+    id_loadingQr: 'Generating QR…',
+    id_qrError: 'Could not generate QR — use the "Copy URL" button instead.',
+    id_close: 'Close',
     t_syncNow: '↻ Sync now',
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
     r_notePlaceholder: 'Note (optional) — visible to everyone',
@@ -4661,9 +4761,16 @@ function getPresets() {
   } catch { return []; }
 }
 
-function writePresets(arr) {
+// Variant "local seulement" : utilisé par loadProfileFromCloud pour hydrater
+// les presets depuis le serveur sans déclencher un push retour (boucle).
+function writePresetsLocal(arr) {
   try { localStorage.setItem(PRESETS_KEY, JSON.stringify(arr.slice(0, MAX_PRESETS))); }
   catch { /* quota / mode privé : on ignore */ }
+}
+
+function writePresets(arr) {
+  writePresetsLocal(arr);
+  pushProfileToCloud();
 }
 
 function savePreset(name, jobs) {
@@ -4794,9 +4901,14 @@ function getTemplates() {
   } catch { return []; }
 }
 
-function writeTemplates(arr) {
+function writeTemplatesLocal(arr) {
   try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(arr.slice(0, MAX_TEMPLATES))); }
   catch { /* quota / mode privé : on ignore */ }
+}
+
+function writeTemplates(arr) {
+  writeTemplatesLocal(arr);
+  pushProfileToCloud();
 }
 
 function saveTemplate(name) {
@@ -4951,9 +5063,14 @@ function getRecentRooms() {
   } catch { return []; }
 }
 
-function writeRecentRooms(arr) {
+function writeRecentRoomsLocal(arr) {
   try { localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(arr.slice(0, MAX_RECENT_ROOMS))); }
   catch { /* quota / mode privé : on ignore */ }
+}
+
+function writeRecentRooms(arr) {
+  writeRecentRoomsLocal(arr);
+  pushProfileToCloud();
 }
 
 function recordCurrentRoom() {
@@ -5002,6 +5119,91 @@ function renderRecentRooms() {
     bar.appendChild(chip);
   });
 }
+
+// ============================================================
+// PROFIL CLOUD — sync presets/templates/recent rooms cross-device
+// ============================================================
+//
+// Le profil utilisateur (presets, templates, recents) est miroir-é côté
+// serveur sous `prof:<USER_ID>` (cf. functions/api/profile.js). Au démarrage
+// de l'app, on hydrate le localStorage depuis le serveur. À chaque modif
+// locale, on push debouncé. Le webhook Discord reste 100% local (critique).
+//
+// Mode dégradé : si le serveur est down ou offline, tout fonctionne sur
+// localStorage seul. Les modifs sont perdues côté cloud mais l'UX n'est
+// jamais bloquée.
+
+let profilePushTimer = null;
+let lastPushedSnapshot = null;  // pour éviter les push identiques
+
+// Snapshot canonique du profil (utilisé pour dédupliquer les push).
+function currentProfileSnapshot() {
+  return JSON.stringify({
+    presets: getPresets(),
+    templates: getTemplates(),
+    recents: getRecentRooms()
+  });
+}
+
+function pushProfileToCloud() {
+  // Debounce 1.5s : si plusieurs modifs s'enchaînent (ex: ajout de plusieurs
+  // presets rapides), on ne fait qu'un seul PUT.
+  clearTimeout(profilePushTimer);
+  profilePushTimer = setTimeout(async () => {
+    const snap = currentProfileSnapshot();
+    if (snap === lastPushedSnapshot) return;  // rien n'a changé
+    try {
+      const r = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': USER_ID },
+        body: snap
+      });
+      if (r.ok) lastPushedSnapshot = snap;
+    } catch { /* offline : on retentera au prochain change */ }
+  }, 1500);
+}
+
+// Au démarrage : récupère le profil cloud, hydrate le localStorage si le
+// serveur a quelque chose ; sinon (cloud vide ET local plein) → push initial
+// silencieux pour migrer l'existant.
+async function loadProfileFromCloud() {
+  try {
+    const r = await fetch('/api/profile', {
+      headers: { 'X-User-Id': USER_ID }
+    });
+    if (!r.ok) return;
+    const profile = await r.json();
+    let hasCloudData = false;
+    if (Array.isArray(profile.presets) && profile.presets.length > 0) {
+      writePresetsLocal(profile.presets);
+      hasCloudData = true;
+    }
+    if (Array.isArray(profile.templates) && profile.templates.length > 0) {
+      writeTemplatesLocal(profile.templates);
+      hasCloudData = true;
+    }
+    if (Array.isArray(profile.recents) && profile.recents.length > 0) {
+      writeRecentRoomsLocal(profile.recents);
+      hasCloudData = true;
+    }
+    if (hasCloudData) {
+      // Re-render recent rooms (visible en haut de page) ; les presets et
+      // templates sont rendus à la demande via leurs menus, pas besoin.
+      renderRecentRooms();
+      lastPushedSnapshot = currentProfileSnapshot();
+    } else if (getPresets().length > 0 || getTemplates().length > 0 || getRecentRooms().length > 0) {
+      // Cloud vide mais local plein → migration silencieuse.
+      pushProfileToCloud();
+    }
+  } catch {
+    // Offline ou serveur down : on reste sur le localStorage. Pas de toast,
+    // l'utilisateur ne perd rien.
+  }
+}
+
+// Kick off la synchro dès que possible (l'event init ci-dessous lance aussi
+// le rendering ; on n'attend pas, c'est du progressive enhancement).
+loadProfileFromCloud();
 
 // ============================================================
 // SALON COLLABORATIF — auto-save sur un même ID
@@ -5639,6 +5841,75 @@ document.getElementById('copyAdminLinkBtn').addEventListener('click', async () =
 // Nouveau : ouvre un onglet vide sur la racine de l'app (sans ?p=)
 document.getElementById('newBtn').addEventListener('click', () => {
   window.open(window.location.pathname, '_blank');
+});
+
+// ============================================================
+// MODALE "MON IDENTITÉ" — QR transfer cross-device
+// ============================================================
+//
+// Lib QR : chargée en lazy import depuis jsDelivr à la 1ʳᵉ ouverture de la
+// modale. Évite de peser ~17KB sur le first paint pour une fonctionnalité
+// que la plupart des utilisateur·ice·s n'ouvriront jamais. Pas de fallback
+// strict si l'import échoue : on affiche un message + l'URL en clair, que
+// l'utilisateur peut copier-coller manuellement.
+
+let _qrLib = null;
+async function loadQrLib() {
+  if (_qrLib) return _qrLib;
+  // qrcode-generator (compact, ~12KB minifié). UMD via jsDelivr → on doit
+  // l'importer via <script> classique (pas un ES module). Astuce : injecter
+  // une balise et await le load.
+  await new Promise((resolve, reject) => {
+    if (window.qrcode) return resolve();
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  _qrLib = window.qrcode;
+  return _qrLib;
+}
+
+// Construit l'URL d'import à scanner. Encode le USER_ID en base64url
+// (pour rester URL-safe, pas de +/= problématiques).
+function buildIdentityUrl() {
+  const b64 = btoa(USER_ID).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return window.location.origin + window.location.pathname + '?import=' + b64;
+}
+
+async function openIdentityModal() {
+  const url = buildIdentityUrl();
+  document.getElementById('identityUrl').value = url;
+  const qrContainer = document.getElementById('identityQr');
+  qrContainer.textContent = t('id_loadingQr');
+  openModal('identityModal');
+
+  try {
+    const qrcode = await loadQrLib();
+    // Type 0 = auto, level L pour la densité minimale (le payload est court)
+    const qr = qrcode(0, 'L');
+    qr.addData(url);
+    qr.make();
+    qrContainer.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2 });
+  } catch (e) {
+    qrContainer.textContent = t('id_qrError');
+  }
+}
+
+const identityBtn = document.getElementById('identityBtn');
+if (identityBtn) identityBtn.addEventListener('click', openIdentityModal);
+
+const copyIdentityUrlBtn = document.getElementById('copyIdentityUrlBtn');
+if (copyIdentityUrlBtn) copyIdentityUrlBtn.addEventListener('click', () => {
+  const ta = document.getElementById('identityUrl');
+  ta.select();
+  navigator.clipboard.writeText(ta.value).then(() => {
+    showToast(t('id_copied'));
+  }).catch(() => {
+    // Fallback : execCommand pour les vieux browsers / WebKit en HTTP
+    try { document.execCommand('copy'); showToast(t('id_copied')); } catch {}
+  });
 });
 
 // Auto-sync quand l'onglet reprend le focus ; flush quand il part au second plan
