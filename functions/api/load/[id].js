@@ -49,11 +49,13 @@ export async function onRequestGet(context) {
   if (userId && USER_ID_PATTERN.test(userId)) {
     if (Array.isArray(data.admins) && data.admins.includes(userId)) {
       isAdmin = true;
-    } else if (!data.ownerId) {
-      // legacy room sans owner : on indique isAdmin pour le 1er saver (l'upgrade
-      // se fera côté save.js). Ici on signale juste le mode "legacy".
-      isAdmin = true;
     }
+    // Note : ancien path "legacy salon sans ownerId → isAdmin=true pour tout
+    // visiteur" supprimé. Il faisait passer n'importe quel visiteur d'un vieux
+    // salon pour admin (et ses lignes sans `by` s'affichaient toutes comme
+    // OWNER côté front à cause d'une comparaison null===null). Les rares
+    // salons sans ownerId sont désormais orphelins en lecture seule ; pour les
+    // récupérer, leur créateur·rice doit utiliser le secret de récupération.
   }
   if (!isAdmin && SECRET_PATTERN.test(adminSecret) && data.recoveryHash) {
     const hash = await sha256Hex(adminSecret);

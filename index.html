@@ -3719,7 +3719,7 @@ function buildPlayerRow(player, idx) {
       let badgeClass = '';
       let badgeText = '';
       if (player.claimedBy === USER_ID) { badgeClass = 'you'; badgeText = t('perm_yours'); }
-      else if (player.claimedBy === state.ownerId) { badgeClass = 'owner'; badgeText = t('perm_owner'); }
+      else if (player.claimedBy && player.claimedBy === state.ownerId) { badgeClass = 'owner'; badgeText = t('perm_owner'); }
       else if (state.admins.includes(player.claimedBy)) { badgeClass = 'admin'; badgeText = t('perm_admin'); }
       if (badgeText) {
         const badge = document.createElement('span');
@@ -3837,7 +3837,7 @@ function buildPlayerRow(player, idx) {
     // Couronne admin (visible seulement pour admin, sur lignes claimées)
     if (state.isAdmin && player.claimedBy) {
       const crown = document.createElement('button');
-      const isOwnerRow = player.claimedBy === state.ownerId;
+      const isOwnerRow = player.claimedBy && player.claimedBy === state.ownerId;
       const isAdminRow = state.admins.includes(player.claimedBy);
       crown.className = 'crown-btn' + (isOwnerRow ? ' is-owner' : '') + (isAdminRow && !isOwnerRow ? ' is-admin' : '');
       crown.textContent = isOwnerRow ? '◆' : '👑';

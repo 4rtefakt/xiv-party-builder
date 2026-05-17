@@ -403,16 +403,11 @@ export async function onRequestPost(context) {
       recoverySecret // renvoyé UNE seule fois, sur la création
     };
   } else {
-    // Backward-compat : salon legacy sans ownerId → premier saver prend l'ownership
-    let isLegacyUpgrade = false;
-    if (!existing.ownerId) {
-      isLegacyUpgrade = true;
-      existing.ownerId = userId;
-      existing.admins = [userId];
-      // Pas de recoveryHash pour les anciens salons : on en génère un et on le renvoie
-      // au saver pour qu'iel puisse le sauver
-    }
-
+    // Note : ancien path "legacy salon sans ownerId → premier saver prend
+    // l'ownership" supprimé pour fermer un trou de sécu (n'importe quel
+    // visiteur d'un vieux salon devenait owner via un auto-claim). Les
+    // rares salons sans ownerId sont désormais figés en read-only ; seul
+    // le secret de récupération (s'il existe) permet de regagner l'admin.
     let isAdmin = Array.isArray(existing.admins) && existing.admins.includes(userId);
 
     // Récupération via secret : si le secret matche, on promeut ce userId admin
@@ -427,14 +422,6 @@ export async function onRequestPost(context) {
       }
     }
 
-    let recoveryToReturn;
-    if (isLegacyUpgrade) {
-      // Génère un secret pour ce salon nouvellement claimé
-      const sec = generateSecret();
-      existing.recoveryHash = await sha256Hex(sec);
-      recoveryToReturn = sec;
-    }
-
     if (isAdmin) {
       stored = normalizeForAdminUpdate(payload, existing);
     } else {
@@ -446,8 +433,7 @@ export async function onRequestPost(context) {
       isAdmin,
       ownerId: stored.ownerId,
       admins: stored.admins,
-      promotedViaSecret: promotedViaSecret || undefined,
-      recoverySecret: recoveryToReturn // uniquement si legacy upgrade
+      promotedViaSecret: promotedViaSecret || undefined
     };
   }
 
