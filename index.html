@@ -2707,7 +2707,7 @@
       <button class="btn-tool" id="reconfigureWebhookBtn" hidden style="font-size:0.6rem;opacity:0.7"><span data-i18n="dc_reconfigure">↻ Reconfigurer le webhook</span></button>
       <button class="btn-tool" id="duplicateRoomBtn" hidden data-i18n-title="dupe_title"><span data-i18n="dupe_btn">↻ Dupliquer ce salon</span></button>
       <button class="btn-tool" id="modalSyncBtn" hidden><span data-i18n="t_syncNow">↻ Synchroniser</span></button>
-      <button class="btn-tool" id="refreshDiscordBtn" data-i18n-title="dc_refreshTitle" style="font-size:0.6rem;opacity:0.85"><span data-i18n="dc_refresh">↻ Forcer le refresh Discord</span></button>
+      <button class="btn-tool" id="refreshDiscordBtn" hidden data-i18n-title="dc_refreshTitle" style="font-size:0.6rem;opacity:0.85"><span data-i18n="dc_refresh">↻ Forcer le refresh Discord</span></button>
     </div>
   </div>
 </div>
@@ -6962,6 +6962,12 @@ document.addEventListener('keydown', e => {
   }
   if (code) {
     const isShortId = SHORT_ID_PATTERN.test(code);
+    // Tant qu'on n'a pas chargé le salon, on assume non-admin (sécu : évite
+    // que les boutons admin clignotent visibles pendant le fetch async si
+    // l'utilisateur·ice ouvre la modale Partager direct au chargement).
+    // applyImportedState() qui suit corrigera state.isAdmin selon la réponse
+    // serveur.
+    if (isShortId) state.isAdmin = false;
     // Pour un short ID, on doit await la Function : on rend d'abord la state
     // par défaut pour éviter une UI vide pendant le fetch.
     if (isShortId) {
