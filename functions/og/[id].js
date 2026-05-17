@@ -12,10 +12,12 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 
 // Cache PNG en KV : la rasterization workers-og (satori + resvg-wasm) coûte
 // 300-500ms CPU par scrape. La sortie est déterministe pour un (id, contenu)
-// donné → on cache l'output sous `og:<id>:<hash(KV)>` avec TTL 7j. Le hash
-// change quand le salon est modifié, donc une nouvelle URL est servie au
-// scrape suivant et le cache devient stale tout seul.
+// donné → on cache l'output sous `og:<id>:<lang>:<hash(KV)>` avec TTL 7j.
+// Le hash change quand le salon est modifié → cache stale auto.
+// VERSION : à incrémenter quand on change le layout du rendu (sinon les
+// vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
+const OG_LAYOUT_VERSION = 2;  // v2 : nom raccourci "Prénom N."
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -99,6 +101,33 @@ function esc(s) {
   return String(s).replace(/[<>&]/g, c => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[c]));
 }
 
+// Compacte un nom FFXIV "Prénom Nom" en "Prénom N." pour les cartes de
+// l'OG image, où Satori ne supporte pas vraiment text-overflow: ellipsis
+// (il rend les noms longs sur 2 lignes ou les coupe au milieu). On garde
+// le prénom complet (= ce que les gens identifient en premier) et on
+// abrège les tokens suivants en initiale. Inchangé si :
+//   - un seul token
+//   - le prénom seul tient déjà très court (≤ MAX_FULL chars)
+//   - le nom complet tient (≤ MAX_TOTAL chars) — pas de besoin d'abréger
+function shortenName(name) {
+  const MAX_TOTAL = 14;  // tient sur 1 ligne dans une carte 260px à 22px
+  const trimmed = String(name || '').trim();
+  if (trimmed.length <= MAX_TOTAL) return trimmed;
+  const tokens = trimmed.split(/\s+/);
+  if (tokens.length < 2) {
+    // Mot unique trop long : on coupe avec ellipsis manuel
+    return trimmed.slice(0, MAX_TOTAL - 1) + '…';
+  }
+  const first = tokens[0];
+  const initials = tokens.slice(1).map(t => t.charAt(0).toUpperCase() + '.').join(' ');
+  const compact = first + ' ' + initials;
+  // Si même le compact dépasse (prénom déjà long), coupe le prénom aussi
+  if (compact.length > MAX_TOTAL) {
+    return first.slice(0, MAX_TOTAL - initials.length - 2) + '… ' + initials;
+  }
+  return compact;
+}
+
 function fallback(text) {
   return new Response(text, { status: 500, headers: { 'Content-Type': 'text/plain' } });
 }
@@ -119,7 +148,7 @@ function renderCard(m, width) {
     <div style="display:flex; align-items:center; height:54px; width:${width}px; padding:0 10px 0 8px; border-left:3px solid ${roleColor}; ${lockBorder}">
       <img src="${iconUrl(m.job)}" width="40" height="40" style="margin-right:12px; flex-shrink:0;" />
       <div style="display:flex; flex-direction:column; overflow:hidden;">
-        <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(m.name)}</div>
+        <div style="display:flex; font-size:22px; font-weight:600; color:#d7e6f2; line-height:1.1;">${esc(shortenName(m.name))}</div>
         <div style="display:flex; font-size:16px; color:${roleColor}; line-height:1.1; margin-top:2px;">${esc(m.job.name)}</div>
       </div>
       ${lockGlyph}
@@ -202,8 +231,9 @@ export async function onRequestGet({ params, env, request }) {
   if (!raw) return new Response('Not found', { status: 404 });
 
   // Cache hit ? La langue fait partie de la clé (titre "Donjon" vs "Dungeon")
+  // et la version du layout aussi (bump = invalidate global).
   const contentHash = await shortHash(raw);
-  const cacheKey = `og:${id}:${lang}:${contentHash}`;
+  const cacheKey = `og:v${OG_LAYOUT_VERSION}:${id}:${lang}:${contentHash}`;
   const cached = await env.PARTY_KV.get(cacheKey, 'arrayBuffer');
   if (cached) {
     return new Response(cached, {
