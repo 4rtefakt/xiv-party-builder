@@ -2338,6 +2338,28 @@
     font-size: 0.8em;
   }
 
+  /* Petit dot vert (pulse léger) qui s'affiche à gauche du label d'un bouton
+     quand data-live="on" — utilisé par #shareBtn pour signaler que le sync
+     WebSocket est actif. Discret : 6px, pas de texte ni de tooltip imposé. */
+  button[data-live="on"]::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.7);
+    margin-right: 0.4rem;
+    animation: livePulse 2s ease-in-out infinite;
+  }
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    button[data-live="on"]::before { animation: none; }
+  }
+
   /* Modal */
   .modal-overlay {
     display: none;
@@ -3224,6 +3246,7 @@ import {
   slotsIntersect, MAX_RAID_SLOTS, MIN_SLOT_DURATION, MAX_SLOT_DURATION
 } from './lib/availability.js';
 import { assignStratRoles, assignDpsGridPositions, getDpsLayout } from './lib/strat-roles.js';
+import { createLiveSync } from './lib/live-sync.js';
 import {
   MAX_PRESETS, MAX_PRESET_NAME_LEN,
   MAX_TEMPLATES, MAX_TEMPLATE_NAME_LEN,
@@ -3407,6 +3430,7 @@ const STRINGS = {
     t_salon: 'Salon',
     t_syncing: 'Sync…',
     t_salonAt: ({ time }) => `Salon · ${time}`,
+    t_liveOn: 'Sync temps réel actif (les modifs des autres apparaissent en live)',
     t_new: 'Nouveau',
     t_newTitle: 'Ouvrir un onglet vide',
     t_identity: 'Mon identité',
@@ -3742,6 +3766,7 @@ const STRINGS = {
     t_salon: 'Room',
     t_syncing: 'Sync…',
     t_salonAt: ({ time }) => `Room · ${time}`,
+    t_liveOn: 'Live sync active (others\' changes appear instantly)',
     t_new: 'New',
     t_newTitle: 'Open an empty tab',
     t_identity: 'My identity',
@@ -6998,9 +7023,7 @@ function updateSyncStatus() {
   if (!label) return;
   if (!currentRoomId) {
     label.textContent = t('t_share');
-    return;
-  }
-  if (saving) {
+  } else if (saving) {
     label.textContent = t('t_syncing');
   } else if (lastSavedAt) {
     const d = new Date(lastSavedAt);
@@ -7008,6 +7031,59 @@ function updateSyncStatus() {
   } else {
     label.textContent = t('t_salon');
   }
+  // Petit indicateur LIVE quand le WS est connecté (sync temps-réel actif).
+  // Discret, ne s'affiche que dans une room. data-attribute lu par CSS.
+  const shareBtn = document.getElementById('shareBtn');
+  if (shareBtn) {
+    if (currentRoomId && liveSyncStatus === 'connected') {
+      shareBtn.dataset.live = 'on';
+      shareBtn.title = t('t_liveOn');
+    } else {
+      delete shareBtn.dataset.live;
+      shareBtn.title = '';
+    }
+  }
+}
+
+// ============================================================
+// LIVE-SYNC : WebSocket vers /api/presence/:id pour recevoir les
+// notifications "room changed" et refetch en temps réel. Si le binding DO
+// n'est pas dispo (worker pas déployé), tout reste fonctionnel — le client
+// retombe sur le sync-on-focus existant.
+// ============================================================
+const liveSync = createLiveSync({ origin: window.location.origin });
+let liveSyncStatus = 'disconnected';
+// Délai après un save local pendant lequel on ignore les broadcasts "changed"
+// — l'event est probablement notre propre save qui nous revient.
+const LIVE_SYNC_SELF_BROADCAST_WINDOW_MS = 2500;
+
+async function handleLiveChange(msg) {
+  if (!currentRoomId) return;
+  // Skip self-broadcast : si je viens de save dans la fenêtre récente,
+  // c'est probablement mon propre event qui revient. Évite la boucle refetch.
+  if (lastSavedAt && (Date.now() - lastSavedAt) < LIVE_SYNC_SELF_BROADCAST_WINDOW_MS) {
+    return;
+  }
+  // Si un save local est en cours OU en attente, on skip aussi : le refetch
+  // écraserait des modifs locales pas encore parties. Le serveur sera de
+  // toutes façons notifié par notre save imminent.
+  if (saving || pendingChanges) return;
+  try {
+    const imported = await fetchPayloadById(currentRoomId);
+    suppressAutoSave = true;
+    applyImportedState(imported);
+    suppressAutoSave = false;
+    lastSavedAt = Date.now();
+    updateSyncStatus();
+  } catch {
+    // Best-effort : si le refetch échoue, on laisse le sync-on-focus reprendre
+    suppressAutoSave = false;
+  }
+}
+
+function handleLiveStatus(status) {
+  liveSyncStatus = status;
+  updateSyncStatus();
 }
 
 function enterRoomMode(id) {
@@ -7017,12 +7093,18 @@ function enterRoomMode(id) {
   window.history.replaceState({}, '', url.toString());
   recordCurrentRoom();
   updateSyncStatus();
+  // Ouvre le WebSocket pour cette room (idempotent : si déjà connecté sur
+  // cette même room, c'est un no-op côté lib).
+  try { liveSync.subscribe(id, handleLiveChange, handleLiveStatus); }
+  catch { /* WS pas dispo (browser ancien) : on continue sans */ }
 }
 
 function exitRoomMode() {
   currentRoomId = null;
   lastSavedAt = null;
   if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+  try { liveSync.unsubscribe(); } catch { /* ignore */ }
+  liveSyncStatus = 'disconnected';
   const url = new URL(window.location.href);
   url.searchParams.delete('p');
   window.history.replaceState({}, '', url.toString());
