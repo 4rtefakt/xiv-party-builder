@@ -6949,6 +6949,13 @@ const MAX_UNDO = 20;
 function snapshotState(label) {
   // Capture les parties mutables du state. Les références sont clonées en
   // profondeur via JSON pour ne pas garder de pointeurs vers des objets vivants.
+  //
+  // CRITIQUE : tout champ omis ici est PERDU au performUndo() suivant. Comme
+  // performUndo() appelle scheduleAutoSave() à la fin, l'omission propage la
+  // perte en KV serveur (path admin = full overwrite via normalizeForAdminUpdate).
+  // Cas vécu : `availability` et `prefTiers` n'étaient pas capturés → un Ctrl+Z
+  // par un admin effaçait les dispos de TOUT le roster en KV. Si tu ajoutes
+  // un nouveau champ persistant à player, AJOUTE-LE ICI ET dans performUndo.
   const snap = {
     label,
     time: Date.now(),
@@ -6957,10 +6964,15 @@ function snapshotState(label) {
       rowId: p.rowId,
       name: p.name,
       preferences: p.preferences.slice(),
+      prefTiers: Array.isArray(p.prefTiers) ? p.prefTiers.slice() : [],
       presence: p.presence,
       lockedJob: p.lockedJob,
       claimedBy: p.claimedBy,
-      note: p.note || ''
+      note: p.note || '',
+      // availability : deep clone (objet { day: [hours] } ou null)
+      availability: p.availability
+        ? Object.fromEntries(Object.entries(p.availability).map(([d, h]) => [d, h.slice()]))
+        : null
     })),
     contentType: state.contentType,
     dpsMode: state.dpsMode,
@@ -6992,10 +7004,14 @@ function performUndo() {
     rowId: s.rowId,
     name: s.name,
     preferences: s.preferences.slice(),
+    prefTiers: Array.isArray(s.prefTiers) ? s.prefTiers.slice() : [],
     presence: s.presence,
     lockedJob: s.lockedJob,
     claimedBy: s.claimedBy,
-    note: s.note || ''
+    note: s.note || '',
+    availability: s.availability
+      ? Object.fromEntries(Object.entries(s.availability).map(([d, h]) => [d, h.slice()]))
+      : null
   }));
   const whenInput = document.getElementById('raidWhenInput');
   if (whenInput) whenInput.value = state.raidWhen;
