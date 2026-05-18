@@ -266,8 +266,9 @@ export async function onRequestGet({ params, env, request }) {
   const id = params.id;
   if (!VALID_ID.test(id)) return new Response('Invalid id', { status: 400 });
 
-  const lang = pickLang(request.headers);
-  const dict = OG_STRINGS[lang];
+  // (lang réelle déterminée après lecture du salon — voir plus bas)
+  let lang;
+  let dict;
 
   const raw = await env.PARTY_KV.get(id);
   if (!raw) return new Response('Not found', { status: 404 });
@@ -295,6 +296,11 @@ export async function onRequestGet({ params, env, request }) {
   let data;
   try { data = JSON.parse(raw); }
   catch { return new Response('Bad data', { status: 500 }); }
+
+  // Langue : stockée par l'admin à la création (data.lg), sinon fallback
+  // sur le scrape Accept-Language. Cohérence garantie avec _middleware.js.
+  lang = (data.lg === 'fr' || data.lg === 'en') ? data.lg : pickLang(request.headers);
+  dict = OG_STRINGS[lang];
 
   const { players, assignment, results } = computeForOg(data, id);
 

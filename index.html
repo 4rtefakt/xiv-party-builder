@@ -1,28 +1,30 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Party Builder · FFXIV</title>
-<meta name="description" content="Composition optimale de groupe pour Final Fantasy XIV — Dawntrail. Choisis ton contenu, entre les préférences de chaque joueur·euse, obtiens la meilleure répartition de jobs.">
+<meta name="description" content="Optimal party composition for Final Fantasy XIV — Dawntrail. Pick your content, enter each player's job preferences, get the best assignment.">
 
 <!-- Open Graph (Discord, Facebook, LinkedIn, ...) -->
+<!-- Default = English. Per-room previews override these via _middleware.js,
+     using the language stored at room creation (admin's language). -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://party-builder.pages.dev/">
 <meta property="og:site_name" content="Party Builder · FFXIV">
 <meta property="og:title" content="Party Builder · FFXIV">
-<meta property="og:description" content="Composition optimale de groupe pour FFXIV Dawntrail. 21 jobs, donjons et raids 4/8/24, partage en un lien.">
+<meta property="og:description" content="Optimal party composition for FFXIV Dawntrail. 21 jobs, dungeons, raids 8 & alliance 24, share via link.">
 <meta property="og:image" content="https://party-builder.pages.dev/og.png?v=7">
 <meta property="og:image:secure_url" content="https://party-builder.pages.dev/og.png?v=7">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Party Builder — outil de composition de groupe pour FFXIV">
+<meta property="og:image:alt" content="Party Builder — FFXIV party composition tool">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Party Builder · FFXIV">
-<meta name="twitter:description" content="Composition optimale de groupe pour FFXIV Dawntrail.">
+<meta name="twitter:description" content="Optimal party composition for FFXIV Dawntrail.">
 <meta name="twitter:image" content="https://party-builder.pages.dev/og.png?v=7">
 
 <!-- Theme color (barre URL mobile / embeds) -->
@@ -5804,6 +5806,10 @@ function buildPayload() {
     // Admin-only fields : le serveur les ignorerait pour un non-admin, mais
     // on évite le bruit réseau et le diff KV non-pertinent en n'envoyant rien.
     claimLimit: state.isAdmin ? state.claimLimit : undefined,
+    // Langue d'affichage du salon (meta OG / image OG) : figée à la langue
+    // de l'admin au moment de la modif. Sur les non-admins, on ne touche pas
+    // (le serveur préserve existing.lg).
+    lang: state.isAdmin ? LANG : undefined,
     admins: state.isAdmin ? state.admins : undefined
   });
 }

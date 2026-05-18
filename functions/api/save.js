@@ -13,6 +13,9 @@ const VALID_CONTENT = new Set(['dungeon', 'raid8', 'raid24', 'raid24chaotic']);
 // jobs valides aussi, pour éviter un import inter-projet en runtime worker).
 const VALID_CLAIM_LIMITS = new Set([0, 1, 2, 3, 4]);
 const DEFAULT_CLAIM_LIMIT = 2;
+// Langue d'affichage stockée par salon — appliquée par middleware + OG worker
+// pour la preview Discord, indépendamment de la langue du scrape.
+const VALID_LANGS = new Set(['fr', 'en']);
 const VALID_DPS_MODE = new Set(['unified', 'split']);
 const VALID_JOBS = new Set([
   'PLD','WAR','DRK','GNB',
@@ -145,6 +148,9 @@ export function validatePayload(payload) {
   if (payload.cl !== undefined) {
     if (typeof payload.cl !== 'number' || !VALID_CLAIM_LIMITS.has(payload.cl)) return 'Invalid claim limit';
   }
+  if (payload.lg !== undefined) {
+    if (typeof payload.lg !== 'string' || !VALID_LANGS.has(payload.lg)) return 'Invalid lang';
+  }
   if (!Array.isArray(payload.p) || payload.p.length > MAX_PLAYERS) return 'Invalid players array';
   for (const raw of payload.p) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'Invalid player entry';
@@ -263,6 +269,8 @@ function normalizeForAdminUpdate(payload, existing) {
   if (payload.w !== undefined && payload.w !== '') stored.w = payload.w;
   if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
   if (payload.cl !== undefined) stored.cl = payload.cl;
+  if (payload.lg !== undefined) stored.lg = payload.lg;
+  else if (existing.lg !== undefined) stored.lg = existing.lg;
   return stored;
 }
 
@@ -280,6 +288,8 @@ export function normalizeForNonAdminMerge(payload, existing, userId) {
   if (existing.w) stored.w = existing.w;
   if (existing.bj && existing.bj.length > 0) stored.bj = existing.bj.slice();
   if (existing.cl !== undefined) stored.cl = existing.cl;
+  // Lang : préservée du salon (non-admin ne peut pas la modifier)
+  if (existing.lg !== undefined) stored.lg = existing.lg;
 
   // Limite de claims : on lit depuis existing (les non-admins ne peuvent pas
   // la modifier). 0 = illimité, undefined → défaut (2).
@@ -416,6 +426,7 @@ export async function onRequestPost(context) {
     if (payload.w !== undefined && payload.w !== '') stored.w = payload.w;
     if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
     if (payload.cl !== undefined) stored.cl = payload.cl;
+    if (payload.lg !== undefined) stored.lg = payload.lg;
     response = {
       id, isAdmin: true, ownerId: userId, admins: [userId],
       recoverySecret // renvoyé UNE seule fois, sur la création

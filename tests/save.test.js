@@ -171,6 +171,19 @@ test('normalizePlayer : av absent → champ omis', () => {
   assert.equal(out.av, undefined);
 });
 
+// ---------- validatePayload : lang (lg) ----------
+
+test('validatePayload : lg="fr" / "en" acceptés', () => {
+  assert.equal(validatePayload(valid({ lg: 'fr' })), null);
+  assert.equal(validatePayload(valid({ lg: 'en' })), null);
+});
+
+test('validatePayload : lg="de" / 42 / "" rejetés', () => {
+  assert.match(validatePayload(valid({ lg: 'de' })), /lang/i);
+  assert.match(validatePayload(valid({ lg: 42 })), /lang/i);
+  assert.match(validatePayload(valid({ lg: '' })), /lang/i);
+});
+
 // ---------- normalizeForNonAdminMerge : enforcement de la limite ----------
 
 function makeExisting(over = {}) {
@@ -369,6 +382,22 @@ test('merge non-admin : cl absent dans existing → défaut 2 appliqué', () => 
   };
   const stored = normalizeForNonAdminMerge(payload, existing, 'me');
   assert.equal(stored.p[2].by, undefined);
+});
+
+test('merge non-admin : lang existante préservée (non-admin ne peut pas modifier)', () => {
+  const existing = makeExisting({
+    lg: 'fr',
+    p: [makeRow('r0000001', 'A')]
+  });
+  // Le payload incoming a lg='en' — un non-admin malveillant essaie de
+  // changer la langue. Le serveur doit ignorer ce champ et garder 'fr'.
+  const payload = {
+    c: 'raid8', d: 'unified',
+    lg: 'en',
+    p: [makeRow('r0000001', 'A')]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.lg, 'fr');
 });
 
 test('merge non-admin : claims pré-existants au-dessus de la limite sont préservés', () => {
