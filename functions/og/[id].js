@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 21; // v21 : seed tie-break par room id (algo scoring) → l'attribution job→joueur en cas d'égalité change vs v20
+const OG_LAYOUT_VERSION = 22; // v22 : lock dur (algo scoring) → un joueur locké joue son job, plus de bench "voluntaire" pour optimiser le bonus de rôles
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));

@@ -506,6 +506,71 @@ test('seed : null/undefined → comportement legacy (1er du roster)', () => {
   }
 });
 
+// ---------- lock "dur" : un joueur locké doit JOUER son lock ----------
+
+test('lock dur : un joueur locké sur sa 3e pref ne doit PAS être benché par "optimisation"', () => {
+  // Bug rapporté : Alice (PLD, WAR, SAM) lockée sur SAM, l'algo benchait Alice
+  // car bench (-105) < SAM 3e pref (50) en termes d'individuel, et bencher
+  // Alice préservait le bonus de Role Composition (caster Hank reste).
+  // Maintenant : bench n'est plus une option si au moins un slot peut accueillir
+  // le lockedJob → Alice DOIT jouer SAM, un autre DPS est benché à sa place.
+  const players = [
+    P('Alice', ['PLD', 'WAR', 'SAM'], { locked: 'SAM' }),
+    P('Bob',   ['WAR', 'PLD']),
+    P('Carol', ['WHM']),
+    P('David', ['SCH']),
+    P('Eve',   ['SAM', 'DRG']),
+    P('Frank', ['DRG', 'SAM']),
+    P('Grace', ['BRD']),
+    P('Hank',  ['BLM'])
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('raid8', 'unified'), fairnessWeight: 50
+  });
+  const alice = r.results.find(x => x.name === 'Alice');
+  assert.equal(alice.assigned, true, 'Alice ne doit PAS être benchée (son lock prime)');
+  assert.equal(alice.jobId, 'SAM', 'Alice doit jouer SAM (son lock)');
+});
+
+test('lock dur : 5 mêlées lockés pour 4 slots DPS → exactement 1 benché (fallback légitime)', () => {
+  // Cas où le bench EST nécessaire (impossible de tout placer). Le fix doit
+  // permettre ce cas-là tout en bloquant les bench "voluntaires".
+  const players = [
+    P('A', ['SAM'], { locked: 'SAM' }),
+    P('B', ['SAM'], { locked: 'SAM' }),
+    P('C', ['SAM'], { locked: 'SAM' }),
+    P('D', ['SAM'], { locked: 'SAM' }),
+    P('E', ['SAM'], { locked: 'SAM' }),
+    P('Tank',  ['PLD']),
+    P('Heal1', ['WHM']),
+    P('Heal2', ['SCH'])
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('raid8', 'unified'), fairnessWeight: 50
+  });
+  const benched = r.results.filter(x => !x.assigned);
+  assert.equal(benched.length, 1, '5 mêlées pour 4 slots DPS → exactement 1 benché');
+  // Le benché est l'un des A/B/C/D/E (pas le tank ni les heals)
+  assert.ok(['A','B','C','D','E'].includes(benched[0].name),
+    `le benché doit être un des SAM lockés, vu: ${benched[0].name}`);
+});
+
+test('lock dur : lock conservé même si slot disponible mais sub-optimal individuellement', () => {
+  // Joueur locké sur 2e pref, alors qu'il aurait pu prendre sa 1ère pref ailleurs.
+  // Le lock prime quoi qu'il arrive.
+  const players = [
+    P('Alice', ['SAM', 'DRG'], { locked: 'DRG' }),  // pref 1=SAM, locked sur DRG
+    P('Bob', ['WAR']),
+    P('Heal', ['WHM'])
+  ];
+  // Dungeon : 1T + 1H + 2 DPS flex
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('dungeon', 'unified'), fairnessWeight: 50
+  });
+  const alice = r.results.find(x => x.name === 'Alice');
+  assert.equal(alice.jobId, 'DRG', 'Alice doit jouer DRG (son lock), pas SAM même si dispo');
+});
+
 test('seed : seed numérique fonctionne aussi (pas que string)', () => {
   const players = threeHealers('Alice', 'Bob', 'Carol');
   const slots = buildSlots('raid8', 'unified');
