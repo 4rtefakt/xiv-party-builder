@@ -21,3 +21,17 @@ preview_id = "65caa924758b44a9bdf598d664e1cd6e"
 # Pour le dev local :
 #   wrangler pages dev . --kv PARTY_KV
 # (KV éphémère Miniflare ; les données ne touchent pas la prod)
+
+# Durable Object : binding vers la classe RoomBroadcast hébergée dans le
+# Worker séparé `xiv-party-presence` (cf do-worker/). Sert au broadcast
+# temps-réel "data changed" aux clients connectés via WebSocket.
+#
+# Privacy : le DO ne tracke pas qui est connecté, juste un Set de sockets
+# par room. Aucune donnée sur les autres clients n'est exposée.
+#
+# Le Worker `xiv-party-presence` doit être déployé AVANT que Pages puisse
+# résoudre ce binding. En local : `wrangler pages dev` avec les deux configs.
+[[durable_objects.bindings]]
+name = "ROOM_BROADCAST"
+class_name = "RoomBroadcast"
+script_name = "xiv-party-presence"

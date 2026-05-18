@@ -90,7 +90,66 @@ file /tmp/og.png  # → PNG image data, 1200 x 630
 
 Puis ouvre `https://<projet>.pages.dev` dans le navigateur, clique **Partager**, et vérifie le flow complet (création de salon, copie du lien, ouverture dans un onglet privé, etc.).
 
-## 6. Custom domain (optionnel)
+## 6. Déployer le Worker presence (Durable Object)
+
+Pour les notifications temps-réel "room changed" (sync live entre onglets / collègues), le projet utilise un Durable Object hébergé dans un Worker séparé du projet Pages. Sans cette étape, les Functions Pages continuent de tourner mais le binding `ROOM_BROADCAST` sera absent → le hook de notify dans `save.js` no-op silencieusement (le fallback `syncOnFocus` côté front reste actif).
+
+### Pré-requis
+
+Plan Workers **payant** (5€/mois minimum). Le tier gratuit n'inclut pas Durable Objects.
+
+### Déploiement
+
+Depuis la racine du repo :
+
+```sh
+cd do-worker
+wrangler deploy
+```
+
+La 1ʳᵉ fois, wrangler te demande de confirmer la migration `v1` (création de la classe `RoomBroadcast`). Réponds **yes**.
+
+Vérifie le déploiement :
+
+```sh
+# Devrait répondre 404 "access via DO binding from Pages" (volontaire, pas de route publique)
+curl https://xiv-party-presence.<sub-domaine-cf>.workers.dev
+```
+
+### Binding côté Pages
+
+Le `wrangler.toml` à la racine déclare déjà le binding :
+
+```toml
+[[durable_objects.bindings]]
+name = "ROOM_BROADCAST"
+class_name = "RoomBroadcast"
+script_name = "xiv-party-presence"
+```
+
+⚠ **Ordre de déploiement** : Worker presence **AVANT** Pages. Sinon Pages refusera de déployer avec "DO script not found".
+
+### Test du flow temps-réel
+
+```sh
+# Connect un WS au room "test01"
+wscat -c "wss://<projet>.pages.dev/api/presence/test01"
+
+# Dans un autre terminal, save dans la même room :
+curl -X POST https://<projet>.pages.dev/api/save \
+  -H 'Content-Type: application/json' -H 'X-User-Id: u_test_12345' \
+  -d '{"id":"test01","c":"raid8","d":"unified","f":50,"p":[]}'
+
+# Le WS doit recevoir : {"type":"changed","hash":"...","savedAt":...}
+```
+
+### Privacy & coûts
+
+- Le DO ne stocke aucune info sur qui est connecté (pas de Map userId → socket)
+- Les broadcasts ne contiennent **aucune** info client (juste un hash + timestamp serveur)
+- Coût : ~1-2€/mois supplémentaire pour ~20 personnes actives en peak (plan Workers Paid inclut large quota DO)
+
+## 7. Custom domain (optionnel)
 
 Projet Pages → **Custom domains** → **Set up a custom domain** → renseigner le DNS proposé.
 
@@ -102,6 +161,22 @@ wrangler pages dev . --kv PARTY_KV
 ```
 
 Servi sur `http://localhost:8788`. Miniflare crée un KV éphémère (les données ne touchent pas la prod).
+
+### Dev local avec le DO presence
+
+Pour tester le broadcast temps-réel localement (les WS sur `/api/presence/:id`) :
+
+```sh
+# Terminal 1 : worker DO en local
+cd do-worker
+wrangler dev --port 8787 --local
+
+# Terminal 2 : Pages avec service binding vers le worker local
+wrangler pages dev . --kv PARTY_KV \
+  --do "ROOM_BROADCAST=RoomBroadcast@xiv-party-presence"
+```
+
+Miniflare gère le binding cross-worker. En prod, le binding est résolu via le `script_name` du `wrangler.toml`.
 
 ## Tier gratuit Cloudflare
 

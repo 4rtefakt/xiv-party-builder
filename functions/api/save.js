@@ -489,11 +489,43 @@ export async function onRequestPost(context) {
     };
   }
 
+  const storedJson = JSON.stringify(stored);
   try {
-    await env.PARTY_KV.put(id, JSON.stringify(stored), { expirationTtl: TTL_SECONDS });
+    await env.PARTY_KV.put(id, storedJson, { expirationTtl: TTL_SECONDS });
   } catch (e) {
     return jsonResponse({ error: 'Storage failure' }, 500);
   }
 
+  // Broadcast temps-réel : notifie les WS connectés à cette room que le
+  // data a changé. Fire-and-forget via waitUntil pour ne pas bloquer la
+  // réponse au client qui a save. Le DO se charge d'envoyer un { type:'changed' }
+  // à tous les sockets ; chaque client refetch ensuite via /api/load/:id.
+  //
+  // Privacy : on n'envoie PAS userId ni aucune info sur qui a save. Juste
+  // le hash du nouveau payload (= cache-buster cohérent avec OG hash) et
+  // un timestamp serveur.
+  if (env.ROOM_BROADCAST) {
+    context.waitUntil((async () => {
+      try {
+        const hash = await shortHash(storedJson);
+        const stub = env.ROOM_BROADCAST.get(env.ROOM_BROADCAST.idFromName(id));
+        await stub.fetch('https://do-internal/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hash, savedAt: Date.now() })
+        });
+      } catch {
+        // Best-effort : si le DO n'est pas joignable (deploy en cours, etc.)
+        // on ignore — le client retombera sur son sync au focus existant.
+      }
+    })());
+  }
+
   return jsonResponse(response);
+}
+
+async function shortHash(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  const arr = new Uint8Array(buf, 0, 4);
+  return [...arr].map(b => b.toString(16).padStart(2, '0')).join('');
 }

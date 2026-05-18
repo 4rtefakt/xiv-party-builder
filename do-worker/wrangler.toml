@@ -1,0 +1,19 @@
+name = "xiv-party-presence"
+main = "index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Le DO RoomBroadcast vit dans CE worker. Le projet Pages le référence via
+# un binding (cf wrangler.toml racine) en pointant `script_name = "xiv-party-presence"`.
+[[durable_objects.bindings]]
+name = "ROOM_BROADCAST"
+class_name = "RoomBroadcast"
+
+# Migration : déclare la nouvelle classe DO. À ne PAS bumper sauf si on
+# rename ou supprime la classe (jamais le cas pour un projet vivant).
+[[migrations]]
+tag = "v1"
+new_classes = ["RoomBroadcast"]
+
+# Déploiement : `wrangler deploy` depuis ce dossier. Le worker doit être
+# déployé AVANT le projet Pages (qui dépend du script `xiv-party-presence`).
