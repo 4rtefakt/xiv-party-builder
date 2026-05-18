@@ -1750,6 +1750,136 @@
     border-color: var(--danger);
   }
 
+  /* Job picker : click sur l'icône OU sur le label "PLD" d'une card de compo
+     finale ouvre un popover listant les préférences du joueur, permettant
+     de réassigner. Choix d'un job différent → lock auto sur ce job + recompute. */
+  button.assignment-job-icon,
+  button.assigned-job {
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    /* Conserve les hauteurs/paddings de la version div d'origine, override default
+       de <button> qui ajoute padding/border. assignment-job-icon a déjà
+       border:1px solid currentColor en .assignment-job-icon → on garde. */
+  }
+  button.assigned-job {
+    border: none;
+    padding: 0;
+    text-align: right;
+  }
+  button.assignment-job-icon:focus-visible,
+  button.assigned-job:focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: 2px;
+  }
+  button.assignment-job-icon:hover { box-shadow: 0 0 0 1px currentColor; }
+  button.assigned-job:hover { text-shadow: 0 0 8px currentColor; }
+
+  .job-picker {
+    display: none;
+    position: fixed;
+    z-index: 200;
+    background: var(--panel-2);
+    border: 1px solid var(--line-bright);
+    padding: 0.7rem;
+    min-width: 220px;
+    max-width: 280px;
+    font-family: 'Chakra Petch', sans-serif;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
+  }
+  .job-picker.show { display: block; }
+  .job-picker-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    margin-bottom: 0.55rem;
+  }
+  .job-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .job-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.35rem 0.5rem;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--ink);
+    text-align: left;
+    width: 100%;
+  }
+  .job-picker-item:hover,
+  .job-picker-item:focus-visible {
+    border-color: var(--cyan);
+    background: rgba(0, 229, 255, 0.06);
+    outline: none;
+  }
+  .job-picker-item.current {
+    border-color: var(--ink-dim);
+    background: rgba(255, 255, 255, 0.03);
+    cursor: default;
+  }
+  .job-picker-item.current:hover {
+    border-color: var(--ink-dim);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .job-picker-item img {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .job-picker-item-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+  }
+  .job-picker-item-job {
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  .job-picker-item-job .tier {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--ink-dim);
+    letter-spacing: 0.08em;
+    margin-left: 0.4rem;
+  }
+  .job-picker-item-role {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .job-picker-item.tank   .job-picker-item-role { color: var(--tank); }
+  .job-picker-item.heal   .job-picker-item-role { color: var(--heal); }
+  .job-picker-item.melee  .job-picker-item-role { color: var(--melee); }
+  .job-picker-item.ranged .job-picker-item-role { color: var(--ranged); }
+  .job-picker-item.caster .job-picker-item-role { color: var(--caster); }
+  .job-picker-item-marker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    padding-left: 0.4rem;
+  }
+  .job-picker-empty {
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    font-style: italic;
+    padding: 0.4rem 0;
+  }
+
   .result-actions {
     display: flex;
     gap: 0.5rem;
@@ -2847,6 +2977,10 @@
     <div id="warningArea"></div>
   </section>
 
+  <!-- Popover du job picker (compo finale). Position calculée à l'ouverture
+       depuis le bounding rect du trigger. Un seul à la fois dans le DOM. -->
+  <div class="job-picker" id="jobPicker" role="dialog" aria-hidden="true"></div>
+
   <footer>
     Tural Datalink <span>//</span> Party Builder
   </footer>
@@ -3225,6 +3359,12 @@ const STRINGS = {
     undo_remove: ({ name }) => `${name || 'Joueur·euse'} retiré·e`,
     undo_unlockAll: 'Tout déverrouillé',
     undo_nothing: 'Rien à annuler',
+    undo_jobPicked: ({ name, job }) => `${name || 'Joueur·euse'} → ${job}`,
+    // — Job picker (compo finale : click icône/label pour réassigner)
+    jp_title: ({ name }) => `Changer le job de ${name || 'cette personne'}`,
+    jp_triggerTitle: ({ name }) => `Choisir un autre job de ${name || 'cette personne'} (lockera la position)`,
+    jp_current: 'actuel',
+    jp_empty: 'Aucune préférence disponible',
     // — Modals
     m_shareTitle: 'Partager ce groupe',
     m_shareSubtitle: 'Lien copiable · contient noms + préférences',
@@ -3528,6 +3668,11 @@ const STRINGS = {
     undo_remove: ({ name }) => `${name || 'Player'} removed`,
     undo_unlockAll: 'All unlocked',
     undo_nothing: 'Nothing to undo',
+    undo_jobPicked: ({ name, job }) => `${name || 'Player'} → ${job}`,
+    jp_title: ({ name }) => `Change ${name || 'this player'}'s job`,
+    jp_triggerTitle: ({ name }) => `Pick a different job for ${name || 'this player'} (will lock the slot)`,
+    jp_current: 'current',
+    jp_empty: 'No preference available',
     m_shareTitle: 'Share this group',
     m_shareSubtitle: 'Copyable link · contains names + preferences',
     m_copyLink: 'Copy link',
@@ -4930,20 +5075,36 @@ function buildAssignmentCard(r, resultsCtx) {
     const stratBadge = r.stratRole
       ? `<span class="strat-badge" title="${escapeHtml(t('res_stratRoleTitle', { role: r.stratRole }))}">${escapeHtml(r.stratRole)}</span>`
       : '';
+    // Pref count (filtre les bans) : si rien à choisir → pas de trigger picker
+    // (on garde l'icône en div, pas en button).
+    const pickablePrefs = (r.preferences || []).filter(id =>
+      JOB_BY_ID[id] && !(state.bannedJobs || []).includes(id)
+    );
+    const canPick = pickablePrefs.length > 0;
+    const pickAttr = canPick ? `data-job-pick-name="${escapeHtml(r.name)}"` : '';
+    const pickTitle = canPick ? t('jp_triggerTitle', { name: r.name }) : '';
+    const iconTag = canPick
+      ? `<button type="button" class="assignment-job-icon" ${pickAttr} title="${escapeHtml(pickTitle)}">
+          <img src="${ICON_URL(JOB_BY_ID[r.jobId])}" alt="${escapeHtml(r.jobName)}" loading="lazy" draggable="false">
+        </button>`
+      : `<div class="assignment-job-icon">
+          <img src="${ICON_URL(JOB_BY_ID[r.jobId])}" alt="${escapeHtml(r.jobName)}" loading="lazy" draggable="false">
+        </div>`;
+    const jobIdTag = canPick
+      ? `<button type="button" class="assigned-job" ${pickAttr} title="${escapeHtml(pickTitle)}">${escapeHtml(r.jobId)}</button>`
+      : `<div class="assigned-job" title="${escapeHtml(r.jobName)}">${escapeHtml(r.jobId)}</div>`;
     card.innerHTML = `
       <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
       <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
       <div class="assignment-left">
-        <div class="assignment-job-icon">
-          <img src="${ICON_URL(JOB_BY_ID[r.jobId])}" alt="${r.jobName}" loading="lazy" draggable="false">
-        </div>
+        ${iconTag}
         <div class="assignment-text-left">
           <div class="assigned-name">${stratBadge}${escapeHtml(r.name)}</div>
           ${rankBadge(r)}
         </div>
       </div>
       <div class="assignment-right">
-        <div class="assigned-job" title="${escapeHtml(r.jobName)}">${r.jobId}</div>
+        ${jobIdTag}
       </div>
       <div class="reorder-controls" style="margin-left:6px;">
         <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
@@ -7465,6 +7626,148 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   });
 });
 
+// ============================================================
+// JOB PICKER : click sur l'icône/label d'une card compo finale →
+// popover listant les préférences du joueur. Choix d'un job différent
+// lock auto sur ce job + recompute (reuse du système de lock existant).
+// ============================================================
+const jobPickerEl = () => document.getElementById('jobPicker');
+
+function closeJobPicker() {
+  const el = jobPickerEl();
+  if (!el) return;
+  el.classList.remove('show');
+  el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = '';
+  delete el.dataset.openFor;
+}
+
+function positionJobPicker(triggerEl) {
+  const el = jobPickerEl();
+  if (!el || !triggerEl) return;
+  // Affichage forcé pour mesurer (display:none → width/height = 0)
+  el.classList.add('show');
+  const trigRect = triggerEl.getBoundingClientRect();
+  const pickRect = el.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 8;
+  // Horizontal : par défaut aligné sur le bord gauche du trigger, clamp à la viewport
+  let left = trigRect.left;
+  if (left + pickRect.width > vw - margin) left = vw - pickRect.width - margin;
+  if (left < margin) left = margin;
+  // Vertical : par défaut sous le trigger ; bascule au-dessus si pas de place
+  let top = trigRect.bottom + 6;
+  if (top + pickRect.height > vh - margin) {
+    const above = trigRect.top - pickRect.height - 6;
+    if (above >= margin) top = above;
+    else top = Math.max(margin, vh - pickRect.height - margin);
+  }
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+
+function openJobPicker(triggerEl, playerName) {
+  const player = state.players.find(p => p.name.trim() === playerName);
+  if (!player) return;
+  const currentJobId = triggerEl.closest('.assignment')?.querySelector('.lock-toggle')?.dataset.job || null;
+  // Préférences pickables (filtrées des bans, et qui existent toujours dans JOB_BY_ID)
+  const prefs = (player.preferences || []).filter(id =>
+    JOB_BY_ID[id] && !(state.bannedJobs || []).includes(id)
+  );
+
+  const el = jobPickerEl();
+  if (!el) return;
+
+  // Toggle off si on re-clique sur le même trigger
+  if (el.dataset.openFor === playerName && el.classList.contains('show')) {
+    closeJobPicker();
+    return;
+  }
+
+  const items = prefs.map((jobId, idx) => {
+    const job = JOB_BY_ID[jobId];
+    const tier = (player.prefTiers && player.prefTiers[idx] != null) ? player.prefTiers[idx] : idx;
+    const isCurrent = jobId === currentJobId;
+    const marker = isCurrent ? `<span class="job-picker-item-marker">${escapeHtml(t('jp_current'))}</span>` : '';
+    return `
+      <button type="button"
+              class="job-picker-item ${job.role}${isCurrent ? ' current' : ''}"
+              data-job-pick-id="${escapeHtml(jobId)}"
+              ${isCurrent ? 'aria-current="true"' : ''}>
+        <img src="${ICON_URL(job)}" alt="" loading="lazy" draggable="false">
+        <div class="job-picker-item-main">
+          <span class="job-picker-item-job">${escapeHtml(job.name)} <span class="tier">T${tier + 1}</span></span>
+          <span class="job-picker-item-role">${escapeHtml(t('role_' + job.role))}</span>
+        </div>
+        ${marker}
+      </button>
+    `;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="job-picker-title">${escapeHtml(t('jp_title', { name: player.name || '' }))}</div>
+    <div class="job-picker-list">
+      ${items || `<div class="job-picker-empty">${escapeHtml(t('jp_empty'))}</div>`}
+    </div>
+  `;
+  el.dataset.openFor = playerName;
+  el.setAttribute('aria-hidden', 'false');
+  positionJobPicker(triggerEl);
+}
+
+// Reposition au scroll/resize (le popover est en position:fixed)
+window.addEventListener('scroll', () => {
+  const el = jobPickerEl();
+  if (!el || !el.classList.contains('show')) return;
+  const name = el.dataset.openFor;
+  if (!name) return;
+  const trigger = document.querySelector(`[data-job-pick-name="${CSS.escape(name)}"]`);
+  if (trigger) positionJobPicker(trigger);
+  else closeJobPicker();
+}, true);
+window.addEventListener('resize', () => {
+  const el = jobPickerEl();
+  if (!el || !el.classList.contains('show')) return;
+  const name = el.dataset.openFor;
+  if (!name) return;
+  const trigger = document.querySelector(`[data-job-pick-name="${CSS.escape(name)}"]`);
+  if (trigger) positionJobPicker(trigger);
+});
+// Fermeture : click outside + Escape
+document.addEventListener('click', e => {
+  const el = jobPickerEl();
+  if (!el || !el.classList.contains('show')) return;
+  if (e.target.closest('#jobPicker')) return;
+  if (e.target.closest('[data-job-pick-name]')) return; // click sur trigger → géré par delegation
+  closeJobPicker();
+}, true);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const el = jobPickerEl();
+    if (el && el.classList.contains('show')) closeJobPicker();
+  }
+});
+// Délégation des clicks DANS le picker
+document.getElementById('jobPicker').addEventListener('click', e => {
+  const item = e.target.closest('[data-job-pick-id]');
+  if (!item) return;
+  const newJobId = item.dataset.jobPickId;
+  const playerName = jobPickerEl().dataset.openFor;
+  const player = state.players.find(p => p.name.trim() === playerName);
+  if (!player) { closeJobPicker(); return; }
+  // Job identique → no-op (mais on ferme le popover pour cohérence visuelle)
+  if (player.lockedJob === newJobId || (!player.lockedJob && item.classList.contains('current'))) {
+    closeJobPicker();
+    return;
+  }
+  // Job différent → snapshot pour undo, puis lock auto + recompute
+  snapshotState(t('undo_jobPicked', { name: player.name || '', job: JOB_BY_ID[newJobId]?.name || newJobId }));
+  player.lockedJob = newJobId;
+  closeJobPicker();
+  scheduleLiveCompute();
+});
+
 // Lock / unlock + réordonnancement : délégation sur la grille de résultat
 document.getElementById('assignmentGrid').addEventListener('click', e => {
   const lockBtn = e.target.closest('.lock-toggle');
@@ -7477,11 +7780,26 @@ document.getElementById('assignmentGrid').addEventListener('click', e => {
     scheduleLiveCompute();
     return;
   }
+  const pickTrigger = e.target.closest('[data-job-pick-name]');
+  if (pickTrigger) {
+    e.stopPropagation();
+    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName);
+    return;
+  }
   const reorderBtn = e.target.closest('[data-reorder-name]');
   if (reorderBtn && !reorderBtn.disabled) {
     const name = reorderBtn.dataset.reorderName;
     const dir = parseInt(reorderBtn.dataset.reorderDir, 10);
     moveResultPlayer(name, dir);
+  }
+});
+
+// Idem délégation pour le banc (mêmes cards via buildAssignmentCard)
+document.getElementById('benchCards')?.addEventListener('click', e => {
+  const pickTrigger = e.target.closest('[data-job-pick-name]');
+  if (pickTrigger) {
+    e.stopPropagation();
+    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName);
   }
 });
 
