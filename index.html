@@ -1205,6 +1205,117 @@
     letter-spacing: 0.05em;
   }
 
+  /* Créneaux de raid lockés : chips + boutons "Lock" / "Manuel" */
+  .avail-heatmap-best-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .avail-locks-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .avail-locks-title {
+    font-size: 0.6rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .avail-locks-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .avail-lock-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid rgba(0, 229, 255, 0.4);
+    color: var(--cyan);
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+  }
+  .avail-lock-chip-rm {
+    background: transparent;
+    border: none;
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0 2px;
+    transition: color 0.15s;
+  }
+  .avail-lock-chip-rm:hover {
+    color: var(--danger);
+  }
+  .avail-lock-btn {
+    background: transparent;
+    border: 1px solid var(--line-bright);
+    color: var(--cyan);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.55rem;
+    transition: all 0.15s;
+  }
+  .avail-lock-btn:hover {
+    background: rgba(0, 229, 255, 0.08);
+    border-color: var(--cyan);
+  }
+  .avail-lock-btn.manual {
+    color: var(--ink-dim);
+    border-color: var(--line);
+    align-self: flex-start;
+  }
+  .avail-lock-btn.manual:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+  .avail-no-more-slots {
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+    font-style: italic;
+    font-family: 'Chakra Petch', sans-serif;
+  }
+  /* Modal "Ajouter créneau manuel" : reuse .modal/.modal-overlay base, +
+     un mini form 3 colonnes pour day/hour/duration */
+  .raid-slot-form {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin: 0.5rem 0 1rem;
+  }
+  .raid-slot-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--ink-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .raid-slot-form select {
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 0.4rem 0.5rem;
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 0.9rem;
+  }
+  .raid-slot-form select:focus {
+    outline: 1px solid var(--cyan);
+    border-color: var(--cyan);
+  }
+
   .presence-pill {
     border: 1px solid var(--line);
     background: transparent;
@@ -3109,7 +3220,8 @@ import {
 } from './lib/codec.js';
 import {
   analyzeAvailability, bestSlotWithTail,
-  countAvailCells, AVAIL_PRESETS, applyAvailPreset
+  countAvailCells, AVAIL_PRESETS, applyAvailPreset,
+  slotsIntersect, MAX_RAID_SLOTS, MIN_SLOT_DURATION, MAX_SLOT_DURATION
 } from './lib/availability.js';
 import { assignStratRoles, assignDpsGridPositions, getDpsLayout } from './lib/strat-roles.js';
 import {
@@ -3355,6 +3467,30 @@ const STRINGS = {
       const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
       return `Meilleur créneau : ${day} ${range} (${count}/${total})`;
     },
+    // — Créneaux de raid lockés (admin only)
+    av_locksTitle: ({ n, max }) => `🔒 Créneaux verrouillés (${n}/${max})`,
+    av_lockChip: ({ day, hour, endHour }) => {
+      const range = endHour > hour + 1 ? `${hour}h → ${endHour}h` : `${hour}h → ${hour + 1}h`;
+      return `${day} ${range}`;
+    },
+    av_lockRemove: 'Retirer ce créneau',
+    av_lockBest: '+ Verrouiller',
+    av_lockBestTitle: 'Verrouiller ce créneau comme date de raid',
+    av_lockManual: '+ Créneau manuel',
+    av_lockManualTitle: 'Ajouter un créneau de raid choisi à la main',
+    av_lockMaxReached: ({ max }) => `Maximum ${max} créneaux atteints`,
+    av_lockIntersect: 'Ce créneau chevauche un créneau déjà verrouillé',
+    av_lockAdded: 'Créneau verrouillé',
+    av_lockRemoved: 'Créneau retiré',
+    av_noMoreSlots: 'Aucun autre créneau disponible (tout est déjà verrouillé ou hors dispos)',
+    av_modalTitle: 'Ajouter un créneau de raid',
+    av_modalSubtitle: 'Choisis le jour, l\'heure de début et la durée.',
+    av_modalDay: 'Jour',
+    av_modalHour: 'Heure',
+    av_modalDuration: 'Durée',
+    av_modalDurationN: ({ n }) => `${n}h`,
+    av_modalAdd: 'Ajouter',
+    av_modalInvalid: 'Valeurs invalides',
     undo_btn: 'Annuler',
     undo_done: 'Action annulée',
     undo_reset: 'Roster réinitialisé',
@@ -3664,6 +3800,29 @@ const STRINGS = {
       const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
       return `Best slot: ${day} ${range} (${count}/${total})`;
     },
+    av_locksTitle: ({ n, max }) => `🔒 Locked raid slots (${n}/${max})`,
+    av_lockChip: ({ day, hour, endHour }) => {
+      const range = endHour > hour + 1 ? `${hour}h → ${endHour}h` : `${hour}h → ${hour + 1}h`;
+      return `${day} ${range}`;
+    },
+    av_lockRemove: 'Remove this slot',
+    av_lockBest: '+ Lock slot',
+    av_lockBestTitle: 'Lock this slot as a raid date',
+    av_lockManual: '+ Custom slot',
+    av_lockManualTitle: 'Add a manually-picked raid slot',
+    av_lockMaxReached: ({ max }) => `Maximum ${max} slots reached`,
+    av_lockIntersect: 'This slot overlaps an already-locked one',
+    av_lockAdded: 'Slot locked',
+    av_lockRemoved: 'Slot removed',
+    av_noMoreSlots: 'No other slot available (all locked or out of availabilities)',
+    av_modalTitle: 'Add a raid slot',
+    av_modalSubtitle: 'Pick the day, start hour and duration.',
+    av_modalDay: 'Day',
+    av_modalHour: 'Hour',
+    av_modalDuration: 'Duration',
+    av_modalDurationN: ({ n }) => `${n}h`,
+    av_modalAdd: 'Add',
+    av_modalInvalid: 'Invalid values',
     undo_btn: 'Undo',
     undo_done: 'Action undone',
     undo_reset: 'Roster reset',
@@ -3917,6 +4076,10 @@ const state = {
   claimLimit: DEFAULT_CLAIM_LIMIT,
   showAlternatives: false,
   players: [],
+  // Créneaux de raid verrouillés ({ day, hour, duration }, max 7). Admin-only.
+  // Servent à exclure des cellules de la heatmap quand on cherche le prochain
+  // meilleur créneau (lib/availability.js#bestSlotWithTail({excludedSlots})).
+  raidSlots: [],
   // Permissions (mises à jour à chaque load/save) :
   ownerId: null,
   admins: [],
@@ -5810,7 +5973,8 @@ function buildPayload() {
     // de l'admin au moment de la modif. Sur les non-admins, on ne touche pas
     // (le serveur préserve existing.lg).
     lang: state.isAdmin ? LANG : undefined,
-    admins: state.isAdmin ? state.admins : undefined
+    admins: state.isAdmin ? state.admins : undefined,
+    raidSlots: state.isAdmin ? state.raidSlots : undefined
   });
 }
 
@@ -6297,10 +6461,49 @@ function renderAvailHeatmap() {
   });
   body.appendChild(grid);
 
+  // Créneaux verrouillés : chips affichés au-dessus du "meilleur créneau".
+  // Visibles pour tout le monde, mais éditables uniquement par admin.
+  // Le calcul du best slot exclut les cellules couvertes par ces slots.
+  const lockedSlots = Array.isArray(state.raidSlots) ? state.raidSlots : [];
+  if (lockedSlots.length > 0) {
+    const locksWrap = document.createElement('div');
+    locksWrap.className = 'avail-locks-wrap';
+    const locksTitle = document.createElement('div');
+    locksTitle.className = 'avail-locks-title';
+    locksTitle.textContent = t('av_locksTitle', { n: lockedSlots.length, max: MAX_RAID_SLOTS });
+    locksWrap.appendChild(locksTitle);
+    const locksList = document.createElement('div');
+    locksList.className = 'avail-locks-list';
+    lockedSlots.forEach((slot, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'avail-lock-chip';
+      const dayLbl = (daysLong && daysLong[VALID_AVAIL_DAYS.indexOf(slot.day)]) || slot.day;
+      const endHour = slot.hour + (slot.duration || 1);
+      const label = document.createElement('span');
+      label.textContent = t('av_lockChip', { day: dayLbl, hour: slot.hour, endHour });
+      chip.appendChild(label);
+      if (state.isAdmin) {
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'avail-lock-chip-rm';
+        rm.textContent = '×';
+        rm.title = t('av_lockRemove');
+        rm.addEventListener('click', () => removeRaidSlot(idx));
+        chip.appendChild(rm);
+      }
+      locksList.appendChild(chip);
+    });
+    locksWrap.appendChild(locksList);
+    body.appendChild(locksWrap);
+  }
+
   // Meilleur créneau en tête : on utilise bestSlotWithTail pour avoir le
-  // range complet (start → end) au lieu d'une heure unique.
-  const best = bestSlotWithTail(analysis);
+  // range complet (start → end) au lieu d'une heure unique. Exclut les slots
+  // déjà lockés pour proposer un créneau qui ne chevauche pas.
+  const best = bestSlotWithTail(analysis, { excludedSlots: lockedSlots });
   if (best && best.count > 0) {
+    const bestRow = document.createElement('div');
+    bestRow.className = 'avail-heatmap-best-row';
     const bestEl = document.createElement('div');
     bestEl.className = 'avail-heatmap-best';
     bestEl.textContent = t('av_best', {
@@ -6310,7 +6513,37 @@ function renderAvailHeatmap() {
       count: best.count,
       total: analysis.respondentCount
     });
-    body.appendChild(bestEl);
+    bestRow.appendChild(bestEl);
+    // Bouton "Lock ce créneau" : admin seulement + cap MAX_RAID_SLOTS
+    if (state.isAdmin && lockedSlots.length < MAX_RAID_SLOTS) {
+      const lockBtn = document.createElement('button');
+      lockBtn.type = 'button';
+      lockBtn.className = 'avail-lock-btn';
+      lockBtn.textContent = t('av_lockBest');
+      lockBtn.title = t('av_lockBestTitle');
+      lockBtn.addEventListener('click', () => {
+        addRaidSlot({ day: best.day, hour: best.hour, duration: (best.endHour - best.hour) });
+      });
+      bestRow.appendChild(lockBtn);
+    }
+    body.appendChild(bestRow);
+  } else if (state.isAdmin && lockedSlots.length > 0) {
+    // Tous les créneaux possibles sont déjà lockés (ou exclus) — message neutre
+    const noMore = document.createElement('div');
+    noMore.className = 'avail-no-more-slots';
+    noMore.textContent = t('av_noMoreSlots');
+    body.appendChild(noMore);
+  }
+
+  // Bouton "Ajouter manuellement" : admin seulement + cap MAX_RAID_SLOTS.
+  if (state.isAdmin && lockedSlots.length < MAX_RAID_SLOTS) {
+    const manualBtn = document.createElement('button');
+    manualBtn.type = 'button';
+    manualBtn.className = 'avail-lock-btn manual';
+    manualBtn.textContent = t('av_lockManual');
+    manualBtn.title = t('av_lockManualTitle');
+    manualBtn.addEventListener('click', () => openRaidSlotModal());
+    body.appendChild(manualBtn);
   }
 
   const legend = document.createElement('div');
@@ -6320,6 +6553,114 @@ function renderAvailHeatmap() {
 
   banner.appendChild(body);
   if (collapsed) banner.classList.add('collapsed');
+}
+
+// Ajoute un slot avec checks (intersection avec existants → toast + reject,
+// limite MAX_RAID_SLOTS → toast + reject). Snapshot pour Ctrl+Z.
+function addRaidSlot(slot) {
+  if (!state.isAdmin) return;
+  if (!Array.isArray(state.raidSlots)) state.raidSlots = [];
+  if (state.raidSlots.length >= MAX_RAID_SLOTS) {
+    showToast(t('av_lockMaxReached', { max: MAX_RAID_SLOTS }));
+    return;
+  }
+  if (state.raidSlots.some(s => slotsIntersect(s, slot))) {
+    showToast(t('av_lockIntersect'));
+    return;
+  }
+  snapshotState(t('av_lockAdded'));
+  state.raidSlots = [...state.raidSlots, { ...slot }];
+  renderAvailHeatmap();
+  scheduleAutoSave(200);
+}
+
+function removeRaidSlot(idx) {
+  if (!state.isAdmin) return;
+  if (!Array.isArray(state.raidSlots) || idx < 0 || idx >= state.raidSlots.length) return;
+  snapshotState(t('av_lockRemoved'));
+  state.raidSlots = state.raidSlots.filter((_, i) => i !== idx);
+  renderAvailHeatmap();
+  scheduleAutoSave(200);
+}
+
+// Modale "Ajouter un créneau manuellement" : 3 selects (jour, heure, durée)
+// + bouton Ajouter. Build à la demande (pas dans le HTML statique pour
+// économiser le DOM initial).
+function openRaidSlotModal() {
+  if (!state.isAdmin) return;
+  let overlay = document.getElementById('raidSlotModalOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'raidSlotModalOverlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <button class="modal-close" data-modal-close>×</button>
+        <div class="modal-title">${escapeHtml(t('av_modalTitle'))}</div>
+        <div class="modal-subtitle">${escapeHtml(t('av_modalSubtitle'))}</div>
+        <div class="raid-slot-form">
+          <label>
+            <span>${escapeHtml(t('av_modalDay'))}</span>
+            <select id="raidSlotDay"></select>
+          </label>
+          <label>
+            <span>${escapeHtml(t('av_modalHour'))}</span>
+            <select id="raidSlotHour"></select>
+          </label>
+          <label>
+            <span>${escapeHtml(t('av_modalDuration'))}</span>
+            <select id="raidSlotDuration"></select>
+          </label>
+        </div>
+        <div class="modal-error" id="raidSlotModalError"></div>
+        <div class="modal-actions">
+          <button class="btn-tool" id="raidSlotAddBtn"><span class="arrow">+</span> ${escapeHtml(t('av_modalAdd'))}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.closest('[data-modal-close]')) {
+        overlay.classList.remove('show');
+      }
+    });
+    overlay.querySelector('#raidSlotAddBtn').addEventListener('click', () => {
+      const day = overlay.querySelector('#raidSlotDay').value;
+      const hour = parseInt(overlay.querySelector('#raidSlotHour').value, 10);
+      const duration = parseInt(overlay.querySelector('#raidSlotDuration').value, 10);
+      const errEl = overlay.querySelector('#raidSlotModalError');
+      errEl.classList.remove('show');
+      if (!VALID_AVAIL_DAYS.includes(day) || !VALID_AVAIL_HOURS.includes(hour) || !(duration >= MIN_SLOT_DURATION && duration <= MAX_SLOT_DURATION)) {
+        errEl.textContent = t('av_modalInvalid');
+        errEl.classList.add('show');
+        return;
+      }
+      const slot = { day, hour, duration };
+      if (state.raidSlots.some(s => slotsIntersect(s, slot))) {
+        errEl.textContent = t('av_lockIntersect');
+        errEl.classList.add('show');
+        return;
+      }
+      addRaidSlot(slot);
+      overlay.classList.remove('show');
+    });
+  }
+  // Rebuild les options à chaque ouverture (i18n peut avoir changé)
+  const daySel = overlay.querySelector('#raidSlotDay');
+  const hourSel = overlay.querySelector('#raidSlotHour');
+  const durSel = overlay.querySelector('#raidSlotDuration');
+  const daysLongLocal = t('av_daysLong');
+  daySel.innerHTML = VALID_AVAIL_DAYS.map((d, i) =>
+    `<option value="${d}">${escapeHtml((daysLongLocal && daysLongLocal[i]) || d)}</option>`
+  ).join('');
+  hourSel.innerHTML = VALID_AVAIL_HOURS.map(h =>
+    `<option value="${h}">${h}h</option>`
+  ).join('');
+  durSel.innerHTML = Array.from({ length: MAX_SLOT_DURATION }, (_, i) => i + 1).map(d =>
+    `<option value="${d}"${d === 2 ? ' selected' : ''}>${t('av_modalDurationN', { n: d })}</option>`
+  ).join('');
+  overlay.querySelector('#raidSlotModalError').classList.remove('show');
+  overlay.classList.add('show');
 }
 
 // ============================================================
@@ -6887,6 +7228,8 @@ function applyImportedState(imported) {
   // claimLimit fallback : si l'import vient d'un vieux salon ou d'un base64
   // sans cl, validateImportedPayload retourne déjà le défaut (2).
   state.claimLimit = typeof imported.claimLimit === 'number' ? imported.claimLimit : DEFAULT_CLAIM_LIMIT;
+  // Raid slots : vide par défaut si le payload n'en contient pas
+  state.raidSlots = Array.isArray(imported.raidSlots) ? imported.raidSlots.slice() : [];
   state.players = imported.players;
   // Permissions : si l'import vient du serveur on a ces champs ; sinon (base64
   // local) on reste en mode "admin local"
@@ -6970,7 +7313,9 @@ function snapshotState(label) {
     raidWhen: state.raidWhen,
     bannedJobs: state.bannedJobs.slice(),
     fairnessWeight: state.fairnessWeight,
-    claimLimit: state.claimLimit
+    claimLimit: state.claimLimit,
+    // raidSlots : deep clone (chaque slot est { day, hour, duration } plat)
+    raidSlots: Array.isArray(state.raidSlots) ? state.raidSlots.map(s => ({ ...s })) : []
   };
   undoStack.push(snap);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -6992,6 +7337,8 @@ function performUndo() {
   // Re-clone à la restauration : on ne veut pas que le live state alias les
   // objets du snapshot (un undo suivant doit pouvoir rejouer proprement).
   state.players = structuredClone(snap.players);
+  // raidSlots : top-level state, pas un champ player → traité séparément
+  state.raidSlots = Array.isArray(snap.raidSlots) ? structuredClone(snap.raidSlots) : [];
   const whenInput = document.getElementById('raidWhenInput');
   if (whenInput) whenInput.value = state.raidWhen;
   const slider = document.getElementById('balanceSlider');
