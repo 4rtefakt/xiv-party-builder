@@ -177,6 +177,23 @@ test('validateImportedPayload : cl=99 / cl="2" → fallback 2', () => {
   }
 });
 
+test('validateImportedPayload : lg absent → lang = null', () => {
+  const r = validateImportedPayload(validPayload());
+  assert.equal(r.lang, null);
+});
+
+test('validateImportedPayload : lg="fr"/"en" préservés', () => {
+  assert.equal(validateImportedPayload(validPayload({ lg: 'fr' })).lang, 'fr');
+  assert.equal(validateImportedPayload(validPayload({ lg: 'en' })).lang, 'en');
+});
+
+test('validateImportedPayload : lg invalide → lang = null', () => {
+  for (const v of ['de', 'es', 42, '', null]) {
+    const r = validateImportedPayload(validPayload({ lg: v }));
+    assert.equal(r.lang, null, `lg=${v} doit fallback à null`);
+  }
+});
+
 test('roundtrip avec validation : encode → decode → validate', () => {
   const original = {
     c: 'raid24chaotic',

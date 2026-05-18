@@ -77,7 +77,13 @@ export async function onRequest(context) {
   try { html = await response.text(); }
   catch { return context.next(); }
 
-  const lang = pickLang(context.request.headers);
+  // Langue : on prend celle stockée au moment de la création du salon (admin)
+  // si elle existe. Sinon (anciens salons sans `lg`), fallback sur la langue
+  // du scrape via Accept-Language. Garantit que la preview Discord soit
+  // toujours dans la langue choisie par l'admin, peu importe le bot qui scrape.
+  const lang = (data.lg === 'fr' || data.lg === 'en')
+    ? data.lg
+    : pickLang(context.request.headers);
   const dict = STRINGS[lang];
   const contentLabel = dict.contentLabel[data.c] || data.c || 'Party';
   const when = data.w ? ' · ' + data.w : '';
