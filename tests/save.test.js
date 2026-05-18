@@ -583,3 +583,63 @@ test('checkRateLimit : isolation par userId', async () => {
   assert.equal(rA.estimated, 3);
   assert.equal(rB.estimated, 1);
 });
+
+// ---------- raidSlots (validation + persistance non-admin) ----------
+
+test('validatePayload : rs valide → null', () => {
+  const p = valid({ rs: [{ d: 'mon', h: 20, l: 2 }, { d: 'sat', h: 14, l: 4 }] });
+  assert.equal(validatePayload(p), null);
+});
+
+test('validatePayload : rs > 7 → rejeté', () => {
+  const tooMany = Array.from({ length: 8 }, () => ({ d: 'mon', h: 20, l: 1 }));
+  assert.match(validatePayload(valid({ rs: tooMany })), /raid slots/i);
+});
+
+test('validatePayload : rs avec jour inconnu → rejeté', () => {
+  assert.match(validatePayload(valid({ rs: [{ d: 'XXX', h: 20, l: 2 }] })), /day/i);
+});
+
+test('validatePayload : rs avec heure hors VALID_AVAIL_HOURS → rejeté', () => {
+  assert.match(validatePayload(valid({ rs: [{ d: 'mon', h: 99, l: 2 }] })), /hour/i);
+});
+
+test('validatePayload : rs avec duration hors borne → rejeté', () => {
+  assert.match(validatePayload(valid({ rs: [{ d: 'mon', h: 20, l: 0 }] })), /duration/i);
+  assert.match(validatePayload(valid({ rs: [{ d: 'mon', h: 20, l: 99 }] })), /duration/i);
+});
+
+test('validatePayload : rs entrée null/non-objet → rejeté', () => {
+  assert.match(validatePayload(valid({ rs: [null] })), /entry/i);
+  assert.match(validatePayload(valid({ rs: [42] })), /entry/i);
+});
+
+test('normalizeForNonAdminMerge : rs existant préservé (non-admins ne peuvent pas modifier)', () => {
+  const existing = {
+    c: 'raid8', d: 'unified', ownerId: 'owner-1', admins: ['owner-1'],
+    p: [{ n: 'Owner', j: ['PLD'], by: 'owner-1', id: 'rA1234' }],
+    rs: [{ d: 'tue', h: 21, l: 2 }, { d: 'sat', h: 18, l: 4 }]
+  };
+  // Non-admin essaie d'envoyer une rs différente
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [{ n: 'Owner', j: ['PLD'], by: 'owner-1', id: 'rA1234' }],
+    rs: [{ d: 'mon', h: 20, l: 1 }]
+  };
+  const out = normalizeForNonAdminMerge(payload, existing, 'non-admin-user');
+  assert.deepEqual(out.rs, [{ d: 'tue', h: 21, l: 2 }, { d: 'sat', h: 18, l: 4 }],
+    'le merge non-admin doit GARDER rs existant, ignorer celui du payload');
+});
+
+test('normalizeForNonAdminMerge : rs absent dans existing → champ omis dans stored', () => {
+  const existing = {
+    c: 'raid8', d: 'unified', ownerId: 'owner-1', admins: ['owner-1'],
+    p: [{ n: 'Owner', j: ['PLD'], by: 'owner-1', id: 'rA1234' }]
+  };
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [{ n: 'Owner', j: ['PLD'], by: 'owner-1', id: 'rA1234' }]
+  };
+  const out = normalizeForNonAdminMerge(payload, existing, 'non-admin');
+  assert.equal(out.rs, undefined);
+});

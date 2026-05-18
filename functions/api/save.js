@@ -29,6 +29,10 @@ const VALID_PRESENCE = new Set(['in', 'maybe', 'out']);
 // inter-projet en runtime worker, pattern existant)
 const VALID_AVAIL_HOURS = new Set([8, 10, 14, 16, 18, 19, 20, 21, 22, 23]);
 const VALID_AVAIL_DAYS = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+// Raid slots : créneaux verrouillés comme dates de raid. Max 7 (cf
+// lib/availability.js#MAX_RAID_SLOTS). Duration 1..12.
+const MAX_RAID_SLOTS = 7;
+const MAX_SLOT_DURATION = 12;
 const MAX_BODY_BYTES = 32768; // 32ko : couvre 32 joueurs avec prefs + dispos + notes
 // 32 = taille raid24 (24) + ~8 absent·es de réserve. Couvre le cas réel des
 // raid statiques qui notent les dispos de + de monde que la taille effective.
@@ -189,6 +193,15 @@ export function validatePayload(payload) {
       if (typeof a !== 'string' || !USER_ID_PATTERN.test(a)) return 'Invalid admin user id';
     }
   }
+  if (payload.rs !== undefined) {
+    if (!Array.isArray(payload.rs) || payload.rs.length > MAX_RAID_SLOTS) return 'Invalid raid slots array';
+    for (const slot of payload.rs) {
+      if (!slot || typeof slot !== 'object' || Array.isArray(slot)) return 'Invalid raid slot entry';
+      if (typeof slot.d !== 'string' || !VALID_AVAIL_DAYS.has(slot.d)) return 'Invalid raid slot day';
+      if (typeof slot.h !== 'number' || !VALID_AVAIL_HOURS.has(slot.h)) return 'Invalid raid slot hour';
+      if (typeof slot.l !== 'number' || !Number.isFinite(slot.l) || slot.l < 1 || slot.l > MAX_SLOT_DURATION) return 'Invalid raid slot duration';
+    }
+  }
   return null;
 }
 
@@ -271,6 +284,11 @@ function normalizeForAdminUpdate(payload, existing) {
   if (payload.cl !== undefined) stored.cl = payload.cl;
   if (payload.lg !== undefined) stored.lg = payload.lg;
   else if (existing.lg !== undefined) stored.lg = existing.lg;
+  // Raid slots : admin overwrite. Cap MAX_RAID_SLOTS comme garde-fou supplémentaire
+  // (le validate ci-dessus rejette déjà au-dessus, mais on slice par sécurité).
+  if (Array.isArray(payload.rs) && payload.rs.length > 0) {
+    stored.rs = payload.rs.slice(0, MAX_RAID_SLOTS).map(s => ({ d: s.d, h: s.h, l: s.l }));
+  }
   return stored;
 }
 
@@ -290,6 +308,11 @@ export function normalizeForNonAdminMerge(payload, existing, userId) {
   if (existing.cl !== undefined) stored.cl = existing.cl;
   // Lang : préservée du salon (non-admin ne peut pas la modifier)
   if (existing.lg !== undefined) stored.lg = existing.lg;
+  // Raid slots : admin-only, on garde l'existant tel quel pour les non-admins
+  // (cohérent avec bj/cl/f/w qui sont gelés pour les non-admins).
+  if (Array.isArray(existing.rs) && existing.rs.length > 0) {
+    stored.rs = existing.rs.map(s => ({ d: s.d, h: s.h, l: s.l }));
+  }
 
   // Limite de claims : on lit depuis existing (les non-admins ne peuvent pas
   // la modifier). 0 = illimité, undefined → défaut (2).

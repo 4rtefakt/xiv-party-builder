@@ -4,7 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   analyzeAvailability, bestSlots, bestSlotWithTail,
-  countAvailCells, AVAIL_PRESETS, applyAvailPreset
+  countAvailCells, AVAIL_PRESETS, applyAvailPreset,
+  cellInSlots, slotsIntersect,
+  MAX_RAID_SLOTS, MIN_SLOT_DURATION, MAX_SLOT_DURATION
 } from '../lib/availability.js';
 import { normalizeAvail, VALID_AVAIL_HOURS, VALID_AVAIL_DAYS } from '../lib/codec.js';
 
@@ -301,6 +303,106 @@ test('bestSlotWithTail : ex-æquo en tail ET densité → départage par jour pu
   const b = bestSlotWithTail(a);
   assert.equal(b.day, 'mon');
   assert.equal(b.hour, 20);
+});
+
+// ---------- cellInSlots / slotsIntersect / bestSlot avec exclusions ----------
+
+test('cellInSlots : true si cellule couverte par un slot (même jour, hour ∈ [hour, hour+dur[)', () => {
+  const slots = [{ day: 'mon', hour: 21, duration: 2 }];
+  assert.equal(cellInSlots('mon', 21, slots), true,  '21h start ∈ [21, 23[ ✓');
+  assert.equal(cellInSlots('mon', 22, slots), true,  '22h start ∈ [21, 23[ ✓');
+  assert.equal(cellInSlots('mon', 23, slots), false, '23h start = 21+2 → exclu (semi-ouvert)');
+  assert.equal(cellInSlots('mon', 20, slots), false, '20h avant le slot');
+  assert.equal(cellInSlots('tue', 21, slots), false, 'jour différent');
+});
+
+test('cellInSlots : duration manquante → traité comme 1', () => {
+  const slots = [{ day: 'wed', hour: 19 }]; // pas de duration
+  assert.equal(cellInSlots('wed', 19, slots), true);
+  assert.equal(cellInSlots('wed', 20, slots), false);
+});
+
+test('cellInSlots : empty/falsy slots → toujours false', () => {
+  assert.equal(cellInSlots('mon', 21, []), false);
+  assert.equal(cellInSlots('mon', 21, null), false);
+  assert.equal(cellInSlots('mon', 21, undefined), false);
+});
+
+test('slotsIntersect : symétrique, true ssi même jour + ranges chevauchent', () => {
+  const a = { day: 'mon', hour: 20, duration: 3 }; // [20, 23[
+  const b = { day: 'mon', hour: 22, duration: 2 }; // [22, 24[ → chevauche en 22
+  const c = { day: 'mon', hour: 23, duration: 1 }; // [23, 24[ → ne chevauche PAS a (a finit à 23 exclus)
+  const d = { day: 'tue', hour: 20, duration: 3 }; // autre jour
+  assert.equal(slotsIntersect(a, b), true);
+  assert.equal(slotsIntersect(b, a), true);
+  assert.equal(slotsIntersect(a, c), false, 'a finit à 23 (exclu), c démarre à 23 → adjacent, pas chevauchant');
+  assert.equal(slotsIntersect(a, d), false, 'jour différent → pas d\'intersection');
+});
+
+test('bestSlots avec excludedSlots : retire les cellules couvertes', () => {
+  const a = analyzeAvailability([
+    { name: 'A', availability: { mon: [20, 21], tue: [20] } },
+    { name: 'B', availability: { mon: [20, 21], tue: [20] } }
+  ]);
+  // Sans exclusion : mon 20h et mon 21h et tue 20h tous à 2/2
+  const noExcl = bestSlots(a, { limit: 5 });
+  assert.equal(noExcl.length, 3);
+  // Avec mon 20h locké pour 2h → mon 20-22 exclu, reste tue 20h
+  const withExcl = bestSlots(a, { limit: 5, excludedSlots: [{ day: 'mon', hour: 20, duration: 2 }] });
+  assert.equal(withExcl.length, 1);
+  assert.deepEqual(withExcl[0], { day: 'tue', hour: 20, count: 2 });
+});
+
+test('bestSlotWithTail avec excludedSlots : propose un slot disjoint', () => {
+  const a = analyzeAvailability([
+    { name: 'A', availability: { mon: [20, 21, 22, 23], tue: [19, 20] } },
+    { name: 'B', availability: { mon: [20, 21, 22, 23], tue: [19, 20] } }
+  ]);
+  // Sans exclusion : mon 20h (tail=3, joue 20-24, 2/2 partout)
+  const noExcl = bestSlotWithTail(a);
+  assert.equal(noExcl.day, 'mon');
+  assert.equal(noExcl.hour, 20);
+  // Avec mon 20h locké pour 4h → tout le lundi exclu, reste mardi 19h (tail=1)
+  const withExcl = bestSlotWithTail(a, { excludedSlots: [{ day: 'mon', hour: 20, duration: 4 }] });
+  assert.equal(withExcl.day, 'tue');
+  assert.equal(withExcl.hour, 19);
+  assert.equal(withExcl.tail, 1);
+});
+
+test('bestSlotWithTail : tail s\'arrête si l\'heure suivante chevauche un excluded slot', () => {
+  const a = analyzeAvailability([
+    { name: 'A', availability: { mon: [20, 21, 22, 23] } },
+    { name: 'B', availability: { mon: [20, 21, 22, 23] } }
+  ]);
+  // mon 21h locké pour 1h → 20h candidate avec tail=0 (s'arrête à 21h exclu),
+  // 22h candidate avec tail=1 (s'étend à 23h), 23h candidate avec tail=0.
+  // Tie-break tail max → 22h gagne.
+  const withExcl = bestSlotWithTail(a, { excludedSlots: [{ day: 'mon', hour: 21, duration: 1 }] });
+  assert.equal(withExcl.hour, 22);
+  assert.equal(withExcl.tail, 1, 'tail = 1 (extend à 23h, qui n\'est pas dans l\'excluded)');
+
+  // Vérifie aussi le cas 20h : si on exclut 22h, le candidat 20h doit avoir tail=0
+  // car l'heure suivante (21h) est libre mais 22h est exclu → tail s'arrête à 21h (tail=1)
+  const withExcl2 = bestSlots(a, { limit: 10, excludedSlots: [{ day: 'mon', hour: 22, duration: 1 }] });
+  const slot20 = withExcl2.find(s => s.hour === 20);
+  assert.ok(slot20, '20h doit être candidat');
+});
+
+test('bestSlotWithTail : retourne null si tous les créneaux possibles sont exclus', () => {
+  const a = analyzeAvailability([
+    { name: 'A', availability: { mon: [20, 21] } },
+    { name: 'B', availability: { mon: [20, 21] } }
+  ]);
+  const allExcluded = bestSlotWithTail(a, {
+    excludedSlots: [{ day: 'mon', hour: 20, duration: 2 }]
+  });
+  assert.equal(allExcluded, null);
+});
+
+test('MAX_RAID_SLOTS / MIN_SLOT_DURATION / MAX_SLOT_DURATION : exports cohérents', () => {
+  assert.equal(MAX_RAID_SLOTS, 7);
+  assert.equal(MIN_SLOT_DURATION, 1);
+  assert.ok(MAX_SLOT_DURATION >= 2, 'au moins 2h pour un raid utile');
 });
 
 test('AVAIL_PRESETS : chaque preset utilise des heures valides', () => {

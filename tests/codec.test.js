@@ -441,3 +441,94 @@ test('encodePayload : claimLimit pas dans payload → roundtrip donne défaut', 
   const validated = validateImportedPayload(out);
   assert.equal(validated.claimLimit, DEFAULT_CLAIM_LIMIT);
 });
+
+// ---------- raidSlots (créneaux verrouillés) ----------
+
+test('encodePayload : raidSlots encodés en { d, h, l } compact', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    raidSlots: [
+      { day: 'tue', hour: 21, duration: 2 },
+      { day: 'sat', hour: 18, duration: 4 }
+    ]
+  });
+  assert.deepEqual(out.rs, [
+    { d: 'tue', h: 21, l: 2 },
+    { d: 'sat', h: 18, l: 4 }
+  ]);
+});
+
+test('encodePayload : raidSlots invalides (jour/heure inconnus) filtrés silencieusement', () => {
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    raidSlots: [
+      { day: 'tue', hour: 21, duration: 2 },    // ok
+      { day: 'XXX', hour: 21, duration: 2 },    // jour invalide
+      { day: 'mon', hour: 99, duration: 2 },    // heure invalide
+      { day: 'mon', hour: 20, duration: 99 }    // durée invalide → fallback à 1
+    ]
+  });
+  assert.deepEqual(out.rs, [
+    { d: 'tue', h: 21, l: 2 },
+    { d: 'mon', h: 20, l: 1 }
+  ]);
+});
+
+test('encodePayload : raidSlots > 7 → tronqué à 7', () => {
+  const big = Array.from({ length: 12 }, (_, i) => ({ day: 'mon', hour: 20, duration: 1 }));
+  const out = encodePayload({
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    raidSlots: big
+  });
+  assert.equal(out.rs.length, 7);
+});
+
+test('encodePayload : raidSlots absent ou vide → champ rs omis (économie bytes)', () => {
+  const a = encodePayload({ contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [] });
+  assert.equal(a.rs, undefined);
+  const b = encodePayload({ contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [], raidSlots: [] });
+  assert.equal(b.rs, undefined);
+});
+
+test('validateImportedPayload : raidSlots décodés en { day, hour, duration }', () => {
+  const result = validateImportedPayload({
+    c: 'raid8', d: 'unified', p: [],
+    rs: [{ d: 'wed', h: 19, l: 3 }]
+  });
+  assert.deepEqual(result.raidSlots, [{ day: 'wed', hour: 19, duration: 3 }]);
+});
+
+test('validateImportedPayload : raidSlots manquant → tableau vide (pas null)', () => {
+  const result = validateImportedPayload({ c: 'raid8', d: 'unified', p: [] });
+  assert.deepEqual(result.raidSlots, []);
+});
+
+test('validateImportedPayload : raidSlots avec entrées invalides → ignorées', () => {
+  const result = validateImportedPayload({
+    c: 'raid8', d: 'unified', p: [],
+    rs: [
+      { d: 'wed', h: 19, l: 3 },     // ok
+      { d: 'invalid', h: 19, l: 3 }, // jour KO
+      { d: 'thu', h: 99, l: 2 },     // heure KO
+      null,                            // entrée null
+      { d: 'fri', h: 20, l: 99 }     // duration KO → fallback à 1
+    ]
+  });
+  assert.deepEqual(result.raidSlots, [
+    { day: 'wed', hour: 19, duration: 3 },
+    { day: 'fri', hour: 20, duration: 1 }
+  ]);
+});
+
+test('roundtrip : raidSlots state → encode → decode → state (clean)', () => {
+  const original = {
+    contentType: 'raid8', dpsMode: 'unified', fairnessWeight: 50, players: [],
+    raidSlots: [
+      { day: 'mon', hour: 21, duration: 2 },
+      { day: 'sat', hour: 14, duration: 5 }
+    ]
+  };
+  const encoded = encodePayload(original);
+  const decoded = validateImportedPayload(encoded);
+  assert.deepEqual(decoded.raidSlots, original.raidSlots);
+});
