@@ -403,3 +403,115 @@ test('Role bonus : la diversité départage des solutions à individuel égal', 
   assert.deepEqual(r.stats.subRolesPresent.sort(), ['caster', 'heal', 'ranged', 'tank']);
   assert.equal(r.stats.roleBonusPercent, 4);
 });
+
+// ---------- seed (tie-break déterministe sans biais d'ordre roster) ----------
+
+// Le pattern utilisé : 3 healers pour 2 slots heal en raid8 → l'un des 3 est
+// au banc. Le score est strictement identique quel que soit lequel (chacun
+// prend son 1er choix s'il est assigné, et la pénalité de bench est la même).
+// Sans seed, c'est le 3ème du roster qui est benché (le solver itère dans
+// l'ordre et les 2 premiers healers raflent les slots heal).
+// Avec seed, n'importe lequel des 3 peut être benché selon la permutation.
+function threeHealers(h1, h2, h3) {
+  return [
+    P(h1, ['WHM']),
+    P(h2, ['SCH']),
+    P(h3, ['AST']),
+    P('T1', ['PLD']),
+    P('T2', ['WAR']),
+    P('M1', ['SAM']),
+    P('M2', ['DRG']),
+    P('R1', ['BRD'])
+  ];
+}
+
+test('seed : sans seed, le 3ème healer du roster est benché (comportement legacy)', () => {
+  const players = threeHealers('Alice', 'Bob', 'Carol');
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('raid8', 'unified'), fairnessWeight: 50
+  });
+  const benched = r.results.filter(x => !x.assigned).map(x => x.name);
+  assert.deepEqual(benched, ['Carol'], 'Carol (3ème healer) doit être benchée par ordre roster');
+});
+
+test('seed : même seed → même résultat (déterminisme)', () => {
+  const players = threeHealers('Alice', 'Bob', 'Carol');
+  const slots = buildSlots('raid8', 'unified');
+  const r1 = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed: 'roomXYZ' });
+  const r2 = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed: 'roomXYZ' });
+  const b1 = r1.results.filter(x => !x.assigned).map(x => x.name);
+  const b2 = r2.results.filter(x => !x.assigned).map(x => x.name);
+  assert.deepEqual(b1, b2, 'même seed → même benched');
+});
+
+test('seed : seeds variés produisent des benched différents (distribution)', () => {
+  // Sur N seeds, on doit voir au moins 2 healers différents passer au banc
+  // (preuve que la permutation casse réellement le biais roster).
+  const players = threeHealers('Alice', 'Bob', 'Carol');
+  const slots = buildSlots('raid8', 'unified');
+  const benched = new Set();
+  for (const seed of ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p']) {
+    const r = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed });
+    const who = r.results.filter(x => !x.assigned).map(x => x.name);
+    benched.add(who[0]);
+  }
+  assert.ok(benched.size >= 2,
+    `au moins 2 healers différents doivent être benchés sur 16 seeds (vu: ${[...benched].join(',')})`);
+});
+
+test('seed : score optimal identique avec ou sans seed (algo reste exhaustif)', () => {
+  const players = threeHealers('Alice', 'Bob', 'Carol');
+  const slots = buildSlots('raid8', 'unified');
+  const noSeed = computeOptimalAssignment({ players, slots, fairnessWeight: 50 });
+  for (const seed of ['x', 'y', 'roomABC123']) {
+    const seeded = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed });
+    assert.equal(seeded.stats.satisfaction, noSeed.stats.satisfaction,
+      `seed=${seed} doit donner même satisfaction`);
+    assert.equal(seeded.stats.firstChoices, noSeed.stats.firstChoices,
+      `seed=${seed} doit donner même nb de 1ers choix`);
+    assert.equal(seeded.stats.benched, noSeed.stats.benched);
+  }
+});
+
+test('seed : les results restent en ordre roster (pour que MT/OT/H1/H2 suivent le roster)', () => {
+  const players = threeHealers('Alice', 'Bob', 'Carol');
+  const slots = buildSlots('raid8', 'unified');
+  // L'ordre des results doit TOUJOURS être l'ordre roster, peu importe le seed.
+  // C'est ce qui garantit que les labels MT/OT/H1/H2 suivent l'ordre roster.
+  for (const seed of ['s1', 's2', 's3', 's4', 's5', 's6', 's7']) {
+    const r = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed });
+    assert.deepEqual(r.results.map(x => x.name),
+      ['Alice', 'Bob', 'Carol', 'T1', 'T2', 'M1', 'M2', 'R1'],
+      `seed=${seed} : results doit suivre l'ordre roster`);
+  }
+});
+
+test('seed : 1 seul joueur → seed n\'a aucun effet (pas de plantage)', () => {
+  const slots = buildSlots('dungeon', 'unified').filter(s => s.roles[0] === 'tank');
+  const r = computeOptimalAssignment({
+    players: [P('Solo', ['PLD'])], slots, fairnessWeight: 50, seed: 'whatever'
+  });
+  assert.equal(r.results[0].jobId, 'PLD');
+});
+
+test('seed : null/undefined → comportement legacy (1er du roster)', () => {
+  const players = threeHealers('Alice', 'Bob', 'Carol');
+  const slots = buildSlots('raid8', 'unified');
+  const r1 = computeOptimalAssignment({ players, slots, fairnessWeight: 50 });
+  const r2 = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed: null });
+  const r3 = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed: undefined });
+  for (const r of [r1, r2, r3]) {
+    const benched = r.results.filter(x => !x.assigned).map(x => x.name);
+    assert.deepEqual(benched, ['Carol']);
+  }
+});
+
+test('seed : seed numérique fonctionne aussi (pas que string)', () => {
+  const players = threeHealers('Alice', 'Bob', 'Carol');
+  const slots = buildSlots('raid8', 'unified');
+  const r1 = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed: 12345 });
+  const r2 = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed: 12345 });
+  const b1 = r1.results.filter(x => !x.assigned).map(x => x.name);
+  const b2 = r2.results.filter(x => !x.assigned).map(x => x.name);
+  assert.deepEqual(b1, b2);
+});

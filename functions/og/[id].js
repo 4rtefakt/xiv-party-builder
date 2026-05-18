@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 20; // v20 : retire les shifts heal/DPS (cards alignées en colonne avec leurs headers, comme v18) + shortenName seuil 12c
+const OG_LAYOUT_VERSION = 21; // v21 : seed tie-break par room id (algo scoring) → l'attribution job→joueur en cas d'égalité change vs v20
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -72,7 +72,7 @@ function pickLang(headers) {
 // { players, assignment } à partir du nouveau format { results }.
 // Pour raid24 / chaotic on optimise sur la party totale (pas par alliance),
 // même comportement que l'ancienne version embarquée.
-function computeForOg(data) {
+function computeForOg(data, roomId) {
   const base = CONTENT_COMP[data.c];
   if (!base) return { players: [], assignment: [] };
 
@@ -92,7 +92,9 @@ function computeForOg(data) {
     slots,
     bannedJobs: Array.isArray(data.bj) ? data.bj : [],
     fairnessWeight: typeof data.f === 'number' ? data.f : 50,
-    topK: 1
+    topK: 1,
+    // Seed = room id : tie-break stable par salon, cohérent avec le front.
+    seed: roomId || null
   });
 
   if (out.error) {
@@ -294,7 +296,7 @@ export async function onRequestGet({ params, env, request }) {
   try { data = JSON.parse(raw); }
   catch { return new Response('Bad data', { status: 500 }); }
 
-  const { players, assignment, results } = computeForOg(data);
+  const { players, assignment, results } = computeForOg(data, id);
 
   // Layout 3-col (TANKS | HEALERS | DPS 2×2) pour les contenus ≤ 8 joueurs,
   // miroir de la composition finale affichée en bas de la page web. Pour

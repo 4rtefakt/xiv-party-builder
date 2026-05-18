@@ -4719,7 +4719,13 @@ function computeOptimalAssignment(opts = {}) {
     slots,
     bannedJobs: state.bannedJobs,
     fairnessWeight: opts.fairnessWeight ?? state.fairnessWeight,
-    topK: opts.topK ?? 1
+    topK: opts.topK ?? 1,
+    // Seed = room id quand on est dans un salon partagé. Casse les égalités
+    // de score sans favoriser le 1er du roster, mais reste déterministe pour
+    // une room donnée (cohérent avec OG / partage / alternatives).
+    // Avant save : pas de seed → comportement legacy roster-order (sinon le
+    // résultat changerait pile au moment où la room est créée).
+    seed: currentRoomId || null
   });
 }
 
