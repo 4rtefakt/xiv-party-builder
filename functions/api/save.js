@@ -30,9 +30,11 @@ const VALID_PRESENCE = new Set(['in', 'maybe', 'out']);
 const VALID_AVAIL_HOURS = new Set([8, 10, 14, 16, 18, 19, 20, 21, 22, 23]);
 const VALID_AVAIL_DAYS = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 // Raid slots : créneaux verrouillés comme dates de raid. Max 7 (cf
-// lib/availability.js#MAX_RAID_SLOTS). Duration 1..12.
+// lib/availability.js#MAX_RAID_SLOTS). Duration en heures, multiple de 0.5,
+// borne [0.5, 6].
 const MAX_RAID_SLOTS = 7;
-const MAX_SLOT_DURATION = 12;
+const MIN_SLOT_DURATION = 0.5;
+const MAX_SLOT_DURATION = 6;
 const MAX_BODY_BYTES = 32768; // 32ko : couvre 32 joueurs avec prefs + dispos + notes
 // 32 = taille raid24 (24) + ~8 absent·es de réserve. Couvre le cas réel des
 // raid statiques qui notent les dispos de + de monde que la taille effective.
@@ -199,7 +201,7 @@ export function validatePayload(payload) {
       if (!slot || typeof slot !== 'object' || Array.isArray(slot)) return 'Invalid raid slot entry';
       if (typeof slot.d !== 'string' || !VALID_AVAIL_DAYS.has(slot.d)) return 'Invalid raid slot day';
       if (typeof slot.h !== 'number' || !VALID_AVAIL_HOURS.has(slot.h)) return 'Invalid raid slot hour';
-      if (typeof slot.l !== 'number' || !Number.isFinite(slot.l) || slot.l < 1 || slot.l > MAX_SLOT_DURATION) return 'Invalid raid slot duration';
+      if (typeof slot.l !== 'number' || !Number.isFinite(slot.l) || slot.l < MIN_SLOT_DURATION || slot.l > MAX_SLOT_DURATION || (slot.l * 2) !== Math.round(slot.l * 2)) return 'Invalid raid slot duration';
     }
   }
   return null;

@@ -3243,7 +3243,8 @@ import {
 import {
   analyzeAvailability, bestSlotWithTail,
   countAvailCells, AVAIL_PRESETS, applyAvailPreset,
-  slotsIntersect, MAX_RAID_SLOTS, MIN_SLOT_DURATION, MAX_SLOT_DURATION
+  slotsIntersect, MAX_RAID_SLOTS, MIN_SLOT_DURATION, MAX_SLOT_DURATION, SLOT_DURATION_STEP,
+  formatSlotDuration, formatEndHour
 } from './lib/availability.js';
 import { assignStratRoles, assignDpsGridPositions, getDpsLayout } from './lib/strat-roles.js';
 import { createLiveSync } from './lib/live-sync.js';
@@ -3488,14 +3489,14 @@ const STRINGS = {
       `${day} ${hour}h · ${count}/${total} dispos` + (missing && missing.length > 0 ? ` · manque ${missing.join(', ')}` : ''),
     av_legend: 'Densité : 0 → 100% dispos',
     av_best: ({ day, hour, endHour, count, total }) => {
-      const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
+      const range = endHour > hour ? `${hour}h → ${formatEndHour(endHour)}` : `${hour}h`;
       return `Meilleur créneau : ${day} ${range} (${count}/${total})`;
     },
     // — Créneaux de raid lockés (admin only)
     av_locksTitle: ({ n, max }) => `🔒 Créneaux verrouillés (${n}/${max})`,
     av_lockChip: ({ day, hour, endHour }) => {
-      const range = endHour > hour + 1 ? `${hour}h → ${endHour}h` : `${hour}h → ${hour + 1}h`;
-      return `${day} ${range}`;
+      const end = endHour > hour + 1 ? endHour : hour + 1;
+      return `${day} ${hour}h → ${formatEndHour(end)}`;
     },
     av_lockRemove: 'Retirer ce créneau',
     av_lockBest: '+ Verrouiller',
@@ -3512,7 +3513,7 @@ const STRINGS = {
     av_modalDay: 'Jour',
     av_modalHour: 'Heure',
     av_modalDuration: 'Durée',
-    av_modalDurationN: ({ n }) => `${n}h`,
+    av_modalDurationN: ({ n }) => formatSlotDuration(n),
     av_modalAdd: 'Ajouter',
     av_modalInvalid: 'Valeurs invalides',
     undo_btn: 'Annuler',
@@ -3822,13 +3823,13 @@ const STRINGS = {
       `${day} ${hour}h · ${count}/${total} available` + (missing && missing.length > 0 ? ` · missing: ${missing.join(', ')}` : ''),
     av_legend: 'Density: 0 → 100% available',
     av_best: ({ day, hour, endHour, count, total }) => {
-      const range = endHour > hour ? `${hour}h → ${endHour}h` : `${hour}h`;
+      const range = endHour > hour ? `${hour}h → ${formatEndHour(endHour)}` : `${hour}h`;
       return `Best slot: ${day} ${range} (${count}/${total})`;
     },
     av_locksTitle: ({ n, max }) => `🔒 Locked raid slots (${n}/${max})`,
     av_lockChip: ({ day, hour, endHour }) => {
-      const range = endHour > hour + 1 ? `${hour}h → ${endHour}h` : `${hour}h → ${hour + 1}h`;
-      return `${day} ${range}`;
+      const end = endHour > hour + 1 ? endHour : hour + 1;
+      return `${day} ${hour}h → ${formatEndHour(end)}`;
     },
     av_lockRemove: 'Remove this slot',
     av_lockBest: '+ Lock slot',
@@ -3845,7 +3846,7 @@ const STRINGS = {
     av_modalDay: 'Day',
     av_modalHour: 'Hour',
     av_modalDuration: 'Duration',
-    av_modalDurationN: ({ n }) => `${n}h`,
+    av_modalDurationN: ({ n }) => formatSlotDuration(n),
     av_modalAdd: 'Add',
     av_modalInvalid: 'Invalid values',
     undo_btn: 'Undo',
@@ -6652,10 +6653,12 @@ function openRaidSlotModal() {
     overlay.querySelector('#raidSlotAddBtn').addEventListener('click', () => {
       const day = overlay.querySelector('#raidSlotDay').value;
       const hour = parseInt(overlay.querySelector('#raidSlotHour').value, 10);
-      const duration = parseInt(overlay.querySelector('#raidSlotDuration').value, 10);
+      // parseFloat car duration peut être fractionnaire (0.5, 1.5…) depuis v?
+      const duration = parseFloat(overlay.querySelector('#raidSlotDuration').value);
       const errEl = overlay.querySelector('#raidSlotModalError');
       errEl.classList.remove('show');
-      if (!VALID_AVAIL_DAYS.includes(day) || !VALID_AVAIL_HOURS.includes(hour) || !(duration >= MIN_SLOT_DURATION && duration <= MAX_SLOT_DURATION)) {
+      const durOk = duration >= MIN_SLOT_DURATION && duration <= MAX_SLOT_DURATION && (duration * 2) === Math.round(duration * 2);
+      if (!VALID_AVAIL_DAYS.includes(day) || !VALID_AVAIL_HOURS.includes(hour) || !durOk) {
         errEl.textContent = t('av_modalInvalid');
         errEl.classList.add('show');
         return;
@@ -6681,7 +6684,14 @@ function openRaidSlotModal() {
   hourSel.innerHTML = VALID_AVAIL_HOURS.map(h =>
     `<option value="${h}">${h}h</option>`
   ).join('');
-  durSel.innerHTML = Array.from({ length: MAX_SLOT_DURATION }, (_, i) => i + 1).map(d =>
+  // Options de durée : pas de 0.5h (demi-heure) de MIN à MAX inclus.
+  // Ex : MIN=0.5, MAX=6, STEP=0.5 → [0.5, 1, 1.5, 2, ..., 6] = 12 options.
+  // Beaucoup d'instances FFXIV durent 1h30 (cf retour user Koreto), d'où le pas.
+  const durOptions = [];
+  for (let d = MIN_SLOT_DURATION; d <= MAX_SLOT_DURATION + 0.0001; d += SLOT_DURATION_STEP) {
+    durOptions.push(Math.round(d * 2) / 2);
+  }
+  durSel.innerHTML = durOptions.map(d =>
     `<option value="${d}"${d === 2 ? ' selected' : ''}>${t('av_modalDurationN', { n: d })}</option>`
   ).join('');
   overlay.querySelector('#raidSlotModalError').classList.remove('show');

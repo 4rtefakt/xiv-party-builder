@@ -6,7 +6,8 @@ import {
   analyzeAvailability, bestSlots, bestSlotWithTail,
   countAvailCells, AVAIL_PRESETS, applyAvailPreset,
   cellInSlots, slotsIntersect,
-  MAX_RAID_SLOTS, MIN_SLOT_DURATION, MAX_SLOT_DURATION
+  MAX_RAID_SLOTS, MIN_SLOT_DURATION, MAX_SLOT_DURATION,
+  isValidSlotDuration, formatSlotDuration, formatEndHour
 } from '../lib/availability.js';
 import { normalizeAvail, VALID_AVAIL_HOURS, VALID_AVAIL_DAYS } from '../lib/codec.js';
 
@@ -401,8 +402,56 @@ test('bestSlotWithTail : retourne null si tous les créneaux possibles sont excl
 
 test('MAX_RAID_SLOTS / MIN_SLOT_DURATION / MAX_SLOT_DURATION : exports cohérents', () => {
   assert.equal(MAX_RAID_SLOTS, 7);
-  assert.equal(MIN_SLOT_DURATION, 1);
+  assert.equal(MIN_SLOT_DURATION, 0.5);
   assert.ok(MAX_SLOT_DURATION >= 2, 'au moins 2h pour un raid utile');
+  assert.ok(MAX_SLOT_DURATION <= 12, 'borne supérieure raisonnable');
+});
+
+test('isValidSlotDuration : multiples de 0.5 dans [0.5, 6]', () => {
+  assert.equal(isValidSlotDuration(0.5), true);
+  assert.equal(isValidSlotDuration(1), true);
+  assert.equal(isValidSlotDuration(1.5), true);
+  assert.equal(isValidSlotDuration(2), true);
+  assert.equal(isValidSlotDuration(6), true);
+  // Out of range
+  assert.equal(isValidSlotDuration(0), false);
+  assert.equal(isValidSlotDuration(0.25), false);
+  assert.equal(isValidSlotDuration(6.5), false);
+  assert.equal(isValidSlotDuration(12), false);
+  // Pas multiples de 0.5
+  assert.equal(isValidSlotDuration(1.3), false);
+  assert.equal(isValidSlotDuration(2.7), false);
+  // Bad types
+  assert.equal(isValidSlotDuration('2'), false);
+  assert.equal(isValidSlotDuration(null), false);
+  assert.equal(isValidSlotDuration(NaN), false);
+  assert.equal(isValidSlotDuration(Infinity), false);
+});
+
+test('formatSlotDuration : rend des durées lisibles', () => {
+  assert.equal(formatSlotDuration(0.5), '30 min');
+  assert.equal(formatSlotDuration(1), '1h');
+  assert.equal(formatSlotDuration(1.5), '1h30');
+  assert.equal(formatSlotDuration(2), '2h');
+  assert.equal(formatSlotDuration(2.5), '2h30');
+  assert.equal(formatSlotDuration(6), '6h');
+});
+
+test('formatEndHour : rend les fins d\'heure fractionnaires', () => {
+  assert.equal(formatEndHour(22), '22h');
+  assert.equal(formatEndHour(22.5), '22h30');
+  assert.equal(formatEndHour(23), '23h');
+  assert.equal(formatEndHour(23.5), '23h30');
+});
+
+test('cellInSlots : duration fractionnaire (0.5h, 1.5h) couvre les bonnes cells', () => {
+  // 21h-21h30 (0.5h) → couvre seulement 21h
+  assert.equal(cellInSlots('mon', 21, [{ day: 'mon', hour: 21, duration: 0.5 }]), true);
+  assert.equal(cellInSlots('mon', 22, [{ day: 'mon', hour: 21, duration: 0.5 }]), false);
+  // 21h-22h30 (1.5h) → couvre 21h et 22h
+  assert.equal(cellInSlots('mon', 21, [{ day: 'mon', hour: 21, duration: 1.5 }]), true);
+  assert.equal(cellInSlots('mon', 22, [{ day: 'mon', hour: 21, duration: 1.5 }]), true);
+  assert.equal(cellInSlots('mon', 23, [{ day: 'mon', hour: 21, duration: 1.5 }]), false);
 });
 
 test('AVAIL_PRESETS : chaque preset utilise des heures valides', () => {
