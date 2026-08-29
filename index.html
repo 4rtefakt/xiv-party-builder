@@ -2597,6 +2597,9 @@
     align-items: center;
     margin: -0.5rem 0 1.5rem 0;
   }
+  /* display:flex explicite bat la règle UA [hidden] (même gotcha que
+     .btn-tool[hidden]) — sans ça, bar.hidden = true ne cache rien. */
+  .recent-rooms-bar[hidden] { display: none; }
   .recent-rooms-label {
     font-size: 0.7rem;
     letter-spacing: 0.12em;
@@ -3423,6 +3426,8 @@ const STRINGS = {
     al_expandHint: 'Cliquer pour déplier',
     al_emptyHint: '—',
     al_summary: ({ filled, total }) => `${filled} / ${total}`,
+    al_reserve: 'Réserve (hors alliances)',
+    ts_playerLimit: ({ max }) => `Maximum ${max} lignes par salon`,
     // — Toolbar
     t_share: 'Partager',
     t_import: 'Importer',
@@ -3770,6 +3775,8 @@ const STRINGS = {
     al_expandHint: 'Click to expand',
     al_emptyHint: '—',
     al_summary: ({ filled, total }) => `${filled} / ${total}`,
+    al_reserve: 'Reserve (outside alliances)',
+    ts_playerLimit: ({ max }) => `Maximum ${max} rows per room`,
     t_share: 'Share',
     t_import: 'Import',
     t_reset: 'Reset',
@@ -4097,6 +4104,9 @@ const CONTENT_BASE = Object.fromEntries(
 );
 const ALLIANCE_NAMES = ['A', 'B', 'C'];
 const ALLIANCE_SIZE = 8;
+// Doit matcher MAX_PLAYERS de functions/api/save.js : au-delà, le serveur
+// rejette le payload entier (400) et le salon ne persiste plus.
+const MAX_PLAYERS = 32;
 function isRaid24() {
   // Tous les contenus structurés en 3 alliances de 8 (raid24 normal + chaotic).
   // Renommer la fonction serait moins chirurgical : ses callers veulent
@@ -4380,6 +4390,7 @@ function buildPlayerRow(player, idx) {
       unclaimBtn.addEventListener('click', () => {
         player.claimedBy = null;
         renderPlayers();
+        renderRosterInfo(); // compteur de claims + visibilité du bouton Ajouter
         renderSuggestions();
         scheduleAutoSave(150);
       });
@@ -4398,6 +4409,7 @@ function buildPlayerRow(player, idx) {
       player.presence = PRESENCE_VALUES[(cur + 1) % PRESENCE_VALUES.length];
       renderPlayers();
       renderSuggestions();
+      renderAvailHeatmap(); // un 'out' sort du décompte des dispos
       scheduleLiveCompute();
     });
     row.appendChild(presenceEl);
@@ -4695,6 +4707,7 @@ function buildPlayerRow(player, idx) {
       renderPlayers();
       renderRosterInfo();
       renderSuggestions();
+      renderAvailHeatmap(); // ses dispos sortent de la grille
       scheduleLiveCompute();
       showToast(t('undo_remove', { name: removedName }), {
         action: { label: t('undo_btn'), onClick: performUndo },
@@ -4786,6 +4799,31 @@ function renderPlayers() {
       block.classList.toggle('collapsed', allianceCollapsed[a]);
     });
 
+    list.appendChild(block);
+  }
+
+  // Lignes au-delà des 3 alliances (index ≥ 24) : rendues dans un bloc
+  // "Réserve" pour rester visibles / éditables / supprimables. Avant, une
+  // 25e ligne existait dans le state (comptée "25/24") mais n'apparaissait
+  // nulle part — impossible à retrouver sans changer de type de contenu.
+  const overflow = state.players.slice(3 * ALLIANCE_SIZE);
+  if (overflow.length > 0) {
+    const block = document.createElement('div');
+    block.className = 'alliance-block';
+    const header = document.createElement('div');
+    header.className = 'alliance-header';
+    const title = document.createElement('span');
+    title.className = 'alliance-title';
+    title.textContent = t('al_reserve');
+    header.appendChild(title);
+    block.appendChild(header);
+    const body = document.createElement('div');
+    body.className = 'alliance-body';
+    overflow.forEach((player, i) => {
+      if (!player) return;
+      body.appendChild(buildPlayerRow(player, 3 * ALLIANCE_SIZE + i));
+    });
+    block.appendChild(body);
     list.appendChild(block);
   }
 }
@@ -7146,11 +7184,14 @@ function exitRoomMode() {
 function hasMeaningfulContent() {
   if (state.raidWhen && state.raidWhen.trim()) return true;
   if (state.bannedJobs && state.bannedJobs.length > 0) return true;
+  if (Array.isArray(state.raidSlots) && state.raidSlots.length > 0) return true;
   return state.players.some(p =>
     (p.name && p.name.trim()) ||
     (p.preferences && p.preferences.length > 0) ||
     (p.presence && p.presence !== 'in') ||
-    !!p.lockedJob
+    !!p.lockedJob ||
+    (p.note && p.note.trim()) ||
+    countAvailCells(p.availability) > 0
   );
 }
 
@@ -7529,6 +7570,12 @@ document.getElementById('addPlayerBtn').addEventListener('click', () => {
   // Garde-fou : pour un·e non-admin déjà au max de claims, on n'ajoute pas
   // (le bouton est censé être hidden mais double-check).
   if (!state.isAdmin && currentRoomId && userAtClaimLimit()) return;
+  // Cap serveur : une 33e ligne ferait rejeter TOUS les saves suivants (400
+  // silencieux) — on bloque côté client avec un message clair.
+  if (state.players.length >= MAX_PLAYERS) {
+    showToast(t('ts_playerLimit', { max: MAX_PLAYERS }));
+    return;
+  }
   const p = makePlayer();
   // Auto-claim pour les non-admins : la nouvelle ligne leur appartient
   // direct, sinon elle ne sera pas acceptée côté serveur (le merge

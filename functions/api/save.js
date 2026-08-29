@@ -334,6 +334,18 @@ export function normalizeForNonAdminMerge(payload, existing, userId) {
   for (const ip of (Array.isArray(payload.p) ? payload.p : [])) {
     if (typeof ip.id === 'string') incomingByRowId.set(ip.id, ip);
   }
+  // Passe 1 : décompte les LIBÉRATIONS de ce save avant d'évaluer les
+  // nouveaux claims. Sinon un swap "je libère la ligne 5 + je claim la
+  // ligne 2" dans le même save était refusé ou accepté selon l'ordre des
+  // lignes dans le roster (le compteur n'était décrémenté qu'en atteignant
+  // la ligne libérée).
+  for (const ep of existingPlayers) {
+    const ip = incomingByRowId.get(ep.id);
+    if (!ip) continue;
+    if (ep.by === userId && !(typeof ip.by === 'string' && ip.by === userId)) {
+      userClaims--;
+    }
+  }
   stored.p = existingPlayers.map(ep => {
     const ip = incomingByRowId.get(ep.id);
     if (!ip) return ep;
@@ -341,8 +353,8 @@ export function normalizeForNonAdminMerge(payload, existing, userId) {
     if (epBy === userId) {
       // Sa ligne : peut tout changer, sauf le rowId et le claimedBy (ne peut pas transférer)
       // (un re-claim avec autre userId est ignoré ; clearer son claim = ok)
+      // La libération éventuelle est déjà comptée en passe 1.
       const stillOwned = (typeof ip.by === 'string' && ip.by === userId);
-      if (!stillOwned) userClaims--;  // libération
       return normalizePlayer({ ...ip, by: stillOwned ? userId : null }, ep.id);
     }
     if (!epBy) {

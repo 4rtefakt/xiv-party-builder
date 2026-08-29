@@ -285,6 +285,33 @@ test('merge non-admin : libérer 1 puis claim 1 nouvelle reste sous la limite', 
   assert.equal(stored.p[2].by, 'me', 'nouveau claim accepté (place libérée)');
 });
 
+test('merge non-admin : swap claim vers une ligne PLUS HAUTE dans le roster (libère plus bas)', () => {
+  // Régression : le compteur de claims n'était décrémenté qu'en ATTEIGNANT
+  // la ligne libérée pendant le map séquentiel — "je claim la ligne 1 et je
+  // libère la ligne 3" était refusé alors que le net respecte la limite
+  // (l'inverse, libérer une ligne plus haute, passait). L'issue dépendait
+  // de l'ordre des lignes.
+  const existing = makeExisting({
+    cl: 1,
+    p: [
+      makeRow('r0000001', 'A'),          // libre (plus haut)
+      makeRow('r0000002', 'B'),
+      makeRow('r0000003', 'C', 'me')     // mon claim (plus bas)
+    ]
+  });
+  const payload = {
+    c: 'raid8', d: 'unified',
+    p: [
+      makeRow('r0000001', 'A', 'me'),    // claim la ligne du haut
+      makeRow('r0000002', 'B'),
+      makeRow('r0000003', 'C')           // libère celle du bas
+    ]
+  };
+  const stored = normalizeForNonAdminMerge(payload, existing, 'me');
+  assert.equal(stored.p[0].by, 'me', 'le claim du haut doit être accepté (net = 1 ≤ limite)');
+  assert.equal(stored.p[2].by, undefined, 'la ligne du bas est libérée');
+});
+
 test('merge non-admin : peut ajouter une nouvelle ligne self-claim sous la limite', () => {
   const existing = makeExisting({
     cl: 2,
