@@ -6131,6 +6131,10 @@ function openPresetMenu(btn, player) {
         if (!canEditPlayer(player)) return;
         ensureClaim(player);
         player.preferences = preset.jobs.filter(id => validJobIds.has(id));
+        // Les presets ne stockent que les jobs (ordre strict) : on purge les
+        // anciens tiers, sinon quand les longueurs coïncident par hasard ils
+        // s'appliquent aux nouveaux jobs (co-favoris fantômes persistés).
+        player.prefTiers = [];
         closePresetMenu();
         renderPlayers();
         renderSuggestions();
@@ -8144,7 +8148,14 @@ function openJobPicker(triggerEl, playerName) {
 
   const items = prefs.map((jobId, idx) => {
     const job = JOB_BY_ID[jobId];
-    const tier = (player.prefTiers && player.prefTiers[idx] != null) ? player.prefTiers[idx] : idx;
+    // Tier lu à l'index ORIGINAL de la pref (prefTiers est parallèle à
+    // player.preferences, pas à la liste filtrée des bans) — sinon les
+    // labels T{n} se décalent dès qu'un job banni précède dans les prefs.
+    const origIdx = player.preferences.indexOf(jobId);
+    // Mêmes gardes que getPrefTier (longueur alignée, valeur numérique).
+    const tier = (Array.isArray(player.prefTiers)
+      && player.prefTiers.length === player.preferences.length
+      && typeof player.prefTiers[origIdx] === 'number') ? player.prefTiers[origIdx] : idx;
     const isCurrent = jobId === currentJobId;
     const marker = isCurrent ? `<span class="job-picker-item-marker">${escapeHtml(t('jp_current'))}</span>` : '';
     return `

@@ -408,6 +408,45 @@ test('Role bonus : la diversité départage des solutions à individuel égal', 
   assert.equal(r.stats.roleBonusPercent, 4);
 });
 
+// ---------- prefTiers : cohérence scoring ↔ stats, et alignement sous ban ----------
+
+test('prefTiers : bannir un job garde les tiers alignés sur les prefs restantes', () => {
+  // Régression : le filtre des bans ne touchait que preferences, prefTiers
+  // gardait sa longueur d'origine → mismatch → getPrefTier retombait sur
+  // l'index strict, et les prefs restantes étaient "promues" (un tied-2e
+  // choix devenait 1er choix au scoring ET aux stats).
+  const players = [
+    { name: 'A', preferences: ['WAR', 'PLD', 'DRK'], prefTiers: [0, 1, 1] },
+    { name: 'B', preferences: ['DRK'] }
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: [{ roles: ['tank'] }, { roles: ['tank'] }],
+    bannedJobs: ['WAR'], fairnessWeight: 0
+  });
+  const a = r.results.find(x => x.name === 'A');
+  assert.equal(a.assigned, true);
+  assert.equal(a.prefRank, 1, 'PLD reste un choix de tier 1 même une fois WAR banni');
+  assert.equal(r.stats.firstChoices, 1, 'seul B (DRK 1er choix) compte comme 1er choix');
+});
+
+test('prefTiers : les stats comptent le TIER, pas l\'index brut (tied-first = 1er choix)', () => {
+  // Un·e joueur·euse avec deux co-favoris (tiers [0,0]) qui reçoit le 2e de
+  // la liste doit compter comme 1er choix — le solver le score déjà comme
+  // tel, les stats/cartes disaient "2e choix" (satisfaction 50%).
+  const players = [
+    { name: 'A', preferences: ['NIN', 'VPR'], prefTiers: [0, 0], lockedJob: 'VPR' }
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: [{ roles: ['melee'] }], fairnessWeight: 50
+  });
+  const a = r.results[0];
+  assert.equal(a.jobId, 'VPR');
+  assert.equal(a.prefRank, 0, 'tier 0 = 1er choix affiché');
+  assert.equal(r.stats.firstChoices, 1);
+  assert.equal(r.stats.worstRank, 0);
+  assert.equal(r.stats.satisfaction, 100);
+});
+
 // ---------- fill-first : un slot compatible libre n'est jamais laissé vide ----------
 
 test('fill-first : un joueur sans aucune pref est assigné (forcé) plutôt que benché, à tout fairness', () => {
