@@ -193,6 +193,39 @@ test('re-subscribe sur room différente : ferme l\'ancien socket + ouvre le nouv
   } finally { sync.unsubscribe(); }
 });
 
+test('re-subscribe room différente : un close ASYNCHRONE de l\'ancien socket est ignoré (pas de doublon)', async () => {
+  // Dans un vrai browser, l'event close arrive de façon asynchrone après
+  // ws.close(). Régression : le handler close ne vérifiait pas qu'il
+  // appartenait au socket COURANT — le close périmé de l'ancienne room
+  // nullait le nouveau socket et déclenchait un reconnect en doublon
+  // (deux WS vivants → onChange appelé deux fois par save).
+  const changes = [];
+  const sync = makeSync();
+  try {
+    sync.subscribe('roomA', (m) => changes.push(m));
+    const wsA = MockWS.lastInstance;
+    wsA._open();
+    // Simule l'async browser : on retient l'event close de wsA pour le
+    // rejouer APRÈS que la connexion roomB est établie.
+    const realEmit = wsA._emit.bind(wsA);
+    wsA._emit = () => {};
+    sync.subscribe('roomB', (m) => changes.push(m));
+    const wsB = MockWS.lastInstance;
+    assert.notEqual(wsB, wsA);
+    wsB._open();
+    // Le close de wsA arrive maintenant, en retard
+    wsA._emit = realEmit;
+    realEmit('close', { code: 1000, wasClean: true });
+    await new Promise(r => setTimeout(r, 40)); // laisse un éventuel reconnect (bug) partir
+    assert.equal(MockWS.lastInstance, wsB, 'pas de socket doublon créé par le close périmé');
+    assert.equal(sync.getState().connected, true, 'la connexion roomB reste vivante');
+    // Un message arrivant sur l'ancien socket orphelin ne doit PAS remonter
+    realEmit('message', { data: JSON.stringify({ type: 'changed', hash: 'stale' }) });
+    wsB._msg({ type: 'changed', hash: 'fresh' });
+    assert.deepEqual(changes.map(c => c.hash), ['fresh']);
+  } finally { sync.unsubscribe(); }
+});
+
 test('getState : reflète l\'état du socket', () => {
   const sync = makeSync();
   try {
