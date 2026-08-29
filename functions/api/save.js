@@ -173,7 +173,9 @@ export function validatePayload(payload) {
     if (raw.pt !== undefined) {
       if (!Array.isArray(raw.pt) || raw.pt.length !== raw.j.length) return 'Invalid pref tiers length';
       for (const tval of raw.pt) {
-        if (typeof tval !== 'number' || !Number.isFinite(tval) || tval < 0 || tval > 50) return 'Invalid tier value';
+        // Borne alignée sur lib/codec.js (t >= 0 && t < 50) : accepter 50 ici
+        // stockerait une valeur que validateImportedPayload rejette au load.
+        if (typeof tval !== 'number' || !Number.isFinite(tval) || tval < 0 || tval >= 50) return 'Invalid tier value';
       }
     }
     if (raw.av !== undefined) {
@@ -452,6 +454,9 @@ export async function onRequestPost(context) {
     if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
     if (payload.cl !== undefined) stored.cl = payload.cl;
     if (payload.lg !== undefined) stored.lg = payload.lg;
+    if (Array.isArray(payload.rs) && payload.rs.length > 0) {
+      stored.rs = payload.rs.slice(0, MAX_RAID_SLOTS).map(s => ({ d: s.d, h: s.h, l: s.l }));
+    }
     response = {
       id, isAdmin: true, ownerId: userId, admins: [userId],
       recoverySecret // renvoyé UNE seule fois, sur la création

@@ -88,6 +88,14 @@ test('validatePayload : pt avec valeur hors borne rejetée', () => {
   })), /tier/i);
 });
 
+test('validatePayload : borne pt alignée sur le codec (49 ok, 50 rejeté)', () => {
+  // lib/codec.js valide t >= 0 && t < 50 : accepter 50 côté serveur stockait
+  // une valeur que validateImportedPayload jetait ensuite (tous les tiers du
+  // player silencieusement perdus au load).
+  assert.equal(validatePayload(valid({ p: [{ n: 'X', j: ['PLD'], pt: [49] }] })), null);
+  assert.match(validatePayload(valid({ p: [{ n: 'X', j: ['PLD'], pt: [50] }] })), /tier/i);
+});
+
 // ---------- validatePayload : claim limit ----------
 
 test('validatePayload : cl=2 (défaut) accepté', () => {
