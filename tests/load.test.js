@@ -116,6 +116,72 @@ test('création : rs du payload est stocké dès le premier save', async () => {
   assert.deepEqual(stored.rs, [{ d: 'mon', h: 20, l: 1.5 }]);
 });
 
+test('migration buckets : la création convertit les rangs legacy en pt buckets', async () => {
+  const env = { PARTY_KV: mockKV() };
+  const created = await createRoom(env, {
+    c: 'raid8', d: 'unified',
+    p: [{ n: 'Legacy8', j: ['NIN', 'VPR', 'SAM', 'DRG', 'MNK', 'RPR', 'BRD', 'BLM'] }]
+  });
+  const stored = JSON.parse(await env.PARTY_KV.get(created.id));
+  assert.deepEqual(stored.p[0].pt, [0, 0, 0, 1, 1, 1, 2, 2],
+    '8 picks ordre-de-clic → 3 Main / 3 Ça me va / 2 Si besoin');
+});
+
+test('migration buckets : un save NON-ADMIN homogénéise tout le salon en KV', async () => {
+  // Salon legacy seedé directement en KV : deux rows en ordre-de-clic
+  // (pt absent = strict), appartenant à d'autres. Un·e non-admin sauvegarde
+  // sans rien changer → les rows des AUTRES doivent quand même être
+  // converties en buckets (représentation seule, contenu intact).
+  const env = { PARTY_KV: mockKV({
+    room01: JSON.stringify({
+      c: 'raid8', d: 'unified',
+      ownerId: 'owner-user-0001', admins: ['owner-user-0001'],
+      recoveryHash: 'x',
+      p: [
+        { n: 'Alice', j: ['NIN', 'VPR', 'SAM', 'DRG'], by: 'owner-user-0001', id: 'rAAAAAAA' },
+        { n: 'Bob',   j: ['PLD', 'WAR', 'DRK', 'GNB', 'WHM'], pt: [0, 1, 2, 3, 4], id: 'rBBBBBBB' }
+      ]
+    })
+  }) };
+  const req = new Request('https://x.test/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-User-Id': 'guest-user-0001' },
+    body: JSON.stringify({ id: 'room01', c: 'raid8', d: 'unified', p: [] })
+  });
+  const res = await onRequestPost({ request: req, env, waitUntil() {} });
+  assert.equal(res.status, 200);
+  const stored = JSON.parse(await env.PARTY_KV.get('room01'));
+  assert.deepEqual(stored.p[0].pt, [0, 1, 1, 2], 'row d\'Alice (4 picks legacy) convertie');
+  assert.deepEqual(stored.p[1].pt, [0, 0, 1, 1, 2], 'row de Bob (5 picks legacy) convertie');
+  assert.equal(stored.p[0].by, 'owner-user-0001', 'le claim ne bouge pas');
+  assert.deepEqual(stored.p[0].j, ['NIN', 'VPR', 'SAM', 'DRG'], 'les jobs ne bougent pas');
+});
+
+test('migration buckets : idempotente au re-save (pt strict omis, buckets conservés)', async () => {
+  const env = { PARTY_KV: mockKV() };
+  const created = await createRoom(env, {
+    c: 'raid8', d: 'unified',
+    p: [
+      { n: 'Buckets', j: ['NIN', 'VPR'], pt: [0, 0], id: 'rCCCCCCC' },
+      { n: 'Strict3', j: ['PLD', 'WHM', 'BRD'], id: 'rDDDDDDD' }
+    ]
+  });
+  const first = JSON.parse(await env.PARTY_KV.get(created.id));
+  assert.deepEqual(first.p[0].pt, [0, 0], 'les buckets existants ne bougent pas');
+  assert.equal(first.p[1].pt, undefined, '≤ 3 picks stricts → pt omis (économie bytes)');
+  // Re-save admin du même contenu → stockage identique
+  const req = new Request('https://x.test/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-User-Id': USER },
+    body: JSON.stringify({ id: created.id, c: 'raid8', d: 'unified', p: first.p })
+  });
+  const res = await onRequestPost({ request: req, env, waitUntil() {} });
+  assert.equal(res.status, 200);
+  const second = JSON.parse(await env.PARTY_KV.get(created.id));
+  assert.deepEqual(second.p[0].pt, [0, 0]);
+  assert.equal(second.p[1].pt, undefined);
+});
+
 test('load : ne fuite jamais recoveryHash', async () => {
   const env = { PARTY_KV: mockKV() };
   const created = await createRoom(env, {
