@@ -46,6 +46,11 @@ const MAX_ADMINS = 24;
 const ID_LEN = 6;
 const TTL_SECONDS = 31536000; // 1 year
 
+// Import lib partagé, comme functions/og/[id].js — le pattern "constantes
+// dupliquées" de save.js ne vaut que pour les Set de validation, pas pour
+// la logique métier (une seule source de vérité pour la migration).
+import { bucketizePrefTiers } from '../../lib/scoring.js';
+
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const ID_PATTERN = /^[A-Za-z0-9]{4,12}$/;
 const USER_ID_PATTERN = /^[A-Za-z0-9_-]{4,64}$/;
@@ -262,6 +267,22 @@ export function normalizePlayer(raw, existingRowId) {
   }
   obj.id = (raw.id && ROW_ID_PATTERN.test(raw.id)) ? raw.id : (existingRowId || generateRowId());
   return obj;
+}
+
+// Convertit les rangs legacy (ordre-de-clic, tiers > 2 ou stricts 4+) d'une
+// row STOCKÉE en buckets ★ Main / Ça me va / Si besoin. Appliquée à TOUTES
+// les rows de chaque save, quel que soit son auteur : même le save d'un·e
+// non-admin qui ne touche que sa propre ligne homogénéise le salon entier
+// en KV (les rows des autres ne changent que de représentation de tiers,
+// jamais de contenu). pt omis quand l'ordre est strict — même économie de
+// bytes que normalizePlayer / encodePayload. Idempotent.
+export function migrateLegacyTiers(p) {
+  const tiers = bucketizePrefTiers(Array.isArray(p.j) ? p.j : [], p.pt);
+  const strict = tiers.every((t, i) => t === i);
+  const out = { ...p };
+  if (strict) delete out.pt;
+  else out.pt = tiers;
+  return out;
 }
 
 // Pour un admin : full overwrite (avec garde-fou pour ownerId et admins)
@@ -507,6 +528,10 @@ export async function onRequestPost(context) {
       promotedViaSecret: promotedViaSecret || undefined
     };
   }
+
+  // Migration buckets appliquée au moment de stocker, sur tous les chemins
+  // (création, admin, merge non-admin) — cf. migrateLegacyTiers ci-dessus.
+  stored.p = (Array.isArray(stored.p) ? stored.p : []).map(migrateLegacyTiers);
 
   const storedJson = JSON.stringify(stored);
   try {

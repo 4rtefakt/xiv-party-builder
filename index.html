@@ -3228,7 +3228,7 @@ import { JOBS, JOB_BY_ID, JOBS_BY_ROLE, CONTENT_COMP } from './lib/jobs.js';
 import {
   SCORING, jobScoreForPlayer, benchScore, buildSlots,
   computeOptimalAssignment as _computeOptimalAssignment,
-  buildResultFromAssignment, getPrefTier
+  buildResultFromAssignment, getPrefTier, MAX_PREF_TIER
 } from './lib/scoring.js';
 import {
   getRoleRequirements as _getRoleRequirements,
@@ -3460,6 +3460,13 @@ const STRINGS = {
       const labels = { tank: 'tanks', heal: 'healers', melee: 'mêlée', ranged: 'distance physique', caster: 'casters' };
       return `Cocher tous les ${labels[role] || role} d'un coup`;
     },
+    // Buckets de préférence (cycle au clic sur une icône de job)
+    r_tier0: '★ Main',
+    r_tier1: 'Ça me va',
+    r_tier2: 'Si besoin',
+    r_jobTipAdd: ({ name }) => `${name} — clic : ★ Main`,
+    r_jobTipCycle: ({ name, cur, next }) => `${name} · ${cur} — clic : ${next}`,
+    r_jobTipRemove: ({ name, cur }) => `${name} · ${cur} — clic : retirer`,
     r_presenceClick: 'Présence — clic pour changer',
     r_dragHandle: 'Glisser pour réorganiser',
     r_reorderUp: 'Monter',
@@ -3807,6 +3814,12 @@ const STRINGS = {
       const labels = { tank: 'tanks', heal: 'healers', melee: 'melee', ranged: 'physical ranged', caster: 'casters' };
       return `Select all ${labels[role] || role} at once`;
     },
+    r_tier0: '★ Main',
+    r_tier1: 'Happy to play',
+    r_tier2: 'If needed',
+    r_jobTipAdd: ({ name }) => `${name} — click: ★ Main`,
+    r_jobTipCycle: ({ name, cur, next }) => `${name} · ${cur} — click: ${next}`,
+    r_jobTipRemove: ({ name, cur }) => `${name} · ${cur} — click: remove`,
     r_presenceClick: 'Attendance — click to change',
     r_dragHandle: 'Drag to reorder',
     r_reorderUp: 'Move up',
@@ -4203,15 +4216,14 @@ const makePlayer = (name = '') => ({
   availability: null
 });
 
-// Normalise les tiers pour qu'ils soient consécutifs à partir de 0
-// (utile après une suppression qui laisse un trou). Mutate-in-place,
-// reste local (pas de version pure utile côté lib/).
-function normalizePrefTiers(player) {
-  if (!player.prefTiers || player.prefTiers.length === 0) return;
-  if (player.prefTiers.length !== player.preferences.length) return;
-  const unique = [...new Set(player.prefTiers)].sort((a, b) => a - b);
-  player.prefTiers = player.prefTiers.map(t => unique.indexOf(t));
-}
+// Buckets de préférence : tiers ABSOLUS 0/1/2 (★ Main / Ça me va / Si
+// besoin), cyclés au clic sur l'icône de job. On ne "normalise" plus les
+// tiers en rangs consécutifs : un trou est volontaire (ex: retirer son seul
+// Main ne promeut pas les "Si besoin" en Main). Les rangs legacy (ancien
+// modèle ordre-de-clic, tiers possiblement > 2) sont convertis en buckets
+// dès l'import par validateImportedPayload → bucketizePrefTiers (lib) —
+// le state en mémoire ne contient donc jamais de tier > MAX_PREF_TIER,
+// mais l'UI reste défensive au cas où. MAX_PREF_TIER : cf. lib/scoring.js.
 
 // L'utilisateur peut ajouter/retirer librement après. Mais quand il change de contenu,
 // on n'écrase PAS son roster — on prévient juste s'il y a sous/sur-effectif.
@@ -4574,7 +4586,7 @@ function buildPlayerRow(player, idx) {
 
         if (allSelected) {
           // Comportement toggle : on désélectionne tous les jobs de ce rôle
-          // SAUF ceux qui sont en tier 0 (favoris). Si tous sont co-favoris,
+          // SAUF ceux qui sont en bucket ★ Main. Si tous sont co-mains,
           // on garde tout (rien ne se passe — l'utilisateur peut désélectionner
           // individuellement).
           for (let i = player.preferences.length - 1; i >= 0; i--) {
@@ -4584,25 +4596,17 @@ function buildPlayerRow(player, idx) {
               player.prefTiers.splice(i, 1);
             }
           }
-          normalizePrefTiers(player);
         } else {
-          // Comportement ajout : on ajoute les jobs manquants au même tier
+          // Comportement ajout : les jobs manquants du rôle rejoignent le
+          // même bucket — ★ Main si c'est la première sélection de la ligne
+          // ("je joue tous les tanks"), sinon "Ça me va" (extension de pool).
           autoFillNameIfNeeded();
-          const tiersInRole = [];
-          for (let i = 0; i < player.preferences.length; i++) {
-            const j = JOB_BY_ID[player.preferences[i]];
-            if (j && j.role === role) tiersInRole.push(player.prefTiers[i]);
-          }
-          const maxOverall = player.prefTiers.length > 0 ? Math.max(...player.prefTiers) : -1;
-          const targetTier = tiersInRole.length > 0
-            ? Math.max(...tiersInRole) + 1
-            : maxOverall + 1;
+          const targetTier = player.preferences.length === 0 ? 0 : 1;
           roleJobs.forEach(jobId => {
             if (state.bannedJobs.includes(jobId) || player.preferences.includes(jobId)) return;
             player.preferences.push(jobId);
             player.prefTiers.push(targetTier);
           });
-          normalizePrefTiers(player);
         }
         renderPlayers();
         renderSuggestions();
@@ -4620,8 +4624,10 @@ function buildPlayerRow(player, idx) {
         const icon = document.createElement('div');
         icon.className = 'job-icon';
         icon.dataset.role = role;
-        icon.dataset.tooltip = job.name;
         icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
+
+        // Libellé du bucket (r_tier0/1/2) ; tiers legacy > 2 → numéro brut.
+        const tierLabel = (tier) => tier <= MAX_PREF_TIER ? t('r_tier' + tier) : String(tier + 1);
 
         const prefIdx = player.preferences.indexOf(job.id);
         if (prefIdx !== -1) {
@@ -4629,18 +4635,21 @@ function buildPlayerRow(player, idx) {
           const badge = document.createElement('span');
           badge.className = 'order-badge';
           const tier = getPrefTier(player, prefIdx);
-          // Étoile dorée sur le favori UNIQUEMENT si seul à son tier 0
-          // (sinon plusieurs jobs sont co-favoris → badge "1" pour tous)
-          const tier0Count = (player.prefTiers && player.prefTiers.length === player.preferences.length)
-            ? player.prefTiers.filter(t => t === 0).length
-            : 1;
-          if (tier === 0 && tier0Count === 1) {
+          // ★ pour TOUS les jobs du bucket Main (les co-mains sont un cas
+          // normal du modèle buckets), numéro pour les autres.
+          if (tier === 0) {
             badge.classList.add('favorite');
             badge.textContent = '★';
           } else {
             badge.textContent = tier + 1;
           }
           icon.appendChild(badge);
+          // Tooltip : bucket courant + effet du prochain clic (cycle)
+          icon.dataset.tooltip = tier >= MAX_PREF_TIER
+            ? t('r_jobTipRemove', { name: job.name, cur: tierLabel(tier) })
+            : t('r_jobTipCycle', { name: job.name, cur: tierLabel(tier), next: tierLabel(tier + 1) });
+        } else {
+          icon.dataset.tooltip = t('r_jobTipAdd', { name: job.name });
         }
         if (state.bannedJobs.includes(job.id)) {
           icon.classList.add('banned');
@@ -4656,15 +4665,17 @@ function buildPlayerRow(player, idx) {
             player.prefTiers.push(player.prefTiers.length);
           }
           if (i === -1) {
-            // Ajoute au tier suivant (max + 1) → reste strictement ordonné
-            const maxTier = player.prefTiers.length > 0 ? Math.max(...player.prefTiers) : -1;
+            // Nouveau job → bucket ★ Main
             player.preferences.push(job.id);
-            player.prefTiers.push(maxTier + 1);
+            player.prefTiers.push(0);
             autoFillNameIfNeeded();
+          } else if (getPrefTier(player, i) < MAX_PREF_TIER) {
+            // Cycle : Main → Ça me va → Si besoin
+            player.prefTiers[i] = getPrefTier(player, i) + 1;
           } else {
+            // Dernier bucket (ou tier legacy > 2) → retirer
             player.preferences.splice(i, 1);
             player.prefTiers.splice(i, 1);
-            normalizePrefTiers(player); // collapse les trous éventuels
           }
           renderPlayers();
           renderSuggestions();
@@ -6202,10 +6213,12 @@ function openPresetMenu(btn, player) {
         if (!canEditPlayer(player)) return;
         ensureClaim(player);
         player.preferences = preset.jobs.filter(id => validJobIds.has(id));
-        // Les presets ne stockent que les jobs (ordre strict) : on purge les
-        // anciens tiers, sinon quand les longueurs coïncident par hasard ils
-        // s'appliquent aux nouveaux jobs (co-favoris fantômes persistés).
-        player.prefTiers = [];
+        // Les presets ne stockent que les jobs (liste ordonnée) : on rebâtit
+        // les tiers depuis cet ordre, projeté sur les buckets — 1er job =
+        // ★ Main, 2e = Ça me va, le reste = Si besoin. (Ne jamais garder les
+        // anciens tiers : quand les longueurs coïncident par hasard ils
+        // s'appliqueraient aux nouveaux jobs.)
+        player.prefTiers = player.preferences.map((_, i) => Math.min(i, MAX_PREF_TIER));
         closePresetMenu();
         renderPlayers();
         renderSuggestions();
@@ -8291,7 +8304,7 @@ function openJobPicker(triggerEl, playerName, rowId) {
               ${isCurrent ? 'aria-current="true"' : ''}>
         <img src="${ICON_URL(job)}" alt="" loading="lazy" draggable="false">
         <div class="job-picker-item-main">
-          <span class="job-picker-item-job">${escapeHtml(job.name)} <span class="tier">T${tier + 1}</span></span>
+          <span class="job-picker-item-job">${escapeHtml(job.name)} <span class="tier">${escapeHtml(tier <= MAX_PREF_TIER ? t('r_tier' + tier) : 'T' + (tier + 1))}</span></span>
           <span class="job-picker-item-role">${escapeHtml(t('role_' + job.role))}</span>
         </div>
         ${marker}

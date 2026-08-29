@@ -6,7 +6,7 @@
 
 import { ImageResponse } from 'workers-og';
 import { JOB_BY_ID, CONTENT_COMP, ROLE_COLOR } from '../../lib/jobs.js';
-import { buildSlotsFromComp, computeOptimalAssignment } from '../../lib/scoring.js';
+import { buildSlotsFromComp, computeOptimalAssignment, bucketizePrefTiers } from '../../lib/scoring.js';
 import { analyzeAvailability, bestSlotWithTail } from '../../lib/availability.js';
 import { assignStratRoles, assignDpsGridPositions, getDpsLayout } from '../../lib/strat-roles.js';
 
@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 23; // v23 : raid24/chaotic calculés par alliance (comme le front) + lang dans la clé de cache + fill-first (algo scoring)
+const OG_LAYOUT_VERSION = 24; // v24 : migration des rangs legacy vers les buckets de préférence (★ Main / Ça me va / Si besoin)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -75,10 +75,13 @@ function pickLang(headers) {
 // même compo que la page, et chaque solve est borné à 8 slots — le compute
 // global 24 slots explosait la limite CPU du worker dès ~16 joueur·euses.
 function mapOgPlayer(p) {
+  const preferences = Array.isArray(p.j) ? p.j : [];
   return {
     name: p.n.trim(),
-    preferences: Array.isArray(p.j) ? p.j : [],
-    prefTiers: Array.isArray(p.pt) ? p.pt : [],
+    preferences,
+    // Même migration buckets que le front (via lib/codec.js) : l'OG doit
+    // scorer les rangs legacy comme la page, sinon compo divergente.
+    prefTiers: bucketizePrefTiers(preferences, Array.isArray(p.pt) ? p.pt : []),
     lockedJob: typeof p.l === 'string' && JOB_BY_ID[p.l] ? p.l : null,
     presence: p.s || 'in'
   };
