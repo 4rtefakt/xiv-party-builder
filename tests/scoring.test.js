@@ -208,10 +208,11 @@ test('lock contourne le ban dans les candidats mais le scoring reste cohérent',
   assert.equal(r.results[0].locked, true);
 });
 
-test('job banni : un joueur dont toutes les prefs sont bannies préfère le banc à un forcé', () => {
-  // C'est le comportement attendu de l'algo : forcer quelqu'un sur un job
-  // hors prefs coûte ~250 pts (fairness=50) alors que le bench n'en coûte
-  // que ~105. L'algo choisit le banc — cohérent avec "limited frustration".
+test('job banni : un joueur dont toutes les prefs sont bannies est forcé plutôt que benché (fill-first)', () => {
+  // Fill-first : tant qu'un slot compatible est libre, on le remplit — même
+  // au prix d'un forcé. Un slot vide + un·e joueur·euse au banc qui aurait
+  // pu le remplir n'est jamais la bonne réponse pour un raid. (Ancien
+  // comportement : bench (-105) < forcé (-250) laissait le slot tank vide.)
   const players = [
     P('Tank',  ['PLD']),                  // PLD banni
     P('Heal',  ['WHM']),
@@ -223,7 +224,10 @@ test('job banni : un joueur dont toutes les prefs sont bannies préfère le banc
     bannedJobs: ['PLD'], fairnessWeight: 50
   });
   const tankResult = r.results[0];
-  assert.equal(tankResult.assigned, false, 'Tank dont la pref est bannie va au banc');
+  assert.equal(tankResult.assigned, true, 'Tank est forcé sur un autre job, pas benché');
+  assert.equal(tankResult.forced, true);
+  assert.notEqual(tankResult.jobId, 'PLD', 'le job banni reste interdit');
+  assert.equal(r.stats.assigned, 4, 'les 4 slots du donjon sont remplis');
   // Aucun joueur ne se retrouve assigné PLD
   assert.equal(r.results.filter(rr => rr.assigned && rr.jobId === 'PLD').length, 0);
 });
@@ -404,11 +408,78 @@ test('Role bonus : la diversité départage des solutions à individuel égal', 
   assert.equal(r.stats.roleBonusPercent, 4);
 });
 
+// ---------- fill-first : un slot compatible libre n'est jamais laissé vide ----------
+
+test('fill-first : un joueur sans aucune pref est assigné (forcé) plutôt que benché, à tout fairness', () => {
+  // Régression : bench (-30-150w) > forcé (-50-400w) faisait bencher le
+  // joueur sans prefs et laisser un slot VIDE — et le résultat basculait
+  // selon le slider fairness (à 0, le bonus de sous-rôle inversait la
+  // balance). Désormais FILL_BONUS domine : party remplie à tout fairness.
+  for (const fw of [0, 50, 100]) {
+    const players = [
+      P('T1', ['WAR']), P('T2', ['PLD']),
+      P('H1', ['WHM']), P('H2', ['SCH']),
+      P('M1', ['NIN']), P('M2', ['SAM']),
+      P('R1', ['BRD']),
+      P('NoPref', [])
+    ];
+    const r = computeOptimalAssignment({
+      players, slots: buildSlots('raid8', 'split'), fairnessWeight: fw
+    });
+    assert.equal(r.stats.assigned, 8, `fairness=${fw} : les 8 slots sont remplis`);
+    assert.equal(r.stats.benched, 0, `fairness=${fw} : personne au banc`);
+    const noPref = r.results.find(x => x.name === 'NoPref');
+    assert.equal(noPref.assigned, true);
+    assert.equal(noPref.forced, true);
+  }
+});
+
+test('fill-first : un 3e tank est forcé sur le slot restant plutôt que benché', () => {
+  // 3 joueurs tank-only pour 2 slots tank : le 3e est forcé sur le slot
+  // distance libre (fill-first), pas benché avec un slot vide.
+  const players = [
+    P('T1', ['WAR']), P('T2', ['PLD']), P('T3', ['DRK']),
+    P('H1', ['WHM']), P('H2', ['SCH']),
+    P('M1', ['NIN']), P('M2', ['SAM']),
+    P('R1', ['BRD'])
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('raid8', 'split'), fairnessWeight: 50
+  });
+  assert.equal(r.stats.assigned, 8);
+  assert.equal(r.stats.benched, 0);
+  const t3 = r.results.find(x => x.name === 'T3');
+  assert.equal(t3.assigned, true);
+  assert.equal(t3.forced, true);
+});
+
+test('fill-first : le banc n\'apparaît que quand le roster dépasse les slots', () => {
+  // 9 joueurs pour 8 slots : exactement 1 au banc, 8 slots remplis.
+  const players = [
+    P('T1', ['WAR']), P('T2', ['PLD']), P('T3', ['DRK']),
+    P('H1', ['WHM']), P('H2', ['SCH']),
+    P('M1', ['NIN']), P('M2', ['SAM']),
+    P('R1', ['BRD']), P('C1', ['BLM'])
+  ];
+  const r = computeOptimalAssignment({
+    players, slots: buildSlots('raid8', 'split'), fairnessWeight: 50
+  });
+  assert.equal(r.stats.assigned, 8);
+  assert.equal(r.stats.benched, 1);
+  // Le benché est le tank surnuméraire (le forcer coûterait plus que le
+  // bench, et tous les slots sont déjà remplis par des 1ers choix).
+  const benched = r.results.find(x => !x.assigned);
+  assert.equal(benched.name, 'T3');
+});
+
 // ---------- seed (tie-break déterministe sans biais d'ordre roster) ----------
 
-// Le pattern utilisé : 3 healers pour 2 slots heal en raid8 → l'un des 3 est
-// au banc. Le score est strictement identique quel que soit lequel (chacun
-// prend son 1er choix s'il est assigné, et la pénalité de bench est la même).
+// Le pattern utilisé : 3 healers pour 2 slots heal en raid8, roster de 9
+// pour 8 slots → l'un des 3 healers est au banc (les 4 slots DPS flex sont
+// pris par les 4 mains DPS ; avec fill-first, bencher le healer surnuméraire
+// coûte moins que le forcer sur un job DPS hors prefs, à slots remplis
+// égaux). Le score est strictement identique quel que soit le healer benché
+// (chacun prend son 1er choix s'il est assigné, pénalité de bench égale).
 // Sans seed, c'est le 3ème du roster qui est benché (le solver itère dans
 // l'ordre et les 2 premiers healers raflent les slots heal).
 // Avec seed, n'importe lequel des 3 peut être benché selon la permutation.
@@ -421,7 +492,8 @@ function threeHealers(h1, h2, h3) {
     P('T2', ['WAR']),
     P('M1', ['SAM']),
     P('M2', ['DRG']),
-    P('R1', ['BRD'])
+    P('R1', ['BRD']),
+    P('R2', ['MCH'])
   ];
 }
 
@@ -481,7 +553,7 @@ test('seed : les results restent en ordre roster (pour que MT/OT/H1/H2 suivent l
   for (const seed of ['s1', 's2', 's3', 's4', 's5', 's6', 's7']) {
     const r = computeOptimalAssignment({ players, slots, fairnessWeight: 50, seed });
     assert.deepEqual(r.results.map(x => x.name),
-      ['Alice', 'Bob', 'Carol', 'T1', 'T2', 'M1', 'M2', 'R1'],
+      ['Alice', 'Bob', 'Carol', 'T1', 'T2', 'M1', 'M2', 'R1', 'R2'],
       `seed=${seed} : results doit suivre l'ordre roster`);
   }
 });
