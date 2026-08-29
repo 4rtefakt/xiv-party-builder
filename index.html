@@ -7078,6 +7078,12 @@ async function handleLiveChange(msg) {
   // écraserait des modifs locales pas encore parties. Le serveur sera de
   // toutes façons notifié par notre save imminent.
   if (saving || pendingChanges) return;
+  // Même garde que syncRoom : ne pas rebuild le DOM pendant que l'utilisateur
+  // tape dans un input (perte de focus/caret). Le sync-on-focus rattrapera.
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) {
+    return;
+  }
   try {
     const imported = await fetchPayloadById(currentRoomId);
     suppressAutoSave = true;
@@ -7141,12 +7147,16 @@ function hasMeaningfulContent() {
 // vol réseau du save, le flag se rebascule à true, ce qui pousse un nouveau
 // save à la fin de l'actuel.
 let pendingChanges = false;
+// Échecs consécutifs de saveRoom — pilote le backoff du retry. Reset à 0 dès
+// qu'un save passe.
+let saveFailures = 0;
 
 async function saveRoom() {
   if (saving) return;
   if (!currentRoomId && !hasMeaningfulContent()) return;
   saving = true;
   pendingChanges = false; // on capture l'état courant à cet instant
+  let saveOk = false;
   if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
   updateSyncStatus();
   try {
@@ -7159,6 +7169,7 @@ async function saveRoom() {
       body: JSON.stringify(body)
     });
     if (r.ok) {
+      saveOk = true;
       const data = await r.json().catch(() => null);
       if (!currentRoomId && data && typeof data.id === 'string') {
         enterRoomMode(data.id);
@@ -7183,13 +7194,25 @@ async function saveRoom() {
         suppressAutoSave = false;
       }
     }
-  } catch { /* silencieux */ }
+  } catch { /* silencieux : géré par le retry ci-dessous */ }
   saving = false;
+  if (saveOk) {
+    saveFailures = 0;
+  } else {
+    // Échec (réseau ou non-2xx) : l'état capturé n'a PAS été persisté. On
+    // rebascule pendingChanges à true pour (1) que handleLiveChange / syncRoom
+    // refusent d'écraser les modifs locales avec l'état remote périmé, et
+    // (2) déclencher un retry. Backoff exponentiel plafonné : évite de
+    // marteler un serveur en 429/500, tout en réessayant indéfiniment (une
+    // frappe de l'utilisateur relance de toute façon un scheduleAutoSave).
+    saveFailures++;
+    pendingChanges = true;
+  }
   updateSyncStatus();
-  // Si des modifs sont arrivées pendant ce vol réseau, on relance vite un save
-  // pour éviter que le serveur reste sur un état périmé.
+  // Si des modifs sont arrivées pendant ce vol réseau (ou que le save a
+  // échoué), on relance un save pour éviter que le serveur reste périmé.
   if (pendingChanges) {
-    scheduleAutoSave(200);
+    scheduleAutoSave(saveOk ? 200 : Math.min(30000, 2000 * Math.pow(2, saveFailures - 1)));
   }
 }
 
