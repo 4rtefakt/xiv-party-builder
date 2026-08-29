@@ -447,6 +447,19 @@ test('prefTiers : les stats comptent le TIER, pas l\'index brut (tied-first = 1e
   assert.equal(r.stats.satisfaction, 100);
 });
 
+test('prefTiers buckets : un seul job en tier 2 → satisfaction clampée à 0, jamais négative', () => {
+  // Modèle buckets (UI cycle ★ Main / Ça me va / Si besoin) : les tiers
+  // sont absolus, avec trous permis. Un job seul coché en tier 2 dépassait
+  // la taille de la liste dans la formule de satisfaction → moyenne < 0%.
+  const players = [{ name: 'A', preferences: ['NIN'], prefTiers: [2] }];
+  const r = computeOptimalAssignment({
+    players, slots: [{ roles: ['melee'] }], fairnessWeight: 50
+  });
+  assert.equal(r.results[0].assigned, true);
+  assert.equal(r.results[0].prefRank, 2);
+  assert.ok(r.stats.satisfaction >= 0, `satisfaction=${r.stats.satisfaction} doit être ≥ 0`);
+});
+
 // ---------- fill-first : un slot compatible libre n'est jamais laissé vide ----------
 
 test('fill-first : un joueur sans aucune pref est assigné (forcé) plutôt que benché, à tout fairness', () => {
