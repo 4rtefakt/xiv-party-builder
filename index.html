@@ -4869,9 +4869,11 @@ function movePlayerToIndex(sourceId, targetId, position) {
   scheduleLiveCompute();
 }
 
-function movePlayerByNameToOther(sourceName, targetName, position) {
-  const source = state.players.find(p => p.name.trim() === sourceName);
-  const target = state.players.find(p => p.name.trim() === targetName);
+// sourceRef / targetRef : { name, rowId? } — le rowId (quand présent) évite
+// les ambiguïtés d'homonymes.
+function movePlayerByNameToOther(sourceRef, targetRef, position) {
+  const source = findPlayerForResult(sourceRef);
+  const target = findPlayerForResult(targetRef);
   if (!source || !target || source.id === target.id) return;
   movePlayerToIndex(source.id, target.id, position);
 }
@@ -4927,7 +4929,7 @@ function attachResultDragHandlers(card, r) {
   const handle = card.querySelector('.drag-handle');
   if (handle) {
     handle.addEventListener('dragstart', e => {
-      dragState = { kind: 'result', name: r.name, role: card.dataset.resultRole };
+      dragState = { kind: 'result', name: r.name, rowId: r.rowId || null, role: card.dataset.resultRole };
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', r.name);
       e.dataTransfer.setDragImage(card, 20, 20);
@@ -4962,14 +4964,27 @@ function attachResultDragHandlers(card, r) {
     const rect = card.getBoundingClientRect();
     const above = e.clientY < rect.top + rect.height / 2;
     card.classList.remove('drop-above', 'drop-below');
-    movePlayerByNameToOther(dragState.name, r.name, above ? 'before' : 'after');
+    movePlayerByNameToOther({ name: dragState.name, rowId: dragState.rowId }, r, above ? 'before' : 'after');
   });
 }
 
-function moveResultPlayer(playerName, direction) {
+// Retrouve le player du state correspondant à un result du solver.
+// Priorité au rowId (stable et unique) ; fallback sur le nom trimé pour les
+// results sans rowId — le match par nom seul se trompait de ligne en cas
+// d'homonymes (lock/réordonnancement appliqués au premier "Alice" trouvé).
+function findPlayerForResult(r) {
+  if (!r) return undefined;
+  if (r.rowId) {
+    const byRow = state.players.find(p => p.rowId === r.rowId);
+    if (byRow) return byRow;
+  }
+  return state.players.find(p => p.name.trim() === r.name);
+}
+
+function moveResultPlayer(playerName, direction, rowId) {
   const sol = currentSolutions && currentSolutions[currentAlternativeIndex] || (currentSolutions && currentSolutions[0]);
   if (!sol) return;
-  const me = sol.results.find(r => r.name === playerName);
+  const me = sol.results.find(r => rowId ? r.rowId === rowId : r.name === playerName);
   if (!me || !me.assigned) return;
   // Tank/Heal : groupes stricts ; DPS (mélée + ranged + caster) : un seul groupe permutable
   const groupOf = (role) => (role === 'tank' || role === 'heal') ? role : 'dps';
@@ -4978,13 +4993,12 @@ function moveResultPlayer(playerName, direction) {
     if (!r.assigned) return false;
     return groupOf(r.role) === myGroup;
   });
-  const idx = sameRow.findIndex(r => r.name === playerName);
+  const idx = sameRow.indexOf(me);
   const newIdx = idx + direction;
   if (newIdx < 0 || newIdx >= sameRow.length) return;
-  const otherName = sameRow[newIdx].name;
-  const p1 = state.players.find(p => p.name.trim() === playerName);
-  const p2 = state.players.find(p => p.name.trim() === otherName);
-  if (!p1 || !p2) return;
+  const p1 = findPlayerForResult(me);
+  const p2 = findPlayerForResult(sameRow[newIdx]);
+  if (!p1 || !p2 || p1 === p2) return;
   const i1 = state.players.indexOf(p1);
   const i2 = state.players.indexOf(p2);
   [state.players[i1], state.players[i2]] = [state.players[i2], state.players[i1]];
@@ -5329,7 +5343,8 @@ function buildAssignmentCard(r, resultsCtx) {
       JOB_BY_ID[id] && !(state.bannedJobs || []).includes(id)
     );
     const canPick = pickablePrefs.length > 0;
-    const pickAttr = canPick ? `data-job-pick-name="${escapeHtml(r.name)}"` : '';
+    const rowAttr = r.rowId ? ` data-row-id="${escapeHtml(r.rowId)}"` : '';
+    const pickAttr = canPick ? `data-job-pick-name="${escapeHtml(r.name)}"${rowAttr}` : '';
     const pickTitle = canPick ? t('jp_triggerTitle', { name: r.name }) : '';
     const iconTag = canPick
       ? `<button type="button" class="assignment-job-icon" ${pickAttr} title="${escapeHtml(pickTitle)}">
@@ -5342,7 +5357,7 @@ function buildAssignmentCard(r, resultsCtx) {
       ? `<button type="button" class="assigned-job" ${pickAttr} title="${escapeHtml(pickTitle)}">${escapeHtml(r.jobId)}</button>`
       : `<div class="assigned-job" title="${escapeHtml(r.jobName)}">${escapeHtml(r.jobId)}</div>`;
     card.innerHTML = `
-      <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
+      <button class="lock-toggle" data-name="${escapeHtml(r.name)}"${rowAttr} data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
       <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
       <div class="assignment-left">
         ${iconTag}
@@ -5355,8 +5370,8 @@ function buildAssignmentCard(r, resultsCtx) {
         ${jobIdTag}
       </div>
       <div class="reorder-controls" style="margin-left:6px;">
-        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
-        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
       </div>
     `;
     attachResultDragHandlers(card, r);
@@ -5501,7 +5516,7 @@ function renderSolution(sol) {
     bindRoleBonusBadges(actionsEl);
     document.getElementById('lockAllBtn').addEventListener('click', () => {
       assignedResults.forEach(r => {
-        const player = state.players.find(p => p.name.trim() === r.name);
+        const player = findPlayerForResult(r);
         if (player) player.lockedJob = r.jobId;
       });
       scheduleLiveCompute();
@@ -5559,7 +5574,6 @@ function renderRaid24Result() {
 
   // Pas d'alternatives pour raid24 (multiplie les combinaisons à l'infini)
   tabs.innerHTML = '';
-  currentSolutions = null;
 
   // Optimisation par alliance
   const allianceResults = [];
@@ -5589,6 +5603,16 @@ function renderRaid24Result() {
     }
     allianceBonuses.push(sol.stats.roleBonusPercent || 0);
   }
+
+  // Solution "synthétique" pour les contrôles des cartes (boutons ↑↓ via
+  // moveResultPlayer) : concat des results des 3 alliances en ordre roster.
+  // Avant : currentSolutions = null → les flèches de réordonnancement
+  // étaient inertes en raid24, alors qu'elles sont le seul fallback tactile
+  // (le drag & drop est masqué sur touch).
+  currentSolutions = [{
+    results: allianceResults.flatMap(r => r.error ? [] : r.solutions[0].results)
+  }];
+  currentAlternativeIndex = 0;
 
   const validAlliances = allianceResults.filter(r => !r.error).length;
   const avgSat = validAlliances > 0 ? Math.round(totalSatSum / validAlliances) : 0;
@@ -5652,7 +5676,7 @@ function renderRaid24Result() {
     bindRoleBonusBadges(actionsEl);
     document.getElementById('lockAllBtn').addEventListener('click', () => {
       allAssigned.forEach(r => {
-        const player = state.players.find(p => p.name.trim() === r.name);
+        const player = findPlayerForResult(r);
         if (player) player.lockedJob = r.jobId;
       });
       scheduleLiveCompute();
@@ -7496,7 +7520,15 @@ function snapshotState(label) {
     fairnessWeight: state.fairnessWeight,
     claimLimit: state.claimLimit,
     // raidSlots : deep clone (chaque slot est { day, hour, duration } plat)
-    raidSlots: Array.isArray(state.raidSlots) ? state.raidSlots.map(s => ({ ...s })) : []
+    raidSlots: Array.isArray(state.raidSlots) ? state.raidSlots.map(s => ({ ...s })) : [],
+    // Binding au salon : sans lui, annuler un reset (qui fait exitRoomMode)
+    // restaurait le roster mais PAS le salon — l'autosave de l'undo créait
+    // alors silencieusement un NOUVEAU salon, détachant l'utilisateur de
+    // celui que son groupe utilise encore.
+    roomId: currentRoomId,
+    isAdmin: state.isAdmin,
+    ownerId: state.ownerId,
+    admins: Array.isArray(state.admins) ? state.admins.slice() : []
   };
   undoStack.push(snap);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -7524,6 +7556,15 @@ function performUndo() {
   if (whenInput) whenInput.value = state.raidWhen;
   const slider = document.getElementById('balanceSlider');
   if (slider) slider.value = state.fairnessWeight;
+  // Re-binding au salon du snapshot si on l'a quitté entre-temps (cas
+  // reset → undo). On ne change PAS de salon si l'utilisateur en a rejoint
+  // un autre depuis — l'undo ne doit restaurer que ce qui a été perdu.
+  if (snap.roomId && !currentRoomId) {
+    state.isAdmin = snap.isAdmin;
+    state.ownerId = snap.ownerId;
+    state.admins = Array.isArray(snap.admins) ? snap.admins.slice() : [];
+    enterRoomMode(snap.roomId);
+  }
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
   scheduleAutoSave(100);
@@ -8185,6 +8226,7 @@ function closeJobPicker() {
   el.setAttribute('aria-hidden', 'true');
   el.innerHTML = '';
   delete el.dataset.openFor;
+  delete el.dataset.openForRow;
 }
 
 function positionJobPicker(triggerEl) {
@@ -8212,8 +8254,8 @@ function positionJobPicker(triggerEl) {
   el.style.top = top + 'px';
 }
 
-function openJobPicker(triggerEl, playerName) {
-  const player = state.players.find(p => p.name.trim() === playerName);
+function openJobPicker(triggerEl, playerName, rowId) {
+  const player = findPlayerForResult({ rowId, name: playerName });
   if (!player) return;
   const currentJobId = triggerEl.closest('.assignment')?.querySelector('.lock-toggle')?.dataset.job || null;
   // Préférences pickables (filtrées des bans, et qui existent toujours dans JOB_BY_ID)
@@ -8264,6 +8306,8 @@ function openJobPicker(triggerEl, playerName) {
     </div>
   `;
   el.dataset.openFor = playerName;
+  if (player.rowId) el.dataset.openForRow = player.rowId;
+  else delete el.dataset.openForRow;
   el.setAttribute('aria-hidden', 'false');
   positionJobPicker(triggerEl);
 }
@@ -8305,8 +8349,8 @@ document.getElementById('jobPicker').addEventListener('click', e => {
   const item = e.target.closest('[data-job-pick-id]');
   if (!item) return;
   const newJobId = item.dataset.jobPickId;
-  const playerName = jobPickerEl().dataset.openFor;
-  const player = state.players.find(p => p.name.trim() === playerName);
+  const pickerEl = jobPickerEl();
+  const player = findPlayerForResult({ rowId: pickerEl.dataset.openForRow, name: pickerEl.dataset.openFor });
   if (!player) { closeJobPicker(); return; }
   // Job identique → no-op (mais on ferme le popover pour cohérence visuelle)
   if (player.lockedJob === newJobId || (!player.lockedJob && item.classList.contains('current'))) {
@@ -8324,9 +8368,8 @@ document.getElementById('jobPicker').addEventListener('click', e => {
 document.getElementById('assignmentGrid').addEventListener('click', e => {
   const lockBtn = e.target.closest('.lock-toggle');
   if (lockBtn) {
-    const name = lockBtn.dataset.name;
     const jobId = lockBtn.dataset.job;
-    const player = state.players.find(p => p.name.trim() === name);
+    const player = findPlayerForResult({ rowId: lockBtn.dataset.rowId, name: lockBtn.dataset.name });
     if (!player) return;
     player.lockedJob = (player.lockedJob === jobId) ? null : jobId;
     scheduleLiveCompute();
@@ -8335,14 +8378,14 @@ document.getElementById('assignmentGrid').addEventListener('click', e => {
   const pickTrigger = e.target.closest('[data-job-pick-name]');
   if (pickTrigger) {
     e.stopPropagation();
-    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName);
+    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName, pickTrigger.dataset.rowId);
     return;
   }
   const reorderBtn = e.target.closest('[data-reorder-name]');
   if (reorderBtn && !reorderBtn.disabled) {
     const name = reorderBtn.dataset.reorderName;
     const dir = parseInt(reorderBtn.dataset.reorderDir, 10);
-    moveResultPlayer(name, dir);
+    moveResultPlayer(name, dir, reorderBtn.dataset.rowId);
   }
 });
 
@@ -8351,7 +8394,7 @@ document.getElementById('benchCards')?.addEventListener('click', e => {
   const pickTrigger = e.target.closest('[data-job-pick-name]');
   if (pickTrigger) {
     e.stopPropagation();
-    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName);
+    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName, pickTrigger.dataset.rowId);
   }
 });
 
