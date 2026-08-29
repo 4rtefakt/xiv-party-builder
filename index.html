@@ -7337,7 +7337,13 @@ function clearTitleFlash() {
   document.title = _ORIGINAL_TITLE;
 }
 
-function applyImportedState(imported) {
+// opts.local = true pour un snapshot base64 autoporté (import modal / lien
+// long) : pas de notion de permissions serveur → on (re)devient admin local.
+// Sans ce flag, validateImportedPayload renvoie toujours ownerId:null /
+// admins:[] / isAdmin:false, et un import base64 dégradait silencieusement
+// la session en non-admin (lignes claimées readonly, drag désactivé,
+// contrôles admin masqués) jusqu'au prochain save serveur réussi.
+function applyImportedState(imported, opts = {}) {
   state.contentType = imported.contentType;
   // dpsMode est figé à 'unified' désormais — on ignore la valeur importée
   state.dpsMode = 'unified';
@@ -7350,11 +7356,17 @@ function applyImportedState(imported) {
   // Raid slots : vide par défaut si le payload n'en contient pas
   state.raidSlots = Array.isArray(imported.raidSlots) ? imported.raidSlots.slice() : [];
   state.players = imported.players;
-  // Permissions : si l'import vient du serveur on a ces champs ; sinon (base64
-  // local) on reste en mode "admin local"
-  if (imported.ownerId !== undefined) state.ownerId = imported.ownerId || null;
-  if (Array.isArray(imported.admins)) state.admins = imported.admins.slice();
-  if (typeof imported.isAdmin === 'boolean') state.isAdmin = imported.isAdmin;
+  // Permissions : réponse serveur = source de vérité ; base64 local = mode
+  // "admin local" (cf. opts.local ci-dessus).
+  if (opts.local) {
+    state.ownerId = null;
+    state.admins = [];
+    state.isAdmin = true;
+  } else {
+    if (imported.ownerId !== undefined) state.ownerId = imported.ownerId || null;
+    if (Array.isArray(imported.admins)) state.admins = imported.admins.slice();
+    if (typeof imported.isAdmin === 'boolean') state.isAdmin = imported.isAdmin;
+  }
   // Mettre à jour le slider visuellement
   const slider = document.getElementById('balanceSlider');
   if (slider) slider.value = state.fairnessWeight;
@@ -8001,15 +8013,31 @@ document.getElementById('copyCodeBtn').addEventListener('click', async () => {
 async function buildDiscordText() {
   const { buildMarkdown } = await loadDiscordLib();
   const ct = CONTENT_BASE[state.contentType];
-  return buildMarkdown({
+  const common = {
     contentLabel: ct ? ct.label : state.contentType,
     raidWhen: state.raidWhen.trim(),
     players: state.players,
     bannedJobs: state.bannedJobs,
     link: window.location.href,
-    result: computeOptimalAssignment(),
     t
-  });
+  };
+  // Raid24/chaotic : compo PAR alliance, comme à l'écran et comme le webhook
+  // (buildDiscordFields). L'ancien appel global écrasait 24 joueur·euses sur
+  // les 8 slots d'une seule alliance et listait ~16 personnes au banc.
+  if (isRaid24()) {
+    const alliances = [];
+    for (let a = 0; a < 3; a++) {
+      const slice = state.players.slice(a * ALLIANCE_SIZE, (a + 1) * ALLIANCE_SIZE);
+      const result = computeOptimalAssignment({ topK: 1, playersOverride: slice });
+      if (result.error) continue;
+      alliances.push({
+        name: t('al_title', { name: ALLIANCE_NAMES[a] }),
+        results: result.solutions[0].results
+      });
+    }
+    return buildMarkdown({ ...common, alliances });
+  }
+  return buildMarkdown({ ...common, result: computeOptimalAssignment() });
 }
 
 document.getElementById('copyDiscordBtn').addEventListener('click', async () => {
@@ -8053,7 +8081,7 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
     const imported = isShortIdImport
       ? await fetchPayloadById(code)
       : decodeState(code);
-    applyImportedState(imported);
+    applyImportedState(imported, { local: !isShortIdImport });
     if (isShortIdImport) {
       enterRoomMode(code);
       lastSavedAt = Date.now();
@@ -8370,7 +8398,7 @@ document.addEventListener('keydown', e => {
       const imported = isShortId
         ? await fetchPayloadById(code)
         : decodeState(code);
-      applyImportedState(imported);
+      applyImportedState(imported, { local: !isShortId });
       suppressAutoSave = false;
       if (isShortId) {
         enterRoomMode(code);
