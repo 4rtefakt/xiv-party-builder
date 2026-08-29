@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SCORING, jobScoreForPlayer, benchScore, buildSlots, buildSlotsFromComp,
-  computeOptimalAssignment, getPrefTier
+  computeOptimalAssignment, getPrefTier, bucketizePrefTiers
 } from '../lib/scoring.js';
 import { CONTENT_COMP } from '../lib/jobs.js';
 
@@ -445,6 +445,41 @@ test('prefTiers : les stats comptent le TIER, pas l\'index brut (tied-first = 1e
   assert.equal(r.stats.firstChoices, 1);
   assert.equal(r.stats.worstRank, 0);
   assert.equal(r.stats.satisfaction, 100);
+});
+
+// ---------- bucketizePrefTiers : migration rangs legacy → buckets ----------
+
+test('bucketizePrefTiers : 4 picks legacy → 1 Main / 2 Ça me va / 1 Si besoin', () => {
+  // pt absent (encodePayload omet l'ordre strict) = cas legacy typique
+  const out = bucketizePrefTiers(['NIN', 'VPR', 'SAM', 'DRG'], []);
+  assert.deepEqual(out, [0, 1, 1, 2]);
+});
+
+test('bucketizePrefTiers : 8 picks legacy → 3 Main / 3 Ça me va / 2 Si besoin', () => {
+  const prefs = ['NIN', 'VPR', 'SAM', 'DRG', 'MNK', 'RPR', 'BRD', 'BLM'];
+  const out = bucketizePrefTiers(prefs, prefs.map((_, i) => i));
+  assert.deepEqual(out, [0, 0, 0, 1, 1, 1, 2, 2]);
+});
+
+test('bucketizePrefTiers : déjà en buckets (max ≤ 2) → inchangé, y compris trous et égalités', () => {
+  assert.deepEqual(bucketizePrefTiers(['NIN', 'VPR', 'BLM'], [0, 0, 2]), [0, 0, 2]);
+  assert.deepEqual(bucketizePrefTiers(['NIN', 'VPR', 'BLM'], []), [0, 1, 2], '≤ 3 picks stricts = buckets valides');
+  assert.deepEqual(bucketizePrefTiers([], []), []);
+});
+
+test('bucketizePrefTiers : les égalités legacy restent égales après conversion', () => {
+  // [0,1,1,1,3] (5 entrées, max 3 → legacy). Le groupe tier 1 reste soudé :
+  // il prend le bucket de sa première position (pos 1 < quota Main de 2 →
+  // tout le groupe devient Main), même si ça déborde du quota.
+  const out = bucketizePrefTiers(['A', 'B', 'C', 'D', 'E'], [0, 1, 1, 1, 3]);
+  assert.deepEqual(out, [0, 0, 0, 0, 2]);
+  assert.equal(new Set([out[1], out[2], out[3]]).size, 1, 'le groupe à égalité garde un bucket commun');
+});
+
+test('bucketizePrefTiers : idempotent (convertir deux fois = convertir une fois)', () => {
+  const prefs = ['NIN', 'VPR', 'SAM', 'DRG', 'MNK', 'RPR', 'BRD'];
+  const once = bucketizePrefTiers(prefs, prefs.map((_, i) => i));
+  assert.deepEqual(bucketizePrefTiers(prefs, once), once);
 });
 
 test('prefTiers buckets : un seul job en tier 2 → satisfaction clampée à 0, jamais négative', () => {

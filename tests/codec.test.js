@@ -113,12 +113,28 @@ test('validateImportedPayload : presence invalide → fallback "in"', () => {
   assert.equal(r.players[0].presence, 'in');
 });
 
-test('validateImportedPayload : prefTiers mal formé (mauvaise longueur) → ignoré', () => {
+test('validateImportedPayload : prefTiers mal formé (mauvaise longueur) → ignoré, fallback ordre strict', () => {
   const r = validateImportedPayload({
     c: 'raid8', d: 'unified',
     p: [{ n: 'X', j: ['PLD', 'WAR'], pt: [0] }]  // 2 prefs, 1 tier
   });
-  assert.deepEqual(r.players[0].prefTiers, [], 'tier silencieusement ignoré');
+  // Le pt mal formé est ignoré ; bucketizePrefTiers matérialise le fallback
+  // ordre strict en tiers explicites (≤ 3 picks = déjà des buckets valides).
+  assert.deepEqual(r.players[0].prefTiers, [0, 1], 'tier mal formé ignoré → ordre strict');
+});
+
+test('validateImportedPayload : rangs legacy (4+ picks, pt absent) convertis en buckets', () => {
+  const r = validateImportedPayload({
+    c: 'raid8', d: 'unified',
+    p: [
+      { n: 'Legacy8', j: ['NIN', 'VPR', 'SAM', 'DRG', 'MNK', 'RPR', 'BRD', 'BLM'] },
+      { n: 'Legacy4', j: ['PLD', 'WAR', 'DRK', 'GNB'], pt: [0, 1, 2, 3] },
+      { n: 'New',     j: ['WHM', 'SGE'], pt: [0, 0] }  // buckets déjà → intact
+    ]
+  });
+  assert.deepEqual(r.players[0].prefTiers, [0, 0, 0, 1, 1, 1, 2, 2]);
+  assert.deepEqual(r.players[1].prefTiers, [0, 1, 1, 2]);
+  assert.deepEqual(r.players[2].prefTiers, [0, 0], 'les données déjà en buckets ne bougent pas');
 });
 
 test('validateImportedPayload : prefTiers valides sont préservés', () => {

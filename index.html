@@ -3228,7 +3228,7 @@ import { JOBS, JOB_BY_ID, JOBS_BY_ROLE, CONTENT_COMP } from './lib/jobs.js';
 import {
   SCORING, jobScoreForPlayer, benchScore, buildSlots,
   computeOptimalAssignment as _computeOptimalAssignment,
-  buildResultFromAssignment, getPrefTier
+  buildResultFromAssignment, getPrefTier, MAX_PREF_TIER
 } from './lib/scoring.js';
 import {
   getRoleRequirements as _getRoleRequirements,
@@ -4219,11 +4219,11 @@ const makePlayer = (name = '') => ({
 // Buckets de préférence : tiers ABSOLUS 0/1/2 (★ Main / Ça me va / Si
 // besoin), cyclés au clic sur l'icône de job. On ne "normalise" plus les
 // tiers en rangs consécutifs : un trou est volontaire (ex: retirer son seul
-// Main ne promeut pas les "Si besoin" en Main). Les vieux salons peuvent
-// porter des tiers > 2 (ancien modèle ordre-de-clic) : affichés tels quels,
-// un clic les retire, et ils convergent vers les buckets à mesure qu'on
-// retouche ses prefs.
-const MAX_PREF_TIER = 2;
+// Main ne promeut pas les "Si besoin" en Main). Les rangs legacy (ancien
+// modèle ordre-de-clic, tiers possiblement > 2) sont convertis en buckets
+// dès l'import par validateImportedPayload → bucketizePrefTiers (lib) —
+// le state en mémoire ne contient donc jamais de tier > MAX_PREF_TIER,
+// mais l'UI reste défensive au cas où. MAX_PREF_TIER : cf. lib/scoring.js.
 
 // L'utilisateur peut ajouter/retirer librement après. Mais quand il change de contenu,
 // on n'écrase PAS son roster — on prévient juste s'il y a sous/sur-effectif.
