@@ -2597,6 +2597,9 @@
     align-items: center;
     margin: -0.5rem 0 1.5rem 0;
   }
+  /* display:flex explicite bat la règle UA [hidden] (même gotcha que
+     .btn-tool[hidden]) — sans ça, bar.hidden = true ne cache rien. */
+  .recent-rooms-bar[hidden] { display: none; }
   .recent-rooms-label {
     font-size: 0.7rem;
     letter-spacing: 0.12em;
@@ -3423,6 +3426,8 @@ const STRINGS = {
     al_expandHint: 'Cliquer pour déplier',
     al_emptyHint: '—',
     al_summary: ({ filled, total }) => `${filled} / ${total}`,
+    al_reserve: 'Réserve (hors alliances)',
+    ts_playerLimit: ({ max }) => `Maximum ${max} lignes par salon`,
     // — Toolbar
     t_share: 'Partager',
     t_import: 'Importer',
@@ -3562,6 +3567,14 @@ const STRINGS = {
     sg_gapDetail: ({ gapText }) => `Il nous manque principalement ${gapText} dans les préférences.`,
     sg_gapJoinOr: ' ou ',
     sg_gapJoinComma: ', ',
+    // Libellés de rôle pour les manques ("il nous manque N …")
+    gap_tank: ({ n }) => n > 1 ? 'tanks' : 'tank',
+    gap_heal: ({ n }) => n > 1 ? 'healers' : 'healer',
+    gap_melee: 'DPS mêlée',
+    gap_ranged: 'DPS distance physique',
+    gap_caster: ({ n }) => n > 1 ? 'casters' : 'caster',
+    gap_distance: 'DPS distance',
+    gap_flex_dps: 'DPS',
     // — Results
     res_live: 'Live',
     res_computing: 'Calcul...',
@@ -3583,6 +3596,7 @@ const STRINGS = {
     role_caster: 'caster',
     res_worstRank: 'Pire rang',
     res_forced: 'Forcé',
+    res_forcedBadge: 'Hors prefs',
     res_stratRoleTitle: ({ role }) => `Rôle strat : ${role} (référence dans les guides de stratégie)`,
     res_slots: 'Slots',
     res_bench: 'Banc',
@@ -3654,6 +3668,7 @@ const STRINGS = {
     dc_refresh: '↻ Forcer le refresh Discord',
     dc_refreshTitle: "Copie un lien avec un paramètre frais — Discord verra une 'nouvelle' page et refera son embed (utile après une refonte visuelle de l'OG image)",
     dc_refreshCopied: 'Lien copié — colle-le dans Discord pour forcer le refresh',
+    dc_playerCount: ({ n }) => `${n} joueur·euse${n > 1 ? '·s' : ''}`,
     dc_promptUrl: 'URL du webhook Discord :\n\nCrée-le dans : Paramètres du canal > Intégrations > Webhooks > Nouveau webhook > Copier l\'URL.\nIl reste stocké uniquement dans ton navigateur.',
     dc_invalidUrl: 'URL de webhook invalide',
     dc_published: 'Publié sur Discord ✓',
@@ -3760,6 +3775,8 @@ const STRINGS = {
     al_expandHint: 'Click to expand',
     al_emptyHint: '—',
     al_summary: ({ filled, total }) => `${filled} / ${total}`,
+    al_reserve: 'Reserve (outside alliances)',
+    ts_playerLimit: ({ max }) => `Maximum ${max} rows per room`,
     t_share: 'Share',
     t_import: 'Import',
     t_reset: 'Reset',
@@ -3892,6 +3909,13 @@ const STRINGS = {
     sg_gapDetail: ({ gapText }) => `We mainly need ${gapText} in the preferences.`,
     sg_gapJoinOr: ' or ',
     sg_gapJoinComma: ', ',
+    gap_tank: ({ n }) => n > 1 ? 'tanks' : 'tank',
+    gap_heal: ({ n }) => n > 1 ? 'healers' : 'healer',
+    gap_melee: 'melee DPS',
+    gap_ranged: 'physical ranged DPS',
+    gap_caster: ({ n }) => n > 1 ? 'casters' : 'caster',
+    gap_distance: 'ranged DPS',
+    gap_flex_dps: 'DPS',
     res_live: 'Live',
     res_computing: 'Computing...',
     res_idle: 'Idle',
@@ -3912,6 +3936,7 @@ const STRINGS = {
     role_caster: 'caster',
     res_worstRank: 'Worst rank',
     res_forced: 'Forced',
+    res_forcedBadge: 'Off-prefs',
     res_stratRoleTitle: ({ role }) => `Strat role: ${role} (used in raid guides)`,
     res_slots: 'Slots',
     res_bench: 'Bench',
@@ -3979,6 +4004,7 @@ const STRINGS = {
     dc_refresh: '↻ Force Discord refresh',
     dc_refreshTitle: "Copies a link with a fresh query param — Discord sees a 'new' page and rebuilds the embed (useful after a visual OG redesign)",
     dc_refreshCopied: 'Link copied — paste in Discord to force a refresh',
+    dc_playerCount: ({ n }) => `${n} player${n > 1 ? 's' : ''}`,
     dc_promptUrl: 'Discord webhook URL:\n\nCreate one in: Channel Settings > Integrations > Webhooks > New webhook > Copy URL.\nStored only in your browser.',
     dc_invalidUrl: 'Invalid webhook URL',
     dc_published: 'Published to Discord ✓',
@@ -4078,6 +4104,9 @@ const CONTENT_BASE = Object.fromEntries(
 );
 const ALLIANCE_NAMES = ['A', 'B', 'C'];
 const ALLIANCE_SIZE = 8;
+// Doit matcher MAX_PLAYERS de functions/api/save.js : au-delà, le serveur
+// rejette le payload entier (400) et le salon ne persiste plus.
+const MAX_PLAYERS = 32;
 function isRaid24() {
   // Tous les contenus structurés en 3 alliances de 8 (raid24 normal + chaotic).
   // Renommer la fonction serait moins chirurgical : ses callers veulent
@@ -4361,6 +4390,7 @@ function buildPlayerRow(player, idx) {
       unclaimBtn.addEventListener('click', () => {
         player.claimedBy = null;
         renderPlayers();
+        renderRosterInfo(); // compteur de claims + visibilité du bouton Ajouter
         renderSuggestions();
         scheduleAutoSave(150);
       });
@@ -4379,6 +4409,7 @@ function buildPlayerRow(player, idx) {
       player.presence = PRESENCE_VALUES[(cur + 1) % PRESENCE_VALUES.length];
       renderPlayers();
       renderSuggestions();
+      renderAvailHeatmap(); // un 'out' sort du décompte des dispos
       scheduleLiveCompute();
     });
     row.appendChild(presenceEl);
@@ -4676,6 +4707,7 @@ function buildPlayerRow(player, idx) {
       renderPlayers();
       renderRosterInfo();
       renderSuggestions();
+      renderAvailHeatmap(); // ses dispos sortent de la grille
       scheduleLiveCompute();
       showToast(t('undo_remove', { name: removedName }), {
         action: { label: t('undo_btn'), onClick: performUndo },
@@ -4769,6 +4801,31 @@ function renderPlayers() {
 
     list.appendChild(block);
   }
+
+  // Lignes au-delà des 3 alliances (index ≥ 24) : rendues dans un bloc
+  // "Réserve" pour rester visibles / éditables / supprimables. Avant, une
+  // 25e ligne existait dans le state (comptée "25/24") mais n'apparaissait
+  // nulle part — impossible à retrouver sans changer de type de contenu.
+  const overflow = state.players.slice(3 * ALLIANCE_SIZE);
+  if (overflow.length > 0) {
+    const block = document.createElement('div');
+    block.className = 'alliance-block';
+    const header = document.createElement('div');
+    header.className = 'alliance-header';
+    const title = document.createElement('span');
+    title.className = 'alliance-title';
+    title.textContent = t('al_reserve');
+    header.appendChild(title);
+    block.appendChild(header);
+    const body = document.createElement('div');
+    body.className = 'alliance-body';
+    overflow.forEach((player, i) => {
+      if (!player) return;
+      body.appendChild(buildPlayerRow(player, 3 * ALLIANCE_SIZE + i));
+    });
+    block.appendChild(body);
+    list.appendChild(block);
+  }
 }
 
 function movePlayerInRoster(playerId, direction) {
@@ -4812,9 +4869,11 @@ function movePlayerToIndex(sourceId, targetId, position) {
   scheduleLiveCompute();
 }
 
-function movePlayerByNameToOther(sourceName, targetName, position) {
-  const source = state.players.find(p => p.name.trim() === sourceName);
-  const target = state.players.find(p => p.name.trim() === targetName);
+// sourceRef / targetRef : { name, rowId? } — le rowId (quand présent) évite
+// les ambiguïtés d'homonymes.
+function movePlayerByNameToOther(sourceRef, targetRef, position) {
+  const source = findPlayerForResult(sourceRef);
+  const target = findPlayerForResult(targetRef);
   if (!source || !target || source.id === target.id) return;
   movePlayerToIndex(source.id, target.id, position);
 }
@@ -4870,7 +4929,7 @@ function attachResultDragHandlers(card, r) {
   const handle = card.querySelector('.drag-handle');
   if (handle) {
     handle.addEventListener('dragstart', e => {
-      dragState = { kind: 'result', name: r.name, role: card.dataset.resultRole };
+      dragState = { kind: 'result', name: r.name, rowId: r.rowId || null, role: card.dataset.resultRole };
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', r.name);
       e.dataTransfer.setDragImage(card, 20, 20);
@@ -4905,14 +4964,27 @@ function attachResultDragHandlers(card, r) {
     const rect = card.getBoundingClientRect();
     const above = e.clientY < rect.top + rect.height / 2;
     card.classList.remove('drop-above', 'drop-below');
-    movePlayerByNameToOther(dragState.name, r.name, above ? 'before' : 'after');
+    movePlayerByNameToOther({ name: dragState.name, rowId: dragState.rowId }, r, above ? 'before' : 'after');
   });
 }
 
-function moveResultPlayer(playerName, direction) {
+// Retrouve le player du state correspondant à un result du solver.
+// Priorité au rowId (stable et unique) ; fallback sur le nom trimé pour les
+// results sans rowId — le match par nom seul se trompait de ligne en cas
+// d'homonymes (lock/réordonnancement appliqués au premier "Alice" trouvé).
+function findPlayerForResult(r) {
+  if (!r) return undefined;
+  if (r.rowId) {
+    const byRow = state.players.find(p => p.rowId === r.rowId);
+    if (byRow) return byRow;
+  }
+  return state.players.find(p => p.name.trim() === r.name);
+}
+
+function moveResultPlayer(playerName, direction, rowId) {
   const sol = currentSolutions && currentSolutions[currentAlternativeIndex] || (currentSolutions && currentSolutions[0]);
   if (!sol) return;
-  const me = sol.results.find(r => r.name === playerName);
+  const me = sol.results.find(r => rowId ? r.rowId === rowId : r.name === playerName);
   if (!me || !me.assigned) return;
   // Tank/Heal : groupes stricts ; DPS (mélée + ranged + caster) : un seul groupe permutable
   const groupOf = (role) => (role === 'tank' || role === 'heal') ? role : 'dps';
@@ -4921,13 +4993,12 @@ function moveResultPlayer(playerName, direction) {
     if (!r.assigned) return false;
     return groupOf(r.role) === myGroup;
   });
-  const idx = sameRow.findIndex(r => r.name === playerName);
+  const idx = sameRow.indexOf(me);
   const newIdx = idx + direction;
   if (newIdx < 0 || newIdx >= sameRow.length) return;
-  const otherName = sameRow[newIdx].name;
-  const p1 = state.players.find(p => p.name.trim() === playerName);
-  const p2 = state.players.find(p => p.name.trim() === otherName);
-  if (!p1 || !p2) return;
+  const p1 = findPlayerForResult(me);
+  const p2 = findPlayerForResult(sameRow[newIdx]);
+  if (!p1 || !p2 || p1 === p2) return;
   const i1 = state.players.indexOf(p1);
   const i2 = state.players.indexOf(p2);
   [state.players[i1], state.players[i2]] = [state.players[i2], state.players[i1]];
@@ -5187,10 +5258,10 @@ if (!window.__rbbClickOutsideBound) {
 function rankBadge(r) {
   // Renvoie le HTML du badge de rang avec coloration adéquate
   if (!r.assigned) {
-    return `<div class="rank-display rank-bench"><span class="rank-icon">⊘</span>Banc</div>`;
+    return `<div class="rank-display rank-bench"><span class="rank-icon">⊘</span>${escapeHtml(t('res_bench'))}</div>`;
   }
   if (r.forced) {
-    return `<div class="rank-display rank-forced"><span class="rank-icon">⚠</span>Hors prefs</div>`;
+    return `<div class="rank-display rank-forced"><span class="rank-icon">⚠</span>${escapeHtml(t('res_forcedBadge'))}</div>`;
   }
   const rank = r.prefRank + 1;
   let cls, icon;
@@ -5201,7 +5272,7 @@ function rankBadge(r) {
   const total = r.totalPrefs;
   return `<div class="rank-display ${cls}">
     <span class="rank-icon">${icon}</span>
-    <span class="rank-num">${rank}<sup style="font-size:0.7em;opacity:0.7">e</sup></span>
+    <span class="rank-num">${escapeHtml(t('res_nth', { n: rank }))}</span>
     <span style="opacity:0.6">/ ${total}</span>
   </div>`;
 }
@@ -5272,7 +5343,8 @@ function buildAssignmentCard(r, resultsCtx) {
       JOB_BY_ID[id] && !(state.bannedJobs || []).includes(id)
     );
     const canPick = pickablePrefs.length > 0;
-    const pickAttr = canPick ? `data-job-pick-name="${escapeHtml(r.name)}"` : '';
+    const rowAttr = r.rowId ? ` data-row-id="${escapeHtml(r.rowId)}"` : '';
+    const pickAttr = canPick ? `data-job-pick-name="${escapeHtml(r.name)}"${rowAttr}` : '';
     const pickTitle = canPick ? t('jp_triggerTitle', { name: r.name }) : '';
     const iconTag = canPick
       ? `<button type="button" class="assignment-job-icon" ${pickAttr} title="${escapeHtml(pickTitle)}">
@@ -5285,7 +5357,7 @@ function buildAssignmentCard(r, resultsCtx) {
       ? `<button type="button" class="assigned-job" ${pickAttr} title="${escapeHtml(pickTitle)}">${escapeHtml(r.jobId)}</button>`
       : `<div class="assigned-job" title="${escapeHtml(r.jobName)}">${escapeHtml(r.jobId)}</div>`;
     card.innerHTML = `
-      <button class="lock-toggle" data-name="${escapeHtml(r.name)}" data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
+      <button class="lock-toggle" data-name="${escapeHtml(r.name)}"${rowAttr} data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
       <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
       <div class="assignment-left">
         ${iconTag}
@@ -5298,8 +5370,8 @@ function buildAssignmentCard(r, resultsCtx) {
         ${jobIdTag}
       </div>
       <div class="reorder-controls" style="margin-left:6px;">
-        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
-        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}" data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
       </div>
     `;
     attachResultDragHandlers(card, r);
@@ -5444,7 +5516,7 @@ function renderSolution(sol) {
     bindRoleBonusBadges(actionsEl);
     document.getElementById('lockAllBtn').addEventListener('click', () => {
       assignedResults.forEach(r => {
-        const player = state.players.find(p => p.name.trim() === r.name);
+        const player = findPlayerForResult(r);
         if (player) player.lockedJob = r.jobId;
       });
       scheduleLiveCompute();
@@ -5502,7 +5574,6 @@ function renderRaid24Result() {
 
   // Pas d'alternatives pour raid24 (multiplie les combinaisons à l'infini)
   tabs.innerHTML = '';
-  currentSolutions = null;
 
   // Optimisation par alliance
   const allianceResults = [];
@@ -5532,6 +5603,16 @@ function renderRaid24Result() {
     }
     allianceBonuses.push(sol.stats.roleBonusPercent || 0);
   }
+
+  // Solution "synthétique" pour les contrôles des cartes (boutons ↑↓ via
+  // moveResultPlayer) : concat des results des 3 alliances en ordre roster.
+  // Avant : currentSolutions = null → les flèches de réordonnancement
+  // étaient inertes en raid24, alors qu'elles sont le seul fallback tactile
+  // (le drag & drop est masqué sur touch).
+  currentSolutions = [{
+    results: allianceResults.flatMap(r => r.error ? [] : r.solutions[0].results)
+  }];
+  currentAlternativeIndex = 0;
 
   const validAlliances = allianceResults.filter(r => !r.error).length;
   const avgSat = validAlliances > 0 ? Math.round(totalSatSum / validAlliances) : 0;
@@ -5595,7 +5676,7 @@ function renderRaid24Result() {
     bindRoleBonusBadges(actionsEl);
     document.getElementById('lockAllBtn').addEventListener('click', () => {
       allAssigned.forEach(r => {
-        const player = state.players.find(p => p.name.trim() === r.name);
+        const player = findPlayerForResult(r);
         if (player) player.lockedJob = r.jobId;
       });
       scheduleLiveCompute();
@@ -5761,19 +5842,9 @@ function analyzeCoverage() {
   return _analyzeCoverage(state.players, state.contentType, state.dpsMode, state.bannedJobs);
 }
 
-const ROLE_LABELS_FR = {
-  tank: { sing: 'tank', plur: 'tanks' },
-  heal: { sing: 'healer', plur: 'healers' },
-  melee: { sing: 'DPS mêlée', plur: 'DPS mêlée' },
-  ranged: { sing: 'DPS distance physique', plur: 'DPS distance physique' },
-  caster: { sing: 'caster', plur: 'casters' },
-  distance: { sing: 'DPS distance', plur: 'DPS distance' },
-  flex_dps: { sing: 'DPS', plur: 'DPS' }
-};
-
 function formatGap(gap) {
-  const label = gap.missing > 1 ? ROLE_LABELS_FR[gap.role].plur : ROLE_LABELS_FR[gap.role].sing;
-  return `<strong>${gap.missing} ${label}</strong>`;
+  // Libellés i18n gap_<role> (FR/EN), pluriel géré par la clé elle-même.
+  return `<strong>${gap.missing} ${t('gap_' + gap.role, { n: gap.missing })}</strong>`;
 }
 
 // Heals "pures" : WHM, AST (régen-based). Heals "shields" : SCH, SGE
@@ -6131,6 +6202,10 @@ function openPresetMenu(btn, player) {
         if (!canEditPlayer(player)) return;
         ensureClaim(player);
         player.preferences = preset.jobs.filter(id => validJobIds.has(id));
+        // Les presets ne stockent que les jobs (ordre strict) : on purge les
+        // anciens tiers, sinon quand les longueurs coïncident par hasard ils
+        // s'appliquent aux nouveaux jobs (co-favoris fantômes persistés).
+        player.prefTiers = [];
         closePresetMenu();
         renderPlayers();
         renderSuggestions();
@@ -6878,7 +6953,7 @@ function renderRecentRooms() {
   const bar = document.getElementById('recentRoomsBar');
   if (!bar) return;
   const arr = getRecentRooms();
-  bar.innerHTML = '<span class="recent-rooms-label">Salons récents</span>';
+  bar.innerHTML = `<span class="recent-rooms-label">${escapeHtml(t('s_recentRooms'))}</span>`;
   if (arr.length === 0) { bar.hidden = true; return; }
   bar.hidden = false;
   arr.forEach(r => {
@@ -7078,6 +7153,12 @@ async function handleLiveChange(msg) {
   // écraserait des modifs locales pas encore parties. Le serveur sera de
   // toutes façons notifié par notre save imminent.
   if (saving || pendingChanges) return;
+  // Même garde que syncRoom : ne pas rebuild le DOM pendant que l'utilisateur
+  // tape dans un input (perte de focus/caret). Le sync-on-focus rattrapera.
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) {
+    return;
+  }
   try {
     const imported = await fetchPayloadById(currentRoomId);
     suppressAutoSave = true;
@@ -7127,11 +7208,14 @@ function exitRoomMode() {
 function hasMeaningfulContent() {
   if (state.raidWhen && state.raidWhen.trim()) return true;
   if (state.bannedJobs && state.bannedJobs.length > 0) return true;
+  if (Array.isArray(state.raidSlots) && state.raidSlots.length > 0) return true;
   return state.players.some(p =>
     (p.name && p.name.trim()) ||
     (p.preferences && p.preferences.length > 0) ||
     (p.presence && p.presence !== 'in') ||
-    !!p.lockedJob
+    !!p.lockedJob ||
+    (p.note && p.note.trim()) ||
+    countAvailCells(p.availability) > 0
   );
 }
 
@@ -7141,12 +7225,16 @@ function hasMeaningfulContent() {
 // vol réseau du save, le flag se rebascule à true, ce qui pousse un nouveau
 // save à la fin de l'actuel.
 let pendingChanges = false;
+// Échecs consécutifs de saveRoom — pilote le backoff du retry. Reset à 0 dès
+// qu'un save passe.
+let saveFailures = 0;
 
 async function saveRoom() {
   if (saving) return;
   if (!currentRoomId && !hasMeaningfulContent()) return;
   saving = true;
   pendingChanges = false; // on capture l'état courant à cet instant
+  let saveOk = false;
   if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
   updateSyncStatus();
   try {
@@ -7159,6 +7247,7 @@ async function saveRoom() {
       body: JSON.stringify(body)
     });
     if (r.ok) {
+      saveOk = true;
       const data = await r.json().catch(() => null);
       if (!currentRoomId && data && typeof data.id === 'string') {
         enterRoomMode(data.id);
@@ -7183,13 +7272,25 @@ async function saveRoom() {
         suppressAutoSave = false;
       }
     }
-  } catch { /* silencieux */ }
+  } catch { /* silencieux : géré par le retry ci-dessous */ }
   saving = false;
+  if (saveOk) {
+    saveFailures = 0;
+  } else {
+    // Échec (réseau ou non-2xx) : l'état capturé n'a PAS été persisté. On
+    // rebascule pendingChanges à true pour (1) que handleLiveChange / syncRoom
+    // refusent d'écraser les modifs locales avec l'état remote périmé, et
+    // (2) déclencher un retry. Backoff exponentiel plafonné : évite de
+    // marteler un serveur en 429/500, tout en réessayant indéfiniment (une
+    // frappe de l'utilisateur relance de toute façon un scheduleAutoSave).
+    saveFailures++;
+    pendingChanges = true;
+  }
   updateSyncStatus();
-  // Si des modifs sont arrivées pendant ce vol réseau, on relance vite un save
-  // pour éviter que le serveur reste sur un état périmé.
+  // Si des modifs sont arrivées pendant ce vol réseau (ou que le save a
+  // échoué), on relance un save pour éviter que le serveur reste périmé.
   if (pendingChanges) {
-    scheduleAutoSave(200);
+    scheduleAutoSave(saveOk ? 200 : Math.min(30000, 2000 * Math.pow(2, saveFailures - 1)));
   }
 }
 
@@ -7310,7 +7411,13 @@ function clearTitleFlash() {
   document.title = _ORIGINAL_TITLE;
 }
 
-function applyImportedState(imported) {
+// opts.local = true pour un snapshot base64 autoporté (import modal / lien
+// long) : pas de notion de permissions serveur → on (re)devient admin local.
+// Sans ce flag, validateImportedPayload renvoie toujours ownerId:null /
+// admins:[] / isAdmin:false, et un import base64 dégradait silencieusement
+// la session en non-admin (lignes claimées readonly, drag désactivé,
+// contrôles admin masqués) jusqu'au prochain save serveur réussi.
+function applyImportedState(imported, opts = {}) {
   state.contentType = imported.contentType;
   // dpsMode est figé à 'unified' désormais — on ignore la valeur importée
   state.dpsMode = 'unified';
@@ -7323,11 +7430,17 @@ function applyImportedState(imported) {
   // Raid slots : vide par défaut si le payload n'en contient pas
   state.raidSlots = Array.isArray(imported.raidSlots) ? imported.raidSlots.slice() : [];
   state.players = imported.players;
-  // Permissions : si l'import vient du serveur on a ces champs ; sinon (base64
-  // local) on reste en mode "admin local"
-  if (imported.ownerId !== undefined) state.ownerId = imported.ownerId || null;
-  if (Array.isArray(imported.admins)) state.admins = imported.admins.slice();
-  if (typeof imported.isAdmin === 'boolean') state.isAdmin = imported.isAdmin;
+  // Permissions : réponse serveur = source de vérité ; base64 local = mode
+  // "admin local" (cf. opts.local ci-dessus).
+  if (opts.local) {
+    state.ownerId = null;
+    state.admins = [];
+    state.isAdmin = true;
+  } else {
+    if (imported.ownerId !== undefined) state.ownerId = imported.ownerId || null;
+    if (Array.isArray(imported.admins)) state.admins = imported.admins.slice();
+    if (typeof imported.isAdmin === 'boolean') state.isAdmin = imported.isAdmin;
+  }
   // Mettre à jour le slider visuellement
   const slider = document.getElementById('balanceSlider');
   if (slider) slider.value = state.fairnessWeight;
@@ -7407,7 +7520,15 @@ function snapshotState(label) {
     fairnessWeight: state.fairnessWeight,
     claimLimit: state.claimLimit,
     // raidSlots : deep clone (chaque slot est { day, hour, duration } plat)
-    raidSlots: Array.isArray(state.raidSlots) ? state.raidSlots.map(s => ({ ...s })) : []
+    raidSlots: Array.isArray(state.raidSlots) ? state.raidSlots.map(s => ({ ...s })) : [],
+    // Binding au salon : sans lui, annuler un reset (qui fait exitRoomMode)
+    // restaurait le roster mais PAS le salon — l'autosave de l'undo créait
+    // alors silencieusement un NOUVEAU salon, détachant l'utilisateur de
+    // celui que son groupe utilise encore.
+    roomId: currentRoomId,
+    isAdmin: state.isAdmin,
+    ownerId: state.ownerId,
+    admins: Array.isArray(state.admins) ? state.admins.slice() : []
   };
   undoStack.push(snap);
   if (undoStack.length > MAX_UNDO) undoStack.shift();
@@ -7435,6 +7556,15 @@ function performUndo() {
   if (whenInput) whenInput.value = state.raidWhen;
   const slider = document.getElementById('balanceSlider');
   if (slider) slider.value = state.fairnessWeight;
+  // Re-binding au salon du snapshot si on l'a quitté entre-temps (cas
+  // reset → undo). On ne change PAS de salon si l'utilisateur en a rejoint
+  // un autre depuis — l'undo ne doit restaurer que ce qui a été perdu.
+  if (snap.roomId && !currentRoomId) {
+    state.isAdmin = snap.isAdmin;
+    state.ownerId = snap.ownerId;
+    state.admins = Array.isArray(snap.admins) ? snap.admins.slice() : [];
+    enterRoomMode(snap.roomId);
+  }
   ensureRosterSize(CONTENT_BASE[state.contentType].size);
   renderAll();
   scheduleAutoSave(100);
@@ -7481,6 +7611,12 @@ document.getElementById('addPlayerBtn').addEventListener('click', () => {
   // Garde-fou : pour un·e non-admin déjà au max de claims, on n'ajoute pas
   // (le bouton est censé être hidden mais double-check).
   if (!state.isAdmin && currentRoomId && userAtClaimLimit()) return;
+  // Cap serveur : une 33e ligne ferait rejeter TOUS les saves suivants (400
+  // silencieux) — on bloque côté client avec un message clair.
+  if (state.players.length >= MAX_PLAYERS) {
+    showToast(t('ts_playerLimit', { max: MAX_PLAYERS }));
+    return;
+  }
   const p = makePlayer();
   // Auto-claim pour les non-admins : la nouvelle ligne leur appartient
   // direct, sinon elle ne sera pas acceptée côté serveur (le merge
@@ -7642,7 +7778,7 @@ async function buildDiscordPayload() {
     ? `${window.location.origin}${window.location.pathname}?p=${currentRoomId}`
     : window.location.href;
   const activePlayers = state.players.filter(p => p.name.trim() && (p.presence || 'in') !== 'out').length;
-  const description = `${ct ? ct.label : ''} · ${activePlayers} joueur${activePlayers > 1 ? 's' : ''}`;
+  const description = `${ct ? ct.label : ''} · ${t('dc_playerCount', { n: activePlayers })}`;
   // Cache-bust : Discord cache les images par URL exacte. On force une URL
   // unique pour qu'il re-fetch à chaque publication.
   const ogImageUrl = currentRoomId
@@ -7974,15 +8110,31 @@ document.getElementById('copyCodeBtn').addEventListener('click', async () => {
 async function buildDiscordText() {
   const { buildMarkdown } = await loadDiscordLib();
   const ct = CONTENT_BASE[state.contentType];
-  return buildMarkdown({
+  const common = {
     contentLabel: ct ? ct.label : state.contentType,
     raidWhen: state.raidWhen.trim(),
     players: state.players,
     bannedJobs: state.bannedJobs,
     link: window.location.href,
-    result: computeOptimalAssignment(),
     t
-  });
+  };
+  // Raid24/chaotic : compo PAR alliance, comme à l'écran et comme le webhook
+  // (buildDiscordFields). L'ancien appel global écrasait 24 joueur·euses sur
+  // les 8 slots d'une seule alliance et listait ~16 personnes au banc.
+  if (isRaid24()) {
+    const alliances = [];
+    for (let a = 0; a < 3; a++) {
+      const slice = state.players.slice(a * ALLIANCE_SIZE, (a + 1) * ALLIANCE_SIZE);
+      const result = computeOptimalAssignment({ topK: 1, playersOverride: slice });
+      if (result.error) continue;
+      alliances.push({
+        name: t('al_title', { name: ALLIANCE_NAMES[a] }),
+        results: result.solutions[0].results
+      });
+    }
+    return buildMarkdown({ ...common, alliances });
+  }
+  return buildMarkdown({ ...common, result: computeOptimalAssignment() });
 }
 
 document.getElementById('copyDiscordBtn').addEventListener('click', async () => {
@@ -8026,7 +8178,7 @@ document.getElementById('doImportBtn').addEventListener('click', async () => {
     const imported = isShortIdImport
       ? await fetchPayloadById(code)
       : decodeState(code);
-    applyImportedState(imported);
+    applyImportedState(imported, { local: !isShortIdImport });
     if (isShortIdImport) {
       enterRoomMode(code);
       lastSavedAt = Date.now();
@@ -8074,6 +8226,7 @@ function closeJobPicker() {
   el.setAttribute('aria-hidden', 'true');
   el.innerHTML = '';
   delete el.dataset.openFor;
+  delete el.dataset.openForRow;
 }
 
 function positionJobPicker(triggerEl) {
@@ -8101,8 +8254,8 @@ function positionJobPicker(triggerEl) {
   el.style.top = top + 'px';
 }
 
-function openJobPicker(triggerEl, playerName) {
-  const player = state.players.find(p => p.name.trim() === playerName);
+function openJobPicker(triggerEl, playerName, rowId) {
+  const player = findPlayerForResult({ rowId, name: playerName });
   if (!player) return;
   const currentJobId = triggerEl.closest('.assignment')?.querySelector('.lock-toggle')?.dataset.job || null;
   // Préférences pickables (filtrées des bans, et qui existent toujours dans JOB_BY_ID)
@@ -8121,7 +8274,14 @@ function openJobPicker(triggerEl, playerName) {
 
   const items = prefs.map((jobId, idx) => {
     const job = JOB_BY_ID[jobId];
-    const tier = (player.prefTiers && player.prefTiers[idx] != null) ? player.prefTiers[idx] : idx;
+    // Tier lu à l'index ORIGINAL de la pref (prefTiers est parallèle à
+    // player.preferences, pas à la liste filtrée des bans) — sinon les
+    // labels T{n} se décalent dès qu'un job banni précède dans les prefs.
+    const origIdx = player.preferences.indexOf(jobId);
+    // Mêmes gardes que getPrefTier (longueur alignée, valeur numérique).
+    const tier = (Array.isArray(player.prefTiers)
+      && player.prefTiers.length === player.preferences.length
+      && typeof player.prefTiers[origIdx] === 'number') ? player.prefTiers[origIdx] : idx;
     const isCurrent = jobId === currentJobId;
     const marker = isCurrent ? `<span class="job-picker-item-marker">${escapeHtml(t('jp_current'))}</span>` : '';
     return `
@@ -8146,6 +8306,8 @@ function openJobPicker(triggerEl, playerName) {
     </div>
   `;
   el.dataset.openFor = playerName;
+  if (player.rowId) el.dataset.openForRow = player.rowId;
+  else delete el.dataset.openForRow;
   el.setAttribute('aria-hidden', 'false');
   positionJobPicker(triggerEl);
 }
@@ -8187,8 +8349,8 @@ document.getElementById('jobPicker').addEventListener('click', e => {
   const item = e.target.closest('[data-job-pick-id]');
   if (!item) return;
   const newJobId = item.dataset.jobPickId;
-  const playerName = jobPickerEl().dataset.openFor;
-  const player = state.players.find(p => p.name.trim() === playerName);
+  const pickerEl = jobPickerEl();
+  const player = findPlayerForResult({ rowId: pickerEl.dataset.openForRow, name: pickerEl.dataset.openFor });
   if (!player) { closeJobPicker(); return; }
   // Job identique → no-op (mais on ferme le popover pour cohérence visuelle)
   if (player.lockedJob === newJobId || (!player.lockedJob && item.classList.contains('current'))) {
@@ -8206,9 +8368,8 @@ document.getElementById('jobPicker').addEventListener('click', e => {
 document.getElementById('assignmentGrid').addEventListener('click', e => {
   const lockBtn = e.target.closest('.lock-toggle');
   if (lockBtn) {
-    const name = lockBtn.dataset.name;
     const jobId = lockBtn.dataset.job;
-    const player = state.players.find(p => p.name.trim() === name);
+    const player = findPlayerForResult({ rowId: lockBtn.dataset.rowId, name: lockBtn.dataset.name });
     if (!player) return;
     player.lockedJob = (player.lockedJob === jobId) ? null : jobId;
     scheduleLiveCompute();
@@ -8217,14 +8378,14 @@ document.getElementById('assignmentGrid').addEventListener('click', e => {
   const pickTrigger = e.target.closest('[data-job-pick-name]');
   if (pickTrigger) {
     e.stopPropagation();
-    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName);
+    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName, pickTrigger.dataset.rowId);
     return;
   }
   const reorderBtn = e.target.closest('[data-reorder-name]');
   if (reorderBtn && !reorderBtn.disabled) {
     const name = reorderBtn.dataset.reorderName;
     const dir = parseInt(reorderBtn.dataset.reorderDir, 10);
-    moveResultPlayer(name, dir);
+    moveResultPlayer(name, dir, reorderBtn.dataset.rowId);
   }
 });
 
@@ -8233,7 +8394,7 @@ document.getElementById('benchCards')?.addEventListener('click', e => {
   const pickTrigger = e.target.closest('[data-job-pick-name]');
   if (pickTrigger) {
     e.stopPropagation();
-    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName);
+    openJobPicker(pickTrigger, pickTrigger.dataset.jobPickName, pickTrigger.dataset.rowId);
   }
 });
 
@@ -8336,7 +8497,7 @@ document.addEventListener('keydown', e => {
       const imported = isShortId
         ? await fetchPayloadById(code)
         : decodeState(code);
-      applyImportedState(imported);
+      applyImportedState(imported, { local: !isShortId });
       suppressAutoSave = false;
       if (isShortId) {
         enterRoomMode(code);

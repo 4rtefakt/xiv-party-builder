@@ -74,6 +74,11 @@ export async function onRequestGet(context) {
   if (data.f !== undefined) response.f = data.f;
   if (data.w) response.w = data.w;
   if (data.bj && data.bj.length > 0) response.bj = data.bj.slice();
+  // cl / lg / rs : sans eux, le client retombe sur les défauts (cl=2, rs=[])
+  // et le prochain save admin réécrirait ces défauts en KV (perte silencieuse).
+  if (data.cl !== undefined) response.cl = data.cl;
+  if (data.lg !== undefined) response.lg = data.lg;
+  if (Array.isArray(data.rs) && data.rs.length > 0) response.rs = data.rs.slice();
 
   return new Response(JSON.stringify(response), {
     status: 200,

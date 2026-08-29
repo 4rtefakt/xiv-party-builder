@@ -173,7 +173,9 @@ export function validatePayload(payload) {
     if (raw.pt !== undefined) {
       if (!Array.isArray(raw.pt) || raw.pt.length !== raw.j.length) return 'Invalid pref tiers length';
       for (const tval of raw.pt) {
-        if (typeof tval !== 'number' || !Number.isFinite(tval) || tval < 0 || tval > 50) return 'Invalid tier value';
+        // Borne alignée sur lib/codec.js (t >= 0 && t < 50) : accepter 50 ici
+        // stockerait une valeur que validateImportedPayload rejette au load.
+        if (typeof tval !== 'number' || !Number.isFinite(tval) || tval < 0 || tval >= 50) return 'Invalid tier value';
       }
     }
     if (raw.av !== undefined) {
@@ -332,6 +334,18 @@ export function normalizeForNonAdminMerge(payload, existing, userId) {
   for (const ip of (Array.isArray(payload.p) ? payload.p : [])) {
     if (typeof ip.id === 'string') incomingByRowId.set(ip.id, ip);
   }
+  // Passe 1 : décompte les LIBÉRATIONS de ce save avant d'évaluer les
+  // nouveaux claims. Sinon un swap "je libère la ligne 5 + je claim la
+  // ligne 2" dans le même save était refusé ou accepté selon l'ordre des
+  // lignes dans le roster (le compteur n'était décrémenté qu'en atteignant
+  // la ligne libérée).
+  for (const ep of existingPlayers) {
+    const ip = incomingByRowId.get(ep.id);
+    if (!ip) continue;
+    if (ep.by === userId && !(typeof ip.by === 'string' && ip.by === userId)) {
+      userClaims--;
+    }
+  }
   stored.p = existingPlayers.map(ep => {
     const ip = incomingByRowId.get(ep.id);
     if (!ip) return ep;
@@ -339,8 +353,8 @@ export function normalizeForNonAdminMerge(payload, existing, userId) {
     if (epBy === userId) {
       // Sa ligne : peut tout changer, sauf le rowId et le claimedBy (ne peut pas transférer)
       // (un re-claim avec autre userId est ignoré ; clearer son claim = ok)
+      // La libération éventuelle est déjà comptée en passe 1.
       const stillOwned = (typeof ip.by === 'string' && ip.by === userId);
-      if (!stillOwned) userClaims--;  // libération
       return normalizePlayer({ ...ip, by: stillOwned ? userId : null }, ep.id);
     }
     if (!epBy) {
@@ -452,6 +466,9 @@ export async function onRequestPost(context) {
     if (payload.bj !== undefined && payload.bj.length > 0) stored.bj = [...new Set(payload.bj)];
     if (payload.cl !== undefined) stored.cl = payload.cl;
     if (payload.lg !== undefined) stored.lg = payload.lg;
+    if (Array.isArray(payload.rs) && payload.rs.length > 0) {
+      stored.rs = payload.rs.slice(0, MAX_RAID_SLOTS).map(s => ({ d: s.d, h: s.h, l: s.l }));
+    }
     response = {
       id, isAdmin: true, ownerId: userId, admins: [userId],
       recoverySecret // renvoyé UNE seule fois, sur la création

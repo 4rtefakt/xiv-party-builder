@@ -131,6 +131,44 @@ test('buildMarkdown : avec result OK → groupe par rôle', () => {
   assert.match(md, /🔗 https:\/\/x\.test\/\?p=abc/);
 });
 
+test('buildMarkdown : mode alliances (raid24) → une section par alliance, banc agrégé', () => {
+  // Régression : le copier-Discord raid24 calculait UNE party de 8 slots à
+  // partir des 24 joueur·euses (16 au banc). Désormais le caller passe les
+  // results par alliance et le markdown suit la structure de l'écran.
+  const alliances = [
+    { name: 'Alliance A', results: [
+      { name: 'Alice', assigned: true, role: 'tank', jobName: 'Paladin',  prefRank: 0 },
+      { name: 'Bob',   assigned: true, role: 'heal', jobName: 'Sage',     prefRank: 1 }
+    ] },
+    { name: 'Alliance B', results: [
+      { name: 'Carla', assigned: true, role: 'melee', jobName: 'Samurai', prefRank: 0 },
+      { name: 'Dan',   assigned: false }
+    ] }
+  ];
+  const md = buildMarkdown({
+    contentLabel: 'Raid 24', raidWhen: '',
+    players: [], bannedJobs: [], link: 'x',
+    alliances, t: makeT()
+  });
+  assert.match(md, /\*\*Alliance A\*\*/);
+  assert.match(md, /\*\*Alliance B\*\*/);
+  assert.match(md, /Alice — Paladin ★/);
+  assert.match(md, /Carla — Samurai ★/);
+  assert.match(md, /Banc : Dan/);
+  // L'ordre : Alliance A avant Alliance B
+  assert.ok(md.indexOf('Alliance A') < md.indexOf('Alliance B'));
+});
+
+test('buildMarkdown : alliances vide/invalide → retombe sur result puis fallback', () => {
+  const md = buildMarkdown({
+    contentLabel: 'Raid 24', raidWhen: '',
+    players: [{ name: 'Alice', preferences: ['PLD'], presence: 'in' }],
+    bannedJobs: [], link: 'x',
+    alliances: [], result: { error: 'noComp' }, t: makeT()
+  });
+  assert.match(md, /pas de compo possible/);
+});
+
 test('buildMarkdown : raidWhen vide → pas de séparateur', () => {
   const md = buildMarkdown({
     contentLabel: 'Donjon', raidWhen: '',

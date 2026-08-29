@@ -19,7 +19,7 @@ const VALID_ID = /^[A-Za-z0-9]{4,12}$/;
 // VERSION : à incrémenter quand on change le layout du rendu (sinon les
 // vieux PNG cachés restent servis tant que le salon n'est pas modifié).
 const OG_CACHE_TTL = 7 * 86400;
-const OG_LAYOUT_VERSION = 22; // v22 : lock dur (algo scoring) → un joueur locké joue son job, plus de bench "voluntaire" pour optimiser le bonus de rôles
+const OG_LAYOUT_VERSION = 23; // v23 : raid24/chaotic calculés par alliance (comme le front) + lang dans la clé de cache + fill-first (algo scoring)
 
 async function shortHash(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -70,32 +70,76 @@ function pickLang(headers) {
 
 // Adapte la sortie du scoring lib/ pour l'OG : reproduit l'ancien retour
 // { players, assignment } à partir du nouveau format { results }.
-// Pour raid24 / chaotic on optimise sur la party totale (pas par alliance),
-// même comportement que l'ancienne version embarquée.
+// Pour raid24 / chaotic on optimise PAR ALLIANCE (3 tranches de 8 lignes du
+// roster, comme renderRaid24Result côté front) : la preview Discord montre la
+// même compo que la page, et chaque solve est borné à 8 slots — le compute
+// global 24 slots explosait la limite CPU du worker dès ~16 joueur·euses.
+function mapOgPlayer(p) {
+  return {
+    name: p.n.trim(),
+    preferences: Array.isArray(p.j) ? p.j : [],
+    prefTiers: Array.isArray(p.pt) ? p.pt : [],
+    lockedJob: typeof p.l === 'string' && JOB_BY_ID[p.l] ? p.l : null,
+    presence: p.s || 'in'
+  };
+}
+
+function isOgVisible(p) {
+  return p && typeof p.n === 'string' && p.n.trim() !== '' && p.s !== 'out';
+}
+
 function computeForOg(data, roomId) {
   const base = CONTENT_COMP[data.c];
   if (!base) return { players: [], assignment: [] };
 
-  const slots = buildSlotsFromComp(base.comp, data.d);
-  const rawPlayers = (Array.isArray(data.p) ? data.p : [])
-    .filter(p => p && typeof p.n === 'string' && p.n.trim() !== '' && p.s !== 'out')
-    .map(p => ({
-      name: p.n.trim(),
-      preferences: Array.isArray(p.j) ? p.j : [],
-      prefTiers: Array.isArray(p.pt) ? p.pt : [],
-      lockedJob: typeof p.l === 'string' && JOB_BY_ID[p.l] ? p.l : null,
-      presence: p.s || 'in'
-    }));
+  const rawList = Array.isArray(data.p) ? data.p : [];
+  const bannedJobs = Array.isArray(data.bj) ? data.bj : [];
+  const fairnessWeight = typeof data.f === 'number' ? data.f : 50;
+  // Seed = room id : tie-break stable par salon, cohérent avec le front.
+  const seed = roomId || null;
 
-  const out = computeOptimalAssignment({
-    players: rawPlayers,
-    slots,
-    bannedJobs: Array.isArray(data.bj) ? data.bj : [],
-    fairnessWeight: typeof data.f === 'number' ? data.f : 50,
+  const runSolver = (players, comp) => computeOptimalAssignment({
+    players,
+    slots: buildSlotsFromComp(comp, data.d),
+    bannedJobs,
+    fairnessWeight,
     topK: 1,
-    // Seed = room id : tie-break stable par salon, cohérent avec le front.
-    seed: roomId || null
+    seed
   });
+
+  // Contenus alliancés : mêmes tranches positionnelles que le front
+  // (state.players.slice(a*8, a*8+8)), chaque alliance optimisée seule.
+  if (base.alliances && base.allianceComp) {
+    const allianceSize = base.allianceComp.tank + base.allianceComp.heal + base.allianceComp.dps;
+    const players = [];
+    const assignment = [];
+    const results = [];
+    for (let a = 0; a < base.alliances; a++) {
+      const slicePlayers = rawList.slice(a * allianceSize, (a + 1) * allianceSize)
+        .filter(isOgVisible)
+        .map(mapOgPlayer);
+      if (slicePlayers.length === 0) continue;
+      const out = runSolver(slicePlayers, base.allianceComp);
+      if (out.error) {
+        // Alliance en erreur : tout le monde au banc pour cette tranche.
+        for (const p of slicePlayers) {
+          players.push(p);
+          assignment.push(null);
+          results.push({ name: p.name, assigned: false });
+        }
+        continue;
+      }
+      out.results.forEach((r, i) => {
+        players.push(slicePlayers[i]);
+        assignment.push(r.assigned ? { jobId: r.jobId } : null);
+        results.push(r);
+      });
+    }
+    return { players, assignment, results, comp: base.comp };
+  }
+
+  const rawPlayers = rawList.filter(isOgVisible).map(mapOgPlayer);
+  const out = runSolver(rawPlayers, base.comp);
 
   if (out.error) {
     return { players: rawPlayers, assignment: new Array(rawPlayers.length).fill(null), results: [], comp: null };
@@ -266,15 +310,24 @@ export async function onRequestGet({ params, env, request }) {
   const id = params.id;
   if (!VALID_ID.test(id)) return new Response('Invalid id', { status: 400 });
 
-  // (lang réelle déterminée après lecture du salon — voir plus bas)
-  let lang;
-  let dict;
-
   const raw = await env.PARTY_KV.get(id);
   if (!raw) return new Response('Not found', { status: 404 });
 
-  // Cache hit ? La langue fait partie de la clé (titre "Donjon" vs "Dungeon")
-  // et la version du layout aussi (bump = invalidate global).
+  let data;
+  try { data = JSON.parse(raw); }
+  catch { return new Response('Bad data', { status: 500 }); }
+
+  // Langue : stockée par l'admin à la création (data.lg), sinon fallback
+  // sur le scrape Accept-Language. Cohérence garantie avec _middleware.js.
+  // Déterminée AVANT la clé de cache : elle en fait partie (titre "Donjon"
+  // vs "Dungeon") — sinon le premier scrape (ex: bot EN) cache son rendu
+  // sous une clé partagée et le sert dans la mauvaise langue à tout le monde
+  // pendant OG_CACHE_TTL.
+  const lang = (data.lg === 'fr' || data.lg === 'en') ? data.lg : pickLang(request.headers);
+  const dict = OG_STRINGS[lang];
+
+  // Cache hit ? La langue fait partie de la clé, et la version du layout
+  // aussi (bump = invalidate global).
   const contentHash = await shortHash(raw);
   const cacheKey = `og:v${OG_LAYOUT_VERSION}:${id}:${lang}:${contentHash}`;
   const cached = await env.PARTY_KV.get(cacheKey, 'arrayBuffer');
@@ -293,15 +346,6 @@ export async function onRequestGet({ params, env, request }) {
     });
   }
 
-  let data;
-  try { data = JSON.parse(raw); }
-  catch { return new Response('Bad data', { status: 500 }); }
-
-  // Langue : stockée par l'admin à la création (data.lg), sinon fallback
-  // sur le scrape Accept-Language. Cohérence garantie avec _middleware.js.
-  lang = (data.lg === 'fr' || data.lg === 'en') ? data.lg : pickLang(request.headers);
-  dict = OG_STRINGS[lang];
-
   const { players, assignment, results } = computeForOg(data, id);
 
   // Layout 3-col (TANKS | HEALERS | DPS 2×2) pour les contenus ≤ 8 joueurs,
@@ -312,11 +356,11 @@ export async function onRequestGet({ params, env, request }) {
   const useColumnLayout = data.c === 'dungeon' || data.c === 'raid8';
 
   // Étiquetage strat (MT/OT/H1/H2/M1/M2/R1/R2) seulement sur dungeon/raid8.
-  // Pour raid24, le compute est global (24 joueur·euses ensemble, pas par
-  // alliance) → un label "M1" globalement n'a pas le même sens qu'un "M1"
-  // d'alliance, et le layout par lignes ne distingue pas les alliances :
-  // afficher les labels serait trompeur. On les omet ici, ils restent
-  // visibles sur la page (rendue par alliance, cf. renderRaid24Result).
+  // Pour raid24, le compute est désormais par alliance (comme le front) mais
+  // le layout par lignes ne distingue pas visuellement les alliances : un
+  // label "M1" sans son bloc d'alliance serait trompeur. On les omet ici,
+  // ils restent visibles sur la page (rendue par alliance, cf.
+  // renderRaid24Result).
   let dpsLayout = null;
   if (useColumnLayout && Array.isArray(results) && results.length > 0) {
     const compRaw = CONTENT_COMP[data.c];
@@ -393,7 +437,12 @@ export async function onRequestGet({ params, env, request }) {
       availability: p.av || null
     }));
     const avAnalysis = analyzeAvailability(playersWithAvail);
-    const best = bestSlotWithTail(avAnalysis);
+    // Exclut les créneaux déjà verrouillés comme dates de raid — même logique
+    // que le front : on suggère le prochain meilleur créneau NON planifié.
+    const lockedSlots = Array.isArray(data.rs)
+      ? data.rs.map(s => ({ day: s.d, hour: s.h, duration: s.l }))
+      : [];
+    const best = bestSlotWithTail(avAnalysis, { excludedSlots: lockedSlots });
     if (best && best.count > 0 && avAnalysis.respondentCount >= 2) {
       const dayName = (dict.daysLong && dict.daysLong[best.day]) || best.day;
       const text = dict.bestSlot({
