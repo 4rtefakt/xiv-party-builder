@@ -3194,7 +3194,7 @@
 
     <div class="help-section">
       <div class="help-section-title" data-i18n="bh_scoreTitle">Le score par personne</div>
-      <p class="help-section-body" data-i18n-html="bh_scoreDesc">Chaque assignation rapporte des points selon le rang de la préférence : <strong>1er choix = 100 pts</strong>, 2ᵉ = 90, 3ᵉ = 80, et ainsi de suite (−10 par rang). Un job hors prefs ou le banc rapportent un score négatif. L'algo cherche la combinaison qui maximise un total — la jauge décide comment ce total est calculé.</p>
+      <p class="help-section-body" data-i18n-html="bh_scoreDesc">Chaque assignation rapporte des points selon le bucket de préférence : <strong>★ Main = 100 pts</strong>, Ça me va = 90, Si besoin = 80. Un job hors prefs ou le banc rapportent un score négatif. L'algo cherche la combinaison qui maximise un total — la jauge décide comment ce total est calculé.</p>
     </div>
 
     <div class="help-section">
@@ -3372,7 +3372,7 @@ const STRINGS = {
     bh_title: 'Comment la jauge marche',
     bh_subtitle: 'Optimisation joueur·euse → job',
     bh_scoreTitle: 'Le score par personne',
-    bh_scoreDesc: 'Chaque assignation rapporte des points selon le rang de la préférence : <strong>1er choix = 100 pts</strong>, 2ᵉ = 90, 3ᵉ = 80, et ainsi de suite (−10 par rang). Un job hors prefs ou le banc rapportent un score négatif. L\'algo cherche la combinaison qui maximise un total — la jauge décide comment ce total est calculé.',
+    bh_scoreDesc: 'Chaque assignation rapporte des points selon le bucket de préférence : <strong>★ Main = 100 pts</strong>, Ça me va = 90, Si besoin = 80. Un job hors prefs ou le banc rapportent un score négatif. L\'algo cherche la combinaison qui maximise un total — la jauge décide comment ce total est calculé.',
     bh_globalTitle: '◂ Satisfaction globale (jauge à gauche)',
     bh_globalDesc: 'On maximise la <strong>somme brute</strong> des scores. Résultat : la moyenne du groupe est la plus haute possible — mais une personne peut hériter d\'un 5ᵉ choix si ça permet à trois autres d\'avoir leur 1er.',
     bh_fairTitle: 'Frustration limitée (jauge à droite) ▸',
@@ -3461,7 +3461,7 @@ const STRINGS = {
       return `Cocher tous les ${labels[role] || role} d'un coup`;
     },
     // Buckets de préférence (cycle au clic sur une icône de job)
-    r_tier0: '★ Main',
+    r_tier0: 'Main',
     r_tier1: 'Ça me va',
     r_tier2: 'Si besoin',
     r_jobTipAdd: ({ name }) => `${name} — clic : ★ Main`,
@@ -3586,7 +3586,7 @@ const STRINGS = {
     res_live: 'Live',
     res_computing: 'Calcul...',
     res_idle: 'En attente',
-    res_firstChoice: '1er choix',
+    res_firstChoice: '★ Main',
     res_avgSat: 'Satisfaction moy.',
     res_roleBonus: 'Bonus rôles',
     res_roleBonusFullTitle: 'Bonus de Role Composition FFXIV : tous les sous-rôles présents (tank, heal, melee, ranged physique, caster) → +5% dégâts.',
@@ -3729,7 +3729,7 @@ const STRINGS = {
     bh_title: 'How the slider works',
     bh_subtitle: 'Player → job optimization',
     bh_scoreTitle: 'The per-player score',
-    bh_scoreDesc: 'Each assignment earns points based on the preference rank: <strong>1st choice = 100 pts</strong>, 2nd = 90, 3rd = 80, and so on (−10 per rank). A job outside the player\'s prefs or the bench earn a negative score. The algorithm finds the combination that maximizes a total — the slider decides how that total is computed.',
+    bh_scoreDesc: 'Each assignment earns points based on the preference bucket: <strong>★ Main = 100 pts</strong>, Happy to play = 90, If needed = 80. A job outside the player\'s prefs or the bench earn a negative score. The algorithm finds the combination that maximizes a total — the slider decides how that total is computed.',
     bh_globalTitle: '◂ Global satisfaction (slider left)',
     bh_globalDesc: 'Maximize the <strong>raw sum</strong> of scores. The group average is as high as possible — but one player might end up with their 5th choice if it lets three others get their 1st.',
     bh_fairTitle: 'Limited frustration (slider right) ▸',
@@ -3814,7 +3814,7 @@ const STRINGS = {
       const labels = { tank: 'tanks', heal: 'healers', melee: 'melee', ranged: 'physical ranged', caster: 'casters' };
       return `Select all ${labels[role] || role} at once`;
     },
-    r_tier0: '★ Main',
+    r_tier0: 'Main',
     r_tier1: 'Happy to play',
     r_tier2: 'If needed',
     r_jobTipAdd: ({ name }) => `${name} — click: ★ Main`,
@@ -3932,7 +3932,7 @@ const STRINGS = {
     res_live: 'Live',
     res_computing: 'Computing...',
     res_idle: 'Idle',
-    res_firstChoice: '1st choice',
+    res_firstChoice: '★ Main',
     res_avgSat: 'Avg satisfaction',
     res_roleBonus: 'Role bonus',
     res_roleBonusFullTitle: 'FFXIV Role Composition bonus: all sub-roles present (tank, healer, melee, physical ranged, caster) → +5% damage.',
@@ -4626,8 +4626,9 @@ function buildPlayerRow(player, idx) {
         icon.dataset.role = role;
         icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
 
-        // Libellé du bucket (r_tier0/1/2) ; tiers legacy > 2 → numéro brut.
-        const tierLabel = (tier) => tier <= MAX_PREF_TIER ? t('r_tier' + tier) : String(tier + 1);
+        // Libellé du bucket (r_tier0/1/2, ★ devant Main) ; tiers legacy > 2 → numéro brut.
+        const tierLabel = (tier) => tier === 0 ? '★ ' + t('r_tier0')
+          : (tier <= MAX_PREF_TIER ? t('r_tier' + tier) : String(tier + 1));
 
         const prefIdx = player.preferences.indexOf(job.id);
         if (prefIdx !== -1) {
@@ -5266,6 +5267,15 @@ if (!window.__rbbClickOutsideBound) {
   window.__rbbClickOutsideBound = true;
 }
 
+// Libellé d'un bucket pour les stats du résumé ("Pire rang", etc.).
+// 999 = code interne "forcé" (cf. buildResultFromAssignment#worstRank).
+function bucketDisplayLabel(tier) {
+  if (tier === 999) return t('res_forced');
+  if (tier === 0) return '★ ' + t('r_tier0');
+  if (tier <= MAX_PREF_TIER) return t('r_tier' + tier);
+  return t('res_nth', { n: tier + 1 }); // tiers legacy > 2 (défensif)
+}
+
 function rankBadge(r) {
   // Renvoie le HTML du badge de rang avec coloration adéquate
   if (!r.assigned) {
@@ -5274,17 +5284,18 @@ function rankBadge(r) {
   if (r.forced) {
     return `<div class="rank-display rank-forced"><span class="rank-icon">⚠</span>${escapeHtml(t('res_forcedBadge'))}</div>`;
   }
-  const rank = r.prefRank + 1;
-  let cls, icon;
-  if (rank === 1) { cls = 'rank-1'; icon = '★'; }
-  else if (rank === 2) { cls = 'rank-2'; icon = '◆'; }
-  else if (rank === 3) { cls = 'rank-3'; icon = '◇'; }
-  else { cls = 'rank-low'; icon = '◯'; }
-  const total = r.totalPrefs;
-  return `<div class="rank-display ${cls}">
+  // Badge = bucket de préférence (★ Main / 2 / 3), plus d'ordinal "1e / N"
+  // qui parlait le langage de l'ancien modèle ordre-de-clic.
+  const tier = r.prefRank;
+  let cls, icon, text;
+  if (tier === 0)      { cls = 'rank-1'; icon = '★'; text = t('r_tier0'); }
+  else if (tier === 1) { cls = 'rank-2'; icon = '◆'; text = '2'; }
+  else if (tier === 2) { cls = 'rank-3'; icon = '◇'; text = '3'; }
+  else                 { cls = 'rank-low'; icon = '◯'; text = String(tier + 1); }
+  const title = tier >= 1 && tier <= MAX_PREF_TIER ? ` title="${escapeHtml(t('r_tier' + tier))}"` : '';
+  return `<div class="rank-display ${cls}"${title}>
     <span class="rank-icon">${icon}</span>
-    <span class="rank-num">${escapeHtml(t('res_nth', { n: rank }))}</span>
-    <span style="opacity:0.6">/ ${total}</span>
+    <span class="rank-num">${escapeHtml(text)}</span>
   </div>`;
 }
 
@@ -5299,7 +5310,7 @@ function renderAlternativesTabs() {
     const btn = document.createElement('button');
     btn.className = 'alt-tab' + (idx === currentAlternativeIndex ? ' active' : '');
     const label = idx === 0 ? 'Option A' : (idx === 1 ? 'Option B' : `Option ${String.fromCharCode(65 + idx)}`);
-    btn.innerHTML = `${label}<span class="alt-meta">${sol.stats.satisfaction}% sat · ${sol.stats.firstChoices} 1er</span>`;
+    btn.innerHTML = `${label}<span class="alt-meta">${sol.stats.satisfaction}% sat · ${sol.stats.firstChoices} ★</span>`;
     btn.addEventListener('click', () => {
       currentAlternativeIndex = idx;
       renderAlternativesTabs();
@@ -5477,11 +5488,10 @@ function renderSolution(sol) {
   assignDpsGridPositions(results, dpsSlotCount);
   assignStratRoles(results, state.contentType);
 
-  // Stat "frustration max" : le pire rang attribué
+  // Stat "frustration max" : le pire bucket attribué
   let worstRankDisplay = '—';
   if (stats.worstRank !== null && stats.worstRank !== undefined) {
-    if (stats.worstRank === 999) worstRankDisplay = t('res_forced');
-    else worstRankDisplay = t('res_nth', { n: stats.worstRank + 1 });
+    worstRankDisplay = bucketDisplayLabel(stats.worstRank);
   }
 
   summary.innerHTML = `
@@ -5635,8 +5645,7 @@ function renderRaid24Result() {
     : 0;
   let worstRankDisplay = '—';
   if (worstRank !== null) {
-    if (worstRank === 999) worstRankDisplay = t('res_forced');
-    else worstRankDisplay = t('res_nth', { n: worstRank + 1 });
+    worstRankDisplay = bucketDisplayLabel(worstRank);
   }
 
   summary.innerHTML = `
