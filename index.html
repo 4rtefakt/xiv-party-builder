@@ -2993,6 +2993,62 @@
     background: rgba(0, 229, 255, 0.06);
   }
   .live-toggle:hover { color: var(--ink); border-color: var(--line-bright); }
+
+  /* ---- Tour guidé (onboarding) ---- */
+  /* Le "ring" spotlight : bordure autour de la cible + ombre géante qui
+     assombrit tout le reste. pointer-events none → c'est .tour-blocker qui
+     capte les clics (clic n'importe où = étape suivante). */
+  .tour-blocker {
+    position: fixed; inset: 0; z-index: 940;
+    background: transparent;
+  }
+  .tour-ring {
+    position: fixed; z-index: 950;
+    border: 2px solid var(--cyan);
+    border-radius: 6px;
+    box-shadow: 0 0 0 9999px rgba(3, 6, 12, 0.82), 0 0 22px rgba(0, 229, 255, 0.35);
+    pointer-events: none;
+    transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+  }
+  .tour-card {
+    position: fixed; z-index: 960;
+    left: 50%; bottom: 1.25rem; transform: translateX(-50%);
+    width: min(480px, calc(100vw - 2rem));
+    background: var(--bg-deep, #050810);
+    border: 1px solid var(--line-bright, #2a3a4d);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    padding: 1rem 1.1rem 0.85rem;
+  }
+  .tour-step-count {
+    font-family: 'Chakra Petch', monospace;
+    font-size: 0.65rem; letter-spacing: 2px;
+    color: var(--cyan); margin-bottom: 0.35rem;
+  }
+  .tour-title {
+    font-family: 'Chakra Petch', monospace;
+    font-size: 1rem; font-weight: 700;
+    color: var(--ink); margin-bottom: 0.4rem;
+  }
+  .tour-body {
+    font-size: 0.85rem; line-height: 1.5;
+    color: var(--ink-dim, #8fa3b8); margin-bottom: 0.8rem;
+  }
+  .tour-footer {
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .tour-dots { display: flex; gap: 0.3rem; margin-right: auto; }
+  .tour-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--line-bright, #2a3a4d);
+  }
+  .tour-dot.active { background: var(--cyan); }
+  .tour-skip {
+    background: none; border: none; cursor: pointer;
+    color: var(--ink-faint, #56677a); font-size: 0.75rem;
+    padding: 0.3rem 0.4rem;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .tour-skip:hover { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -3006,6 +3062,7 @@
     <div class="meta-info">
       <button class="btn-new" id="newBtn" data-i18n="t_new" data-i18n-title="t_newTitle">Nouveau</button>
       <button class="btn-new" id="identityBtn" data-i18n="t_identity" data-i18n-title="t_identityTitle">Mon identité</button>
+      <button class="btn-new" id="tourBtn" data-i18n="t_tour" data-i18n-title="t_tourTitle">? Guide</button>
       <span>S9.NET</span>
       <span>v7.1</span>
     </div>
@@ -3072,7 +3129,7 @@
     </div>
   </section>
 
-  <section class="section">
+  <section class="section" id="rosterSection">
     <div class="section-header">
       <span class="section-tag">02</span>
       <h2 data-i18n="s_roster">Roster</h2>
@@ -3453,6 +3510,26 @@ const STRINGS = {
     id_qrError: 'Impossible de générer le QR — utilise le bouton "Copier le lien" à la place.',
     id_close: 'Fermer',
     t_syncNow: '↻ Synchroniser',
+    // — Tour guidé (onboarding)
+    t_tour: '? Guide',
+    t_tourTitle: 'Revoir le tutoriel',
+    tr_stepCount: ({ n, total }) => `${n} / ${total}`,
+    tr_skip: 'Passer',
+    tr_prev: '◂ Précédent',
+    tr_next: 'Suivant ▸',
+    tr_done: 'C\'est parti ◆',
+    tr_welcomeT: 'Bienvenue sur Party Builder',
+    tr_welcomeB: 'L\'outil compose automatiquement la meilleure équipe FFXIV possible à partir des préférences de jobs de chacun·e. Petit tour du propriétaire ? (30 secondes)',
+    tr_paramsT: 'Paramètres',
+    tr_paramsB: 'Choisis le contenu (donjon, raid 8, raid 24…) et règle la stratégie : maximiser la satisfaction globale du groupe, ou limiter la frustration individuelle.',
+    tr_rosterT: 'Le roster et les préférences',
+    tr_rosterB: 'Une ligne par joueur·euse. Clique une icône de job pour la faire cycler : ★ Main → Ça me va → Si besoin → retirée. L\'icône de rôle à gauche coche tout le rôle d\'un coup.',
+    tr_availT: 'Les disponibilités',
+    tr_availB: 'Le bouton 🕐 de chaque ligne ouvre la grille de dispos (jour × heure). L\'outil agrège les réponses et suggère le meilleur créneau pour le raid.',
+    tr_resultT: 'La composition',
+    tr_resultB: 'La compo optimale se recalcule en direct à chaque changement, avec des alternatives (Options A/B/C). Verrouille un job avec ◇ pour l\'imposer, réordonne avec les flèches ou le glisser-déposer.',
+    tr_shareT: 'Partager avec ton groupe',
+    tr_shareB: '« Partager » crée un salon avec un lien : chacun·e réserve sa ligne, remplit ses prefs et dispos, et tout le monde voit la même compo en temps réel.',
     // — Roster row
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
     r_notePlaceholder: 'Note (optionnelle) — visible par tout le monde',
@@ -3808,6 +3885,25 @@ const STRINGS = {
     id_qrError: 'Could not generate QR — use the "Copy link" button instead.',
     id_close: 'Close',
     t_syncNow: '↻ Sync now',
+    t_tour: '? Guide',
+    t_tourTitle: 'Replay the tutorial',
+    tr_stepCount: ({ n, total }) => `${n} / ${total}`,
+    tr_skip: 'Skip',
+    tr_prev: '◂ Back',
+    tr_next: 'Next ▸',
+    tr_done: 'Let\'s go ◆',
+    tr_welcomeT: 'Welcome to Party Builder',
+    tr_welcomeB: 'This tool automatically builds the best possible FFXIV party from everyone\'s job preferences. Quick tour? (30 seconds)',
+    tr_paramsT: 'Settings',
+    tr_paramsB: 'Pick the content (dungeon, 8-man, 24-man…) and tune the strategy: maximize the group\'s overall satisfaction, or limit individual frustration.',
+    tr_rosterT: 'The roster and preferences',
+    tr_rosterB: 'One row per player. Click a job icon to cycle it: ★ Main → Happy to play → If needed → removed. The role icon on the left selects the whole role at once.',
+    tr_availT: 'Availability',
+    tr_availB: 'The 🕐 button on each row opens the availability grid (day × hour). The tool aggregates everyone\'s answers and suggests the best raid slot.',
+    tr_resultT: 'The composition',
+    tr_resultB: 'The optimal party recomputes live on every change, with alternatives (Options A/B/C). Lock a job with ◇ to force it, reorder with the arrows or drag & drop.',
+    tr_shareT: 'Share with your group',
+    tr_shareB: '"Share" creates a room with a link: everyone claims their row, fills in their prefs and availability, and the whole group sees the same composition in real time.',
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
     r_notePlaceholder: 'Note (optional) — visible to everyone',
     r_bulkRole: ({ role }) => {
@@ -8480,6 +8576,162 @@ document.addEventListener('keydown', e => {
 });
 
 // ============================================================
+// TOUR GUIDÉ — onboarding première visite + bouton "? Guide" (header)
+// ============================================================
+// Spotlight séquentiel sur les vraies sections de la page. Cibles = éléments
+// stables (sections avec id), jamais des nœuds re-rendus par renderXxx().
+// Auto-démarre à la toute première visite (flag localStorage), relançable
+// via le bouton Guide. Clic n'importe où / → : étape suivante ; Échap : quitter.
+
+const TOUR_SEEN_KEY = 'xiv-tour-seen';
+
+// selectors : cascade — la première cible trouvée gagne ; [] = carte centrée
+// sans spotlight (étape d'accueil). tKey → clés i18n tr_<tKey>T / tr_<tKey>B.
+const TOUR_STEPS = [
+  { selectors: [], tKey: 'welcome' },
+  { selectors: ['#paramsSection'], tKey: 'params' },
+  { selectors: ['#rosterSection'], tKey: 'roster' },
+  { selectors: ['.avail-btn', '#rosterSection'], tKey: 'avail' },
+  { selectors: ['#resultSection'], tKey: 'result' },
+  { selectors: ['#shareBtn', '#rosterSection'], tKey: 'share' }
+];
+
+let tourIdx = -1;
+let tourDom = null;       // { blocker, ring, card, ... } une fois construit
+let tourTargetEl = null;  // cible de l'étape courante (pour reposition)
+
+function buildTourDom() {
+  if (tourDom) return tourDom;
+  const blocker = document.createElement('div');
+  blocker.className = 'tour-blocker';
+  blocker.addEventListener('click', () => tourGo(1));
+  const ring = document.createElement('div');
+  ring.className = 'tour-ring';
+  const card = document.createElement('div');
+  card.className = 'tour-card';
+  // Empêche le clic dans la carte de déclencher le blocker en dessous
+  card.addEventListener('click', e => e.stopPropagation());
+  card.innerHTML = `
+    <div class="tour-step-count"></div>
+    <div class="tour-title"></div>
+    <div class="tour-body"></div>
+    <div class="tour-footer">
+      <div class="tour-dots"></div>
+      <button type="button" class="tour-skip"></button>
+      <button type="button" class="btn-tool tour-prev"></button>
+      <button type="button" class="btn-tool tour-next"></button>
+    </div>
+  `;
+  card.querySelector('.tour-skip').addEventListener('click', endTour);
+  card.querySelector('.tour-prev').addEventListener('click', () => tourGo(-1));
+  card.querySelector('.tour-next').addEventListener('click', () => tourGo(1));
+  document.body.appendChild(blocker);
+  document.body.appendChild(ring);
+  document.body.appendChild(card);
+  tourDom = { blocker, ring, card };
+  return tourDom;
+}
+
+function positionTourRing() {
+  if (!tourDom || tourIdx < 0) return;
+  const ring = tourDom.ring;
+  if (!tourTargetEl) {
+    // Pas de cible (accueil) : ring réduit à un point au centre → l'ombre
+    // géante assombrit tout l'écran uniformément.
+    ring.style.top = '45%'; ring.style.left = '50%';
+    ring.style.width = '0px'; ring.style.height = '0px';
+    ring.style.borderWidth = '0px';
+    return;
+  }
+  const pad = 6;
+  const r = tourTargetEl.getBoundingClientRect();
+  ring.style.borderWidth = '2px';
+  ring.style.top = (r.top - pad) + 'px';
+  ring.style.left = (r.left - pad) + 'px';
+  ring.style.width = (r.width + pad * 2) + 'px';
+  ring.style.height = (r.height + pad * 2) + 'px';
+}
+
+function tourKeydown(e) {
+  if (tourIdx < 0) return;
+  if (e.key === 'Escape') { e.stopPropagation(); endTour(); }
+  else if (e.key === 'ArrowRight' || e.key === 'Enter') tourGo(1);
+  else if (e.key === 'ArrowLeft') tourGo(-1);
+}
+
+function showTourStep(idx) {
+  const step = TOUR_STEPS[idx];
+  const { card } = buildTourDom();
+  tourIdx = idx;
+  tourTargetEl = null;
+  for (const sel of step.selectors) {
+    const el = document.querySelector(sel);
+    if (el && el.getBoundingClientRect().height > 0) { tourTargetEl = el; break; }
+  }
+  if (tourTargetEl) {
+    tourTargetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  card.querySelector('.tour-step-count').textContent =
+    t('tr_stepCount', { n: idx + 1, total: TOUR_STEPS.length });
+  card.querySelector('.tour-title').textContent = t('tr_' + step.tKey + 'T');
+  card.querySelector('.tour-body').textContent = t('tr_' + step.tKey + 'B');
+  card.querySelector('.tour-dots').innerHTML = TOUR_STEPS
+    .map((_, i) => `<span class="tour-dot${i === idx ? ' active' : ''}"></span>`).join('');
+  card.querySelector('.tour-skip').textContent = t('tr_skip');
+  const prev = card.querySelector('.tour-prev');
+  prev.textContent = t('tr_prev');
+  prev.hidden = idx === 0;
+  card.querySelector('.tour-next').textContent =
+    idx === TOUR_STEPS.length - 1 ? t('tr_done') : t('tr_next');
+  positionTourRing();
+  // Le smooth scroll bouge la cible pendant ~300ms → on resuit un peu.
+  setTimeout(positionTourRing, 200);
+  setTimeout(positionTourRing, 450);
+}
+
+function tourGo(delta) {
+  const next = tourIdx + delta;
+  if (next < 0) return;
+  if (next >= TOUR_STEPS.length) { endTour(); return; }
+  showTourStep(next);
+}
+
+function startTour() {
+  const { blocker, ring, card } = buildTourDom();
+  blocker.hidden = false; ring.hidden = false; card.hidden = false;
+  window.addEventListener('scroll', positionTourRing, { passive: true });
+  window.addEventListener('resize', positionTourRing);
+  // capture : passe avant le handler global Échap-ferme-les-modales
+  document.addEventListener('keydown', tourKeydown, true);
+  showTourStep(0);
+}
+
+function endTour() {
+  if (!tourDom) return;
+  tourIdx = -1;
+  tourTargetEl = null;
+  tourDom.blocker.hidden = true;
+  tourDom.ring.hidden = true;
+  tourDom.card.hidden = true;
+  window.removeEventListener('scroll', positionTourRing);
+  window.removeEventListener('resize', positionTourRing);
+  document.removeEventListener('keydown', tourKeydown, true);
+  try { localStorage.setItem(TOUR_SEEN_KEY, '1'); } catch { /* privé/bloqué : tant pis */ }
+}
+
+document.getElementById('tourBtn').addEventListener('click', startTour);
+
+// Auto-démarrage : uniquement à la toute première visite (jamais vu, quel
+// que soit le mode — un lien d'invitation est justement le cas où un·e
+// nouvel·le arrivant·e a besoin du guide). Skippable en un clic.
+function maybeAutoStartTour() {
+  try {
+    if (localStorage.getItem(TOUR_SEEN_KEY)) return;
+  } catch { return; } // localStorage indisponible → pas de tour auto
+  setTimeout(startTour, 800);
+}
+
+// ============================================================
 // INIT — charger depuis l'URL si paramètre ?p= présent
 // ============================================================
 
@@ -8538,7 +8790,7 @@ document.addEventListener('keydown', e => {
   balanceValue.textContent = balanceLabel(state.fairnessWeight);
   renderAll();
   renderRecentRooms();
-})();
+})().finally(maybeAutoStartTour);
 </script>
 </body>
 </html>
