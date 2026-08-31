@@ -1116,6 +1116,7 @@
     background: rgba(0, 0, 0, 0.2);
     cursor: pointer;
     transition: background 0.1s, border-color 0.1s;
+    padding: 0; /* reset button UA (cellules = <button> pour le clavier) */
   }
   .avail-cell:hover { border-color: var(--cyan); }
   .avail-cell.on {
@@ -1429,6 +1430,10 @@
     justify-content: center;
     transition: all 0.15s;
     user-select: none;
+    /* Reset button UA (les icônes sont des <button> pour l'accès clavier) */
+    padding: 0;
+    font: inherit;
+    color: inherit;
     flex-shrink: 0;
     color: var(--ink-faint);
   }
@@ -1837,17 +1842,20 @@
     right: 4px;
     background: transparent;
     border: 1px solid transparent;
-    color: var(--ink-faint);
+    /* ink-dim pleine opacité : reste discret face au cyan/ink, mais visible
+       pour les utilisateur·ices malvoyant·es (l'ancien ink-faint à 0.4
+       tombait à un contraste de 1.24:1 — le bouton était introuvable). */
+    color: var(--ink-dim);
     cursor: pointer;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
     padding: 2px 5px;
     line-height: 1;
-    opacity: 0.4;
+    opacity: 1;
     transition: all 0.15s;
     letter-spacing: 0;
   }
-  .assignment:hover .lock-toggle { opacity: 0.85; }
+  .assignment:hover .lock-toggle { color: var(--ink); }
   .lock-toggle:hover {
     color: var(--cyan);
     border-color: var(--cyan);
@@ -3044,11 +3052,29 @@
   .tour-dot.active { background: var(--cyan); }
   .tour-skip {
     background: none; border: none; cursor: pointer;
-    color: var(--ink-faint, #56677a); font-size: 0.75rem;
+    color: var(--ink-dim); font-size: 0.75rem;
     padding: 0.3rem 0.4rem;
     text-decoration: underline; text-underline-offset: 2px;
   }
   .tour-skip:hover { color: var(--ink); }
+
+  /* ---- Accessibilité ---- */
+  /* Indicateur de focus clavier global. Plusieurs styles historiques font
+     outline:none sur :focus — le !important garantit qu'un focus CLAVIER
+     (:focus-visible) reste toujours visible ; la souris n'est pas affectée. */
+  :focus-visible {
+    outline: 2px solid var(--cyan) !important;
+    outline-offset: 2px;
+  }
+  /* Texte présent pour les lecteurs d'écran, invisible à l'écran */
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -3068,12 +3094,14 @@
     </div>
   </header>
 
+  <main>
+
   <div class="recent-rooms-bar" id="recentRoomsBar" hidden>
     <span class="recent-rooms-label" data-i18n="s_recentRooms">Salons récents</span>
   </div>
 
   <section class="section section-collapsible" id="paramsSection">
-    <div class="section-header" id="paramsHeader">
+    <div class="section-header" id="paramsHeader" role="button" tabindex="0" aria-expanded="false" aria-controls="paramsSection">
       <span class="section-tag">01</span>
       <h2 data-i18n="s_parameters">Paramètres</h2>
       <span class="section-summary" id="paramsSummary"></span>
@@ -3176,6 +3204,8 @@
        depuis le bounding rect du trigger. Un seul à la fois dans le DOM. -->
   <div class="job-picker" id="jobPicker" role="dialog" aria-hidden="true"></div>
 
+  </main>
+
   <footer>
     Tural Datalink <span>//</span> Party Builder
   </footer>
@@ -3184,9 +3214,9 @@
 
 <!-- SHARE MODAL -->
 <div class="modal-overlay" id="shareModal">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareModalTitle">
     <button class="modal-close" data-modal-close>×</button>
-    <div class="modal-title" data-i18n="m_shareTitle">Partager ce groupe</div>
+    <div class="modal-title" id="shareModalTitle" data-i18n="m_shareTitle">Partager ce groupe</div>
     <div class="modal-subtitle" data-i18n="m_shareSubtitle">Lien copiable · contient noms + préférences</div>
     <textarea id="shareUrl" readonly></textarea>
     <div class="modal-actions">
@@ -3206,9 +3236,9 @@
 
 <!-- IMPORT MODAL -->
 <div class="modal-overlay" id="importModal">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
     <button class="modal-close" data-modal-close>×</button>
-    <div class="modal-title" data-i18n="m_importTitle">Importer un groupe</div>
+    <div class="modal-title" id="importModalTitle" data-i18n="m_importTitle">Importer un groupe</div>
     <div class="modal-subtitle" data-i18n="m_importSubtitle">Colle un lien partagé ou un code base64</div>
     <textarea id="importInput" data-i18n-placeholder="m_importPlaceholder" placeholder="https://... ou eyJjIjoicmFpZDgi..."></textarea>
     <div class="modal-error" id="importError"></div>
@@ -3220,9 +3250,9 @@
 
 <!-- IDENTITY (QR transfer) MODAL -->
 <div class="modal-overlay" id="identityModal">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="identityModalTitle">
     <button class="modal-close" data-modal-close>×</button>
-    <div class="modal-title" data-i18n="id_title">Mon identité</div>
+    <div class="modal-title" id="identityModalTitle" data-i18n="id_title">Mon identité</div>
     <div class="modal-subtitle" data-i18n="id_intro">Retrouve tes presets et salons récents sur un autre appareil — sans recréer de compte.</div>
 
     <div class="identity-method-label" data-i18n="id_methodQr">Option 1 · Scanner avec ton téléphone</div>
@@ -3244,9 +3274,9 @@
 
 <!-- BALANCE HELP MODAL · explique le slider Stratégie d'optimisation -->
 <div class="modal-overlay" id="balanceHelpModal">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="balanceHelpModalTitle">
     <button class="modal-close" data-modal-close>×</button>
-    <div class="modal-title" data-i18n="bh_title">Comment la jauge marche</div>
+    <div class="modal-title" id="balanceHelpModalTitle" data-i18n="bh_title">Comment la jauge marche</div>
     <div class="modal-subtitle" data-i18n="bh_subtitle">Optimisation joueur·euse → job</div>
 
     <div class="help-section">
@@ -3274,7 +3304,9 @@
 <div class="preset-menu" id="presetMenu" hidden></div>
 <div class="preset-menu" id="templateMenu" hidden></div>
 <div class="avail-popover" id="availPopover" hidden></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- Région d'annonce pour lecteurs d'écran : recomputes de la compo, etc. -->
+<div id="a11yAnnouncer" class="visually-hidden" role="status" aria-live="polite"></div>
 
 <script type="module">
 'use strict';
@@ -3528,6 +3560,9 @@ const STRINGS = {
     tr_availB: 'Le bouton 🕐 de chaque ligne ouvre la grille de dispos (jour × heure). L\'outil agrège les réponses et suggère le meilleur créneau pour le raid.',
     tr_resultT: 'La composition',
     tr_resultB: 'La compo optimale se recalcule en direct à chaque changement, avec des alternatives (Options A/B/C). Verrouille un job avec ◇ pour l\'imposer, réordonne avec les flèches ou le glisser-déposer.',
+    m_closeAria: 'Fermer',
+    a11y_compoUpdate: ({ assigned, total, first }) => `Composition mise à jour : ${assigned} slot${assigned > 1 ? 's' : ''} sur ${total} rempli${assigned > 1 ? 's' : ''}, ${first} sur leur Main`,
+    a11y_playerName: ({ n }) => `Nom du joueur ou de la joueuse, ligne ${n}`,
     tr_shareT: 'Partager avec ton groupe',
     tr_shareB: '« Partager » crée un salon avec un lien : chacun·e réserve sa ligne, remplit ses prefs et dispos, et tout le monde voit la même compo en temps réel.',
     // — Roster row
@@ -3902,6 +3937,9 @@ const STRINGS = {
     tr_availB: 'The 🕐 button on each row opens the availability grid (day × hour). The tool aggregates everyone\'s answers and suggests the best raid slot.',
     tr_resultT: 'The composition',
     tr_resultB: 'The optimal party recomputes live on every change, with alternatives (Options A/B/C). Lock a job with ◇ to force it, reorder with the arrows or drag & drop.',
+    m_closeAria: 'Close',
+    a11y_compoUpdate: ({ assigned, total, first }) => `Composition updated: ${assigned} of ${total} slot${total > 1 ? 's' : ''} filled, ${first} on their Main`,
+    a11y_playerName: ({ n }) => `Player name, row ${n}`,
     tr_shareT: 'Share with your group',
     tr_shareB: '"Share" creates a room with a link: everyone claims their row, fills in their prefs and availability, and the whole group sees the same composition in real time.',
     r_playerPlaceholder: ({ n }) => `P${String(n).padStart(2, '0')}`,
@@ -4529,6 +4567,7 @@ function buildPlayerRow(player, idx) {
     input.type = 'text';
     input.className = 'player-name-input';
     input.placeholder = t('r_playerPlaceholder', { n: idx + 1 });
+    input.setAttribute('aria-label', t('a11y_playerName', { n: idx + 1 }));
     input.value = player.name;
     input.readOnly = !editable;
     input.addEventListener('input', e => {
@@ -4560,6 +4599,7 @@ function buildPlayerRow(player, idx) {
     noteInput.type = 'text';
     noteInput.className = 'player-note-input';
     noteInput.placeholder = t('r_notePlaceholder');
+    noteInput.setAttribute('aria-label', t('r_notePlaceholder'));
     noteInput.value = player.note || '';
     noteInput.readOnly = !editable;
     noteInput.maxLength = 200;
@@ -4612,6 +4652,9 @@ function buildPlayerRow(player, idx) {
     presetBtn.className = 'preset-btn';
     presetBtn.textContent = '★';
     presetBtn.title = t('r_presetTip');
+    presetBtn.setAttribute('aria-label', t('r_presetTip'));
+    presetBtn.setAttribute('aria-haspopup', 'menu');
+    presetBtn.setAttribute('aria-expanded', 'false');
     presetBtn.addEventListener('click', e => {
       e.stopPropagation();
       if (presetMenuTarget && presetMenuTarget.btn === presetBtn) closePresetMenu();
@@ -4628,6 +4671,9 @@ function buildPlayerRow(player, idx) {
     if (availCount > 0) availBtn.classList.add('has-data');
     availBtn.innerHTML = '🕐' + (availCount > 0 ? `<span class="avail-count">${availCount}</span>` : '');
     availBtn.title = t('av_btnTitle');
+    availBtn.setAttribute('aria-label', t('av_btnTitle'));
+    availBtn.setAttribute('aria-haspopup', 'dialog');
+    availBtn.setAttribute('aria-expanded', 'false');
     availBtn.addEventListener('click', e => {
       e.stopPropagation();
       if (availPopoverTarget && availPopoverTarget.btn === availBtn) closeAvailPopover();
@@ -4717,10 +4763,14 @@ function buildPlayerRow(player, idx) {
       ROLE_GRID_ORDER[role].forEach(jobId => {
         const job = JOB_BY_ID[jobId];
         if (!job) return;
-        const icon = document.createElement('div');
+        // <button> : focusable au clavier + annonce SR (le div d'origine
+        // rendait le choix des préférences inaccessible sans souris).
+        const icon = document.createElement('button');
+        icon.type = 'button';
         icon.className = 'job-icon';
         icon.dataset.role = role;
-        icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
+        icon.disabled = !editable;
+        icon.innerHTML = `<img src="${ICON_URL(job)}" alt="" loading="lazy" draggable="false">`;
 
         // Libellé du bucket (r_tier0/1/2, ★ devant Main) ; tiers legacy > 2 → numéro brut.
         const tierLabel = (tier) => tier === 0 ? '★ ' + t('r_tier0')
@@ -4748,9 +4798,13 @@ function buildPlayerRow(player, idx) {
         } else {
           icon.dataset.tooltip = t('r_jobTipAdd', { name: job.name });
         }
+        // Le tooltip custom (CSS ::after) est invisible pour les lecteurs
+        // d'écran → on le duplique en aria-label (état + action du clic).
+        icon.setAttribute('aria-label', icon.dataset.tooltip);
         if (state.bannedJobs.includes(job.id)) {
           icon.classList.add('banned');
           icon.title = t('r_bannedTooltip', { name: job.name });
+          icon.setAttribute('aria-label', t('r_bannedTooltip', { name: job.name }));
         }
 
         icon.addEventListener('click', () => {
@@ -4862,6 +4916,13 @@ function renderPlayers() {
 
     const header = document.createElement('div');
     header.className = 'alliance-header alliance-' + ALLIANCE_NAMES[a];
+    // Pliable au clavier aussi (role=button + Entrée/Espace, cf. paramsHeader)
+    header.setAttribute('role', 'button');
+    header.setAttribute('tabindex', '0');
+    header.setAttribute('aria-expanded', allianceCollapsed[a] ? 'false' : 'true');
+    header.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); header.click(); }
+    });
     const title = document.createElement('span');
     title.className = 'alliance-title';
     title.textContent = t('al_title', { name: ALLIANCE_NAMES[a] });
@@ -4905,6 +4966,7 @@ function renderPlayers() {
     header.addEventListener('click', () => {
       allianceCollapsed[a] = !allianceCollapsed[a];
       block.classList.toggle('collapsed', allianceCollapsed[a]);
+      header.setAttribute('aria-expanded', allianceCollapsed[a] ? 'false' : 'true');
     });
 
     list.appendChild(block);
@@ -5133,12 +5195,16 @@ function renderBannedJobs() {
     ROLE_GRID_ORDER[role].forEach(jobId => {
       const job = JOB_BY_ID[jobId];
       if (!job) return;
-      const icon = document.createElement('div');
+      // <button> + aria-pressed : le ban est un vrai toggle binaire.
+      const icon = document.createElement('button');
+      icon.type = 'button';
       icon.className = 'job-icon' + (bannedSet.has(job.id) ? ' banned' : '');
       icon.dataset.role = job.role;
       icon.dataset.jobId = job.id;
       icon.title = bannedSet.has(job.id) ? t('r_unbanJob', { name: job.name }) : t('r_banJob', { name: job.name });
-      icon.innerHTML = `<img src="${ICON_URL(job)}" alt="${job.name}" loading="lazy" draggable="false">`;
+      icon.setAttribute('aria-label', icon.title);
+      icon.setAttribute('aria-pressed', bannedSet.has(job.id) ? 'true' : 'false');
+      icon.innerHTML = `<img src="${ICON_URL(job)}" alt="" loading="lazy" draggable="false">`;
       icon.addEventListener('click', () => {
         const i = state.bannedJobs.indexOf(job.id);
         if (i === -1) state.bannedJobs.push(job.id);
@@ -5180,6 +5246,8 @@ function setParamsCollapsed(collapsed) {
   const sec = document.getElementById('paramsSection');
   if (!sec) return;
   sec.classList.toggle('collapsed', collapsed);
+  const header = document.getElementById('paramsHeader');
+  if (header) header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   try { localStorage.setItem(PARAMS_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch {}
 }
 
@@ -5462,7 +5530,7 @@ function buildAssignmentCard(r, resultsCtx) {
     );
     const canPick = pickablePrefs.length > 0;
     const rowAttr = r.rowId ? ` data-row-id="${escapeHtml(r.rowId)}"` : '';
-    const pickAttr = canPick ? `data-job-pick-name="${escapeHtml(r.name)}"${rowAttr}` : '';
+    const pickAttr = canPick ? `data-job-pick-name="${escapeHtml(r.name)}"${rowAttr} aria-haspopup="dialog"` : '';
     const pickTitle = canPick ? t('jp_triggerTitle', { name: r.name }) : '';
     const iconTag = canPick
       ? `<button type="button" class="assignment-job-icon" ${pickAttr} title="${escapeHtml(pickTitle)}">
@@ -5475,7 +5543,7 @@ function buildAssignmentCard(r, resultsCtx) {
       ? `<button type="button" class="assigned-job" ${pickAttr} title="${escapeHtml(pickTitle)}">${escapeHtml(r.jobId)}</button>`
       : `<div class="assigned-job" title="${escapeHtml(r.jobName)}">${escapeHtml(r.jobId)}</div>`;
     card.innerHTML = `
-      <button class="lock-toggle" data-name="${escapeHtml(r.name)}"${rowAttr} data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}">${lockGlyph}</button>
+      <button class="lock-toggle" data-name="${escapeHtml(r.name)}"${rowAttr} data-job="${escapeHtml(r.jobId)}" title="${escapeHtml(lockTitle)}" aria-label="${escapeHtml(lockTitle)}" aria-pressed="${r.locked ? 'true' : 'false'}">${lockGlyph}</button>
       <div class="drag-handle" draggable="true" title="${escapeHtml(t('lk_dragHandle'))}">⋮⋮</div>
       <div class="assignment-left">
         ${iconTag}
@@ -5488,8 +5556,8 @@ function buildAssignmentCard(r, resultsCtx) {
         ${jobIdTag}
       </div>
       <div class="reorder-controls" style="margin-left:6px;">
-        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}"${canLeft ? '' : ' disabled'}>↑</button>
-        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}"${canRight ? '' : ' disabled'}>↓</button>
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="-1" title="${escapeHtml(t('lk_reorderUp'))}" aria-label="${escapeHtml(t('lk_reorderUp'))} — ${escapeHtml(r.name)}"${canLeft ? '' : ' disabled'}>↑</button>
+        <button class="reorder-btn" data-reorder-name="${escapeHtml(r.name)}"${rowAttr} data-reorder-dir="1" title="${escapeHtml(t('lk_reorderDown'))}" aria-label="${escapeHtml(t('lk_reorderDown'))} — ${escapeHtml(r.name)}"${canRight ? '' : ' disabled'}>↓</button>
       </div>
     `;
     attachResultDragHandlers(card, r);
@@ -5678,6 +5746,13 @@ function renderSolution(sol) {
     w.textContent = t('res_missingWarn', { n: missing });
     warningArea.appendChild(w);
   }
+
+  // Lecteurs d'écran : la section Composition se recalcule en silence à
+  // chaque changement — on annonce un résumé (poli, debounced en amont par
+  // scheduleLiveCompute).
+  announce(t('a11y_compoUpdate', {
+    assigned: stats.assigned, total: stats.slotsTotal, first: stats.firstChoices
+  }));
 }
 
 function renderRaid24Result() {
@@ -5863,6 +5938,10 @@ function renderRaid24Result() {
     w.textContent = t('res_missingWarn', { n: totalSlots - totalAssigned });
     warningArea.appendChild(w);
   }
+
+  announce(t('a11y_compoUpdate', {
+    assigned: totalAssigned, total: totalSlots, first: totalFirst
+  }));
 }
 
 function setLiveIndicator(state) {
@@ -6273,11 +6352,15 @@ let presetMenuTarget = null;
 function closePresetMenu() {
   const menu = document.getElementById('presetMenu');
   if (menu) menu.hidden = true;
+  if (presetMenuTarget && presetMenuTarget.btn) {
+    presetMenuTarget.btn.setAttribute('aria-expanded', 'false');
+  }
   presetMenuTarget = null;
 }
 
 function openPresetMenu(btn, player) {
   presetMenuTarget = { btn, player };
+  btn.setAttribute('aria-expanded', 'true');
   const menu = document.getElementById('presetMenu');
   menu.innerHTML = '';
   const presets = getPresets();
@@ -6385,6 +6468,9 @@ let availPopoverTarget = null;
 function closeAvailPopover() {
   const pop = document.getElementById('availPopover');
   if (pop) pop.hidden = true;
+  if (availPopoverTarget && availPopoverTarget.btn) {
+    availPopoverTarget.btn.setAttribute('aria-expanded', 'false');
+  }
   availPopoverTarget = null;
 }
 
@@ -6400,6 +6486,7 @@ function openAvailPopover(btn, player) {
   ensureClaim(player);
 
   availPopoverTarget = { btn, player };
+  btn.setAttribute('aria-expanded', 'true');
   const pop = document.getElementById('availPopover');
   pop.innerHTML = '';
 
@@ -6523,12 +6610,17 @@ function openAvailPopover(btn, player) {
     dayLabel.textContent = (daysShort && daysShort[di]) || day;
     grid.appendChild(dayLabel);
     VALID_AVAIL_HOURS.forEach(h => {
-      const cell = document.createElement('div');
+      // <button> + aria-pressed : cochable au clavier (Tab + Entrée), pas
+      // seulement au drag-paint pointeur.
+      const cell = document.createElement('button');
+      cell.type = 'button';
       cell.className = 'avail-cell';
       cell.dataset.day = day;
       cell.dataset.hour = String(h);
+      cell.setAttribute('aria-label', `${(daysShort && daysShort[di]) || day} ${h}h`);
       const cur = player.availability && Array.isArray(player.availability[day]) ? player.availability[day] : [];
       if (cur.includes(h)) cell.classList.add('on');
+      cell.setAttribute('aria-pressed', cur.includes(h) ? 'true' : 'false');
       grid.appendChild(cell);
     });
   });
@@ -6551,7 +6643,20 @@ function openAvailPopover(btn, player) {
     else { list.sort((a, b) => a - b); player.availability[day] = list; }
     if (Object.keys(player.availability).length === 0) player.availability = null;
     cell.classList.toggle('on', mode === 'add');
+    cell.setAttribute('aria-pressed', mode === 'add' ? 'true' : 'false');
   }
+  grid.addEventListener('click', e => {
+    // Activation CLAVIER uniquement (Entrée/Espace → click avec detail=0).
+    // Souris/tactile passent par pointerdown (drag-paint) : re-toggler au
+    // click doublerait l'action.
+    if (e.detail !== 0) return;
+    const cell = e.target.closest('.avail-cell');
+    if (!cell) return;
+    applyCell(cell, cell.classList.contains('on') ? 'remove' : 'add');
+    scheduleAutoSave(150);
+    player._needsBadgeRender = true;
+    renderAvailHeatmap();
+  });
   grid.addEventListener('pointerdown', e => {
     const cell = e.target.closest('.avail-cell');
     if (!cell) return;
@@ -7578,11 +7683,52 @@ function buildShareUrl(code) {
 // MODALS & TOAST
 // ============================================================
 
+// Focus à restaurer à la fermeture de la modale (l'élément qui l'a ouverte)
+let modalReturnFocus = null;
+
+function modalFocusables(overlay) {
+  return [...overlay.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.hidden && !el.disabled && el.offsetParent !== null);
+}
+
 function openModal(id) {
-  document.getElementById(id).classList.add('show');
+  const overlay = document.getElementById(id);
+  modalReturnFocus = document.activeElement;
+  overlay.classList.add('show');
+  // Focus dans la modale (1er élément après le bouton ×, sinon le ×)
+  const focusables = modalFocusables(overlay);
+  const target = focusables.find(el => !el.classList.contains('modal-close')) || focusables[0];
+  if (target) target.focus();
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('show');
+  if (modalReturnFocus && document.contains(modalReturnFocus)) {
+    try { modalReturnFocus.focus(); } catch { /* élément devenu non-focusable */ }
+  }
+  modalReturnFocus = null;
+}
+
+// Piège à focus : tant qu'une modale est ouverte, Tab reste dedans.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const overlay = document.querySelector('.modal-overlay.show');
+  if (!overlay) return;
+  const focusables = modalFocusables(overlay);
+  if (focusables.length === 0) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (!overlay.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+// Annonce polie pour lecteurs d'écran (région aria-live cachée). Reset +
+// rAF pour forcer la re-annonce même quand le texte est identique.
+function announce(msg) {
+  const el = document.getElementById('a11yAnnouncer');
+  if (!el) return;
+  el.textContent = '';
+  requestAnimationFrame(() => { el.textContent = msg; });
 }
 
 function showToast(message, opts) {
@@ -8340,11 +8486,19 @@ const jobPickerEl = () => document.getElementById('jobPicker');
 function closeJobPicker() {
   const el = jobPickerEl();
   if (!el) return;
+  // Si le focus était DANS le picker (navigation clavier), on le rend au
+  // trigger — sinon (fermeture par clic ailleurs) on ne le vole pas.
+  const hadFocus = el.contains(document.activeElement);
+  const openForName = el.dataset.openFor;
   el.classList.remove('show');
   el.setAttribute('aria-hidden', 'true');
   el.innerHTML = '';
   delete el.dataset.openFor;
   delete el.dataset.openForRow;
+  if (hadFocus && openForName) {
+    const trigger = document.querySelector(`[data-job-pick-name="${CSS.escape(openForName)}"]`);
+    if (trigger) { try { trigger.focus(); } catch { /* re-render en cours */ } }
+  }
 }
 
 function positionJobPicker(triggerEl) {
@@ -8428,6 +8582,10 @@ function openJobPicker(triggerEl, playerName, rowId) {
   else delete el.dataset.openForRow;
   el.setAttribute('aria-hidden', 'false');
   positionJobPicker(triggerEl);
+  // Focus sur le 1er item : navigation Tab/Entrée immédiate, et les
+  // lecteurs d'écran entrent dans le dialog.
+  const firstItem = el.querySelector('[data-job-pick-id]');
+  if (firstItem) firstItem.focus();
 }
 
 // Reposition au scroll/resize (le popover est en position:fixed)
@@ -8528,9 +8686,14 @@ function balanceLabel(v) {
   return t('p_balanceAnti');
 }
 
+// Le libellé visuel ("Équilibré", …) vit hors du slider → on le duplique en
+// aria-valuetext pour que les lecteurs d'écran entendent mieux que "50".
+balanceSlider.setAttribute('aria-label', t('p_strategy'));
+balanceSlider.setAttribute('aria-valuetext', balanceLabel(parseInt(balanceSlider.value, 10)));
 balanceSlider.addEventListener('input', e => {
   state.fairnessWeight = parseInt(e.target.value, 10);
   balanceValue.textContent = balanceLabel(state.fairnessWeight);
+  balanceSlider.setAttribute('aria-valuetext', balanceLabel(state.fairnessWeight));
   scheduleLiveCompute(50);
 });
 
@@ -8546,6 +8709,15 @@ document.getElementById('paramsHeader').addEventListener('click', () => {
   const sec = document.getElementById('paramsSection');
   setParamsCollapsed(!sec.classList.contains('collapsed'));
 });
+// Header pliable = role="button" (div avec contenu riche) → activer aussi
+// au clavier (Entrée / Espace)
+document.getElementById('paramsHeader').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    const sec = document.getElementById('paramsSection');
+    setParamsCollapsed(!sec.classList.contains('collapsed'));
+  }
+});
 
 // État initial : collapsé par défaut sauf si l'utilisateur l'a déjà déplié
 (() => {
@@ -8553,25 +8725,33 @@ document.getElementById('paramsHeader').addEventListener('click', () => {
   setParamsCollapsed(saved === null ? true : saved === '1');
 })();
 
-// Modal close buttons (générique)
+// Modal close buttons (générique) — via closeModal pour restaurer le focus
 document.querySelectorAll('[data-modal-close]').forEach(btn => {
+  btn.setAttribute('aria-label', t('m_closeAria'));
   btn.addEventListener('click', () => {
     const overlay = btn.closest('.modal-overlay');
-    if (overlay) overlay.classList.remove('show');
+    if (!overlay) return;
+    if (overlay.id) closeModal(overlay.id);
+    else overlay.classList.remove('show');
   });
 });
 
 // Click outside modal to close
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('show');
+    if (e.target !== overlay) return;
+    if (overlay.id) closeModal(overlay.id);
+    else overlay.classList.remove('show');
   });
 });
 
-// Escape to close modals
+// Escape to close modals (via closeModal → restaure le focus à l'ouvreur)
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.modal-overlay.show').forEach(o => o.classList.remove('show'));
+    document.querySelectorAll('.modal-overlay.show').forEach(o => {
+      if (o.id) closeModal(o.id);
+      else o.classList.remove('show');
+    });
   }
 });
 
@@ -8609,11 +8789,14 @@ function buildTourDom() {
   ring.className = 'tour-ring';
   const card = document.createElement('div');
   card.className = 'tour-card';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-modal', 'true');
+  card.setAttribute('aria-labelledby', 'tourTitle');
   // Empêche le clic dans la carte de déclencher le blocker en dessous
   card.addEventListener('click', e => e.stopPropagation());
   card.innerHTML = `
     <div class="tour-step-count"></div>
-    <div class="tour-title"></div>
+    <div class="tour-title" id="tourTitle"></div>
     <div class="tour-body"></div>
     <div class="tour-footer">
       <div class="tour-dots"></div>
@@ -8654,9 +8837,20 @@ function positionTourRing() {
 
 function tourKeydown(e) {
   if (tourIdx < 0) return;
-  if (e.key === 'Escape') { e.stopPropagation(); endTour(); }
-  else if (e.key === 'ArrowRight' || e.key === 'Enter') tourGo(1);
-  else if (e.key === 'ArrowLeft') tourGo(-1);
+  if (e.key === 'Escape') { e.stopPropagation(); endTour(); return; }
+  if (e.key === 'ArrowRight') { tourGo(1); return; }
+  if (e.key === 'ArrowLeft') { tourGo(-1); return; }
+  // Piège à focus : Tab reste dans la carte (le reste de la page est
+  // masqué par le blocker de toute façon)
+  if (e.key === 'Tab' && tourDom) {
+    const focusables = [...tourDom.card.querySelectorAll('button')].filter(b => !b.hidden);
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (!tourDom.card.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
 }
 
 function showTourStep(idx) {
@@ -8696,14 +8890,19 @@ function tourGo(delta) {
   showTourStep(next);
 }
 
+let tourReturnFocus = null;
+
 function startTour() {
   const { blocker, ring, card } = buildTourDom();
+  tourReturnFocus = document.activeElement;
   blocker.hidden = false; ring.hidden = false; card.hidden = false;
   window.addEventListener('scroll', positionTourRing, { passive: true });
   window.addEventListener('resize', positionTourRing);
   // capture : passe avant le handler global Échap-ferme-les-modales
   document.addEventListener('keydown', tourKeydown, true);
   showTourStep(0);
+  // Focus dans le dialog (bouton Suivant) pour les utilisateurs clavier / SR
+  card.querySelector('.tour-next').focus();
 }
 
 function endTour() {
@@ -8716,6 +8915,11 @@ function endTour() {
   window.removeEventListener('scroll', positionTourRing);
   window.removeEventListener('resize', positionTourRing);
   document.removeEventListener('keydown', tourKeydown, true);
+  // Restaure le focus à l'ouvreur (bouton Guide) ou retombe dessus
+  const back = (tourReturnFocus && document.contains(tourReturnFocus) && tourReturnFocus !== document.body)
+    ? tourReturnFocus : document.getElementById('tourBtn');
+  if (back) { try { back.focus(); } catch { /* non-focusable */ } }
+  tourReturnFocus = null;
   try { localStorage.setItem(TOUR_SEEN_KEY, '1'); } catch { /* privé/bloqué : tant pis */ }
 }
 
